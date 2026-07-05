@@ -1,0 +1,255 @@
+<?php
+
+namespace App\Controllers\Dashboard;
+
+use App\Controllers\BaseController;
+use Config\Database;
+
+class DashboardDetailController extends BaseController
+{
+    public function show(string $section)
+    {
+        $tenantId = (int) session()->get('tenant_id');
+        $definition = $this->definition($section, $tenantId);
+
+        if ($definition === null) {
+            return redirect()->to('/dashboard')->with('error', 'Dashboard section not found.');
+        }
+
+        return view('dashboard/section', [
+            'title' => $definition['title'],
+            'pageTitle' => $definition['title'],
+            'pageSubtitle' => 'Dashboard records',
+            'section' => $section,
+            'columns' => $definition['columns'],
+            'rows' => $definition['rows'],
+        ]);
+    }
+
+    private function definition(string $section, int $tenantId): ?array
+    {
+        $today = date('Y-m-d');
+        $next30 = date('Y-m-d', strtotime('+30 days'));
+        $next90 = date('Y-m-d', strtotime('+90 days'));
+        $db = Database::connect();
+
+        return match ($section) {
+            'total_clients' => $this->clientSection('Total clients', $db->table('clients')->where('tenant_id', $tenantId)->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
+            'legacy_clients' => $this->clientSection('Legacy clients', $db->table('clients')->where('tenant_id', $tenantId)->where('is_legacy', 1)->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
+            'active_certificates' => $this->certificateSection('Active certificates', $this->certificates($tenantId, ['certificates.status' => 'active'])),
+            'expired_certificates' => $this->certificateSection('Expired certificates', $this->certificates($tenantId, ['certificates.status' => 'active'], ['certificates.expiry_date <' => $today])),
+            'certificates_expiring' => $this->certificateSection('Certificates expiring', $this->certificates($tenantId, ['certificates.status' => 'active'], ['certificates.expiry_date >=' => $today, 'certificates.expiry_date <=' => $next90])),
+            'open_ncrs' => $this->ncrSection('Open NCRs', false),
+            'open_capas' => $this->capaSection('Open CAPAs'),
+            'pending_technical_reviews' => $this->technicalReviewSection('Pending technical reviews', 'pending'),
+            'pending_certification_decisions' => $this->decisionSection('Pending certification decisions', 'pending'),
+            'upcoming_audits' => $this->auditSection('Upcoming audits', $today, $next30, []),
+            'upcoming_surveillance_audits' => $this->auditSection('Upcoming surveillance audits', $today, $next90, ['surveillance1', 'surveillance2']),
+            'monthly_revenue' => $this->proposalSection('Monthly revenue source proposals'),
+            default => null,
+        };
+    }
+
+    private function clientSection(string $title, array $clients): array
+    {
+        return [
+            'title' => $title,
+            'columns' => ['Company', 'Status', 'Contact', 'Certificate expiry'],
+            'rows' => array_map(fn (array $client): array => [
+                'cells' => [$client['company'], str_replace('_', ' ', $client['certification_status']), $client['contact_person'] ?: $client['email'], $client['certificate_expiry_date']],
+                'view' => site_url('masters/clients/' . $client['id']),
+                'edit' => site_url('masters/clients/' . $client['id'] . '/edit'),
+                'pdf' => site_url('workflow/certification/' . $client['id'] . '/documents/audit_report'),
+            ], $clients),
+        ];
+    }
+
+    private function certificateSection(string $title, array $certificates): array
+    {
+        return [
+            'title' => $title,
+            'columns' => ['Certificate', 'Client', 'Standard', 'Issue', 'Expiry', 'Status'],
+            'rows' => array_map(fn (array $certificate): array => [
+                'cells' => [$certificate['certificate_number'], $certificate['company'], $certificate['standard_code'], $certificate['issue_date'], $certificate['expiry_date'], $certificate['status']],
+                'view' => site_url('certificates/verify/' . $certificate['public_slug']),
+                'edit' => site_url('workflow/certification/' . $certificate['client_id'] . '/certificates'),
+                'pdf' => site_url('workflow/certification/certificates/' . $certificate['id'] . '/pdf'),
+            ], $certificates),
+        ];
+    }
+
+    private function ncrSection(string $title, bool $includeClosed): array
+    {
+        $builder = Database::connect()->table('ncrs')
+            ->select('ncrs.*, clients.id AS client_id, clients.company, audit_events.event_type')
+            ->join('audit_events', 'audit_events.id = ncrs.audit_event_id')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('clients', 'clients.id = audit_programs.client_id')
+            ->where('ncrs.tenant_id', (int) session()->get('tenant_id'));
+
+        if (! $includeClosed) {
+            $builder->whereNotIn('ncrs.status', ['closed', 'verified_closed', 'cancelled']);
+        }
+
+        $rows = $builder->orderBy('ncrs.id', 'DESC')->get()->getResultArray();
+
+        return [
+            'title' => $title,
+            'columns' => ['NCR', 'Client', 'Audit stage', 'Class', 'Status', 'Target'],
+            'rows' => array_map(fn (array $ncr): array => [
+                'cells' => [$ncr['ncr_number'], $ncr['company'], str_replace('_', ' ', $ncr['event_type']), strtoupper($ncr['classification']), $ncr['status'], $ncr['target_date']],
+                'view' => site_url('workflow/certification/' . $ncr['client_id'] . '/audit-events/' . $ncr['audit_event_id'] . '/file'),
+                'edit' => site_url('workflow/certification/' . $ncr['client_id'] . '/audit-events/' . $ncr['audit_event_id'] . '/execute'),
+                'pdf' => site_url('workflow/certification/' . $ncr['client_id'] . '/audit-events/' . $ncr['audit_event_id'] . '/documents/audit_report'),
+            ], $rows),
+        ];
+    }
+
+    private function capaSection(string $title): array
+    {
+        $rows = Database::connect()->table('capas')
+            ->select('capas.*, clients.id AS client_id, clients.company, audit_events.id AS audit_event_id')
+            ->join('ncrs', 'ncrs.id = capas.ncr_id', 'left')
+            ->join('audit_events', 'audit_events.id = ncrs.audit_event_id', 'left')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id', 'left')
+            ->join('clients', 'clients.id = audit_programs.client_id', 'left')
+            ->where('capas.tenant_id', (int) session()->get('tenant_id'))
+            ->whereNotIn('capas.status', ['closed', 'cancelled'])
+            ->orderBy('capas.id', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        return [
+            'title' => $title,
+            'columns' => ['CAPA', 'Client', 'Issue', 'Status', 'Target'],
+            'rows' => array_map(fn (array $capa): array => [
+                'cells' => [$capa['capa_number'], $capa['company'], mb_strimwidth((string) $capa['issue'], 0, 80, '...'), $capa['status'], $capa['target_date']],
+                'view' => empty($capa['client_id']) ? '' : site_url('workflow/certification/' . $capa['client_id']),
+                'edit' => empty($capa['client_id']) ? '' : site_url('workflow/certification/' . $capa['client_id']),
+                'pdf' => empty($capa['client_id']) ? '' : site_url('workflow/certification/' . $capa['client_id'] . '/documents/audit_report'),
+            ], $rows),
+        ];
+    }
+
+    private function technicalReviewSection(string $title, string $status): array
+    {
+        $rows = Database::connect()->table('technical_reviews')
+            ->select('technical_reviews.*, clients.id AS client_id, clients.company, audit_events.event_type, personnel.full_name')
+            ->join('audit_events', 'audit_events.id = technical_reviews.audit_event_id')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('clients', 'clients.id = audit_programs.client_id')
+            ->join('personnel', 'personnel.id = technical_reviews.reviewer_personnel_id', 'left')
+            ->where('technical_reviews.tenant_id', (int) session()->get('tenant_id'))
+            ->where('technical_reviews.status', $status)
+            ->orderBy('technical_reviews.id', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        return [
+            'title' => $title,
+            'columns' => ['Client', 'Audit stage', 'Reviewer', 'Recommendation', 'Status'],
+            'rows' => array_map(fn (array $review): array => [
+                'cells' => [$review['company'], str_replace('_', ' ', $review['event_type']), $review['full_name'], str_replace('_', ' ', (string) $review['recommendation']), $review['status']],
+                'view' => site_url('workflow/certification/' . $review['client_id'] . '/audit-events/' . $review['audit_event_id'] . '/file'),
+                'edit' => site_url('workflow/certification/' . $review['client_id'] . '/technical-review'),
+                'pdf' => site_url('workflow/certification/' . $review['client_id'] . '/audit-events/' . $review['audit_event_id'] . '/documents/technical_review'),
+            ], $rows),
+        ];
+    }
+
+    private function decisionSection(string $title, string $status): array
+    {
+        $rows = Database::connect()->table('certification_decisions')
+            ->select('certification_decisions.*, technical_reviews.audit_event_id, clients.id AS client_id, clients.company, audit_events.event_type, personnel.full_name')
+            ->join('technical_reviews', 'technical_reviews.id = certification_decisions.technical_review_id')
+            ->join('audit_events', 'audit_events.id = technical_reviews.audit_event_id')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('clients', 'clients.id = audit_programs.client_id')
+            ->join('personnel', 'personnel.id = certification_decisions.decision_maker_personnel_id', 'left')
+            ->where('certification_decisions.tenant_id', (int) session()->get('tenant_id'))
+            ->where('certification_decisions.status', $status)
+            ->orderBy('certification_decisions.id', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        return [
+            'title' => $title,
+            'columns' => ['Client', 'Audit stage', 'Decision maker', 'Decision', 'Status'],
+            'rows' => array_map(fn (array $decision): array => [
+                'cells' => [$decision['company'], str_replace('_', ' ', $decision['event_type']), $decision['full_name'], str_replace('_', ' ', $decision['decision']), $decision['status']],
+                'view' => site_url('workflow/certification/' . $decision['client_id'] . '/audit-events/' . $decision['audit_event_id'] . '/file'),
+                'edit' => site_url('workflow/certification/' . $decision['client_id'] . '/decision'),
+                'pdf' => site_url('workflow/certification/' . $decision['client_id'] . '/audit-events/' . $decision['audit_event_id'] . '/documents/decision_report'),
+            ], $rows),
+        ];
+    }
+
+    private function auditSection(string $title, string $from, string $to, array $types): array
+    {
+        $builder = Database::connect()->table('audit_events')
+            ->select('audit_events.*, clients.id AS client_id, clients.company')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('clients', 'clients.id = audit_programs.client_id')
+            ->where('audit_programs.tenant_id', (int) session()->get('tenant_id'))
+            ->where('audit_events.planned_start_date >=', $from)
+            ->where('audit_events.planned_start_date <=', $to);
+
+        if ($types !== []) {
+            $builder->whereIn('audit_events.event_type', $types);
+        }
+
+        $rows = $builder->orderBy('audit_events.planned_start_date', 'ASC')->get()->getResultArray();
+
+        return [
+            'title' => $title,
+            'columns' => ['Client', 'Audit', 'Stage', 'Start', 'End', 'Status'],
+            'rows' => array_map(fn (array $event): array => [
+                'cells' => [$event['company'], $event['audit_number'], str_replace('_', ' ', $event['event_type']), $event['planned_start_date'], $event['planned_end_date'], $event['status']],
+                'view' => site_url('workflow/certification/' . $event['client_id'] . '/audit-events/' . $event['id'] . '/file'),
+                'edit' => site_url('workflow/certification/' . $event['client_id'] . '/audit-events/' . $event['id'] . '/execute'),
+                'pdf' => site_url('workflow/certification/' . $event['client_id'] . '/audit-events/' . $event['id'] . '/documents/audit_plan'),
+            ], $rows),
+        ];
+    }
+
+    private function proposalSection(string $title): array
+    {
+        $monthStart = date('Y-m-01');
+        $monthEnd = date('Y-m-t');
+        $rows = Database::connect()->table('proposals')
+            ->select('proposals.*, clients.company')
+            ->join('clients', 'clients.id = proposals.client_id')
+            ->where('proposals.tenant_id', (int) session()->get('tenant_id'))
+            ->where('proposals.created_at >=', $monthStart . ' 00:00:00')
+            ->where('proposals.created_at <=', $monthEnd . ' 23:59:59')
+            ->orderBy('proposals.id', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        return [
+            'title' => $title,
+            'columns' => ['Client', 'Proposal', 'Status', 'Currency', 'Grand total'],
+            'rows' => array_map(fn (array $proposal): array => [
+                'cells' => [$proposal['company'], $proposal['proposal_number'], $proposal['status'], $proposal['currency'], number_format((float) $proposal['grand_total'], 2)],
+                'view' => site_url('workflow/certification/' . $proposal['client_id']),
+                'edit' => site_url('workflow/certification/' . $proposal['client_id'] . '/proposal'),
+                'pdf' => site_url('workflow/certification/' . $proposal['client_id'] . '/documents/proposal'),
+            ], $rows),
+        ];
+    }
+
+    private function certificates(int $tenantId, array $where, array $extraWhere = []): array
+    {
+        $builder = Database::connect()->table('certificates')
+            ->select('certificates.*, clients.company, standards.code AS standard_code')
+            ->join('clients', 'clients.id = certificates.client_id')
+            ->join('standards', 'standards.id = certificates.standard_id')
+            ->where('certificates.tenant_id', $tenantId);
+
+        foreach ($where + $extraWhere as $field => $value) {
+            $builder->where($field, $value);
+        }
+
+        return $builder->orderBy('certificates.expiry_date', 'ASC')->get()->getResultArray();
+    }
+}

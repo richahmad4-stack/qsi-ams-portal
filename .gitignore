@@ -1,0 +1,43 @@
+# CodeIgniter / PHP dependencies
+vendor/
+node_modules/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Runtime writable data
+writable/cache/
+writable/logs/
+writable/session/
+writable/debugbar/
+writable/uploads/
+
+# Local database/runtime folders
+.mysql-data/
+tmp/
+
+# Test/build/editor caches
+.phpunit.cache/
+.phpunit.result.cache
+coverage/
+dist/
+build/
+.idea/
+.vscode/
+.agents/
+.codex/
+.repo-git/
+
+# Archives and backup files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+*.bak
+*.backup
+*.old
+*~
