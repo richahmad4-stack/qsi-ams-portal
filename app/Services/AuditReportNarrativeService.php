@@ -14,7 +14,7 @@ class AuditReportNarrativeService
         $processes = $this->processTrail($planItems, $standard, $clauseTitle, $scope);
         $evidence = $this->evidenceTrail($standard, $clauseNumber, $clauseTitle, (string) ($clause['evidence_examples'] ?? ''), $scope);
         $auditNumber = trim((string) ($event['audit_number'] ?? ''));
-        $sampledEvidence = array_slice($evidence, 0, 3);
+        $sampledEvidence = $this->withDocumentReferences($client, $clauseNumber, array_slice($evidence, 0, 3));
         $clauseFocus = $this->clauseFocus($clauseNumber, $clauseTitle);
 
         return trim(
@@ -503,6 +503,54 @@ class AuditReportNarrativeService
     private function startsWithClause(string $clauseNumber, string $prefix): bool
     {
         return str_starts_with(strtoupper(trim($clauseNumber)), strtoupper($prefix));
+    }
+
+    private function withDocumentReferences(array $client, string $clauseNumber, array $evidence): array
+    {
+        $companyCode = $this->companyReferenceCode($client);
+        $clauseCode = $this->clauseReferenceCode($clauseNumber);
+
+        return array_map(
+            static fn (string $item, int $index): string => rtrim($item, '.') . ' (Ref: ' . $companyCode . '-' . $clauseCode . '-' . str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT) . ')',
+            array_values($evidence),
+            array_keys(array_values($evidence))
+        );
+    }
+
+    private function companyReferenceCode(array $client): string
+    {
+        $name = strtoupper((string) ($client['company'] ?? $client['company_name'] ?? $client['client_name'] ?? 'QSI'));
+        $words = preg_split('/[^A-Z0-9]+/', $name) ?: [];
+        $skip = [
+            'AL', 'EL', 'THE', 'DEMO', 'LLC', 'LTD', 'CO', 'COMPANY', 'CORP', 'GROUP',
+            'SERVICES', 'SERVICE', 'MANAGEMENT', 'INDUSTRIES', 'INDUSTRY', 'FACTORY',
+            'FACILITIES', 'PROCESSING', 'CATERING',
+        ];
+
+        foreach ($words as $word) {
+            $word = trim($word);
+            if ($word === '' || in_array($word, $skip, true)) {
+                continue;
+            }
+
+            $collapsed = preg_replace('/(.)\1+/', '$1', $word) ?: $word;
+            if (strlen($collapsed) >= 3) {
+                return substr($collapsed, 0, 3);
+            }
+        }
+
+        $fallback = preg_replace('/[^A-Z0-9]/', '', $name) ?: 'QSI';
+        $fallback = preg_replace('/(.)\1+/', '$1', $fallback) ?: $fallback;
+
+        return str_pad(substr($fallback, 0, 3), 3, 'X');
+    }
+
+    private function clauseReferenceCode(string $clauseNumber): string
+    {
+        $code = strtoupper(trim($clauseNumber));
+        $code = preg_replace('/[^A-Z0-9.]+/', '', $code) ?: 'GEN';
+
+        return $code;
     }
 
     private function clauseFocus(string $clauseNumber, string $clauseTitle): string

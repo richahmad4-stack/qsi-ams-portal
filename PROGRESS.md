@@ -15,7 +15,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 
 ## Current Focus
 
-Refining audit execution evidence so each clause receives aligned objective evidence instead of repeated generic wording across the audit report.
+Refining audit execution evidence so each clause receives aligned objective evidence with internal sample document references such as `NOR-10.1-001`.
 
 ## Next
 

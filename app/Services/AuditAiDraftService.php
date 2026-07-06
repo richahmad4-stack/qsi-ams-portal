@@ -67,6 +67,7 @@ class AuditAiDraftService
             . "Write 90 to 140 words maximum. Use sampled evidence wording, not absolute guarantees. Do not invent exact document numbers, record IDs, dates or names unless provided in the context.\n"
             . "Use these headings exactly: Conformity note, Objective evidence sampled, Auditor remark.\n"
             . "Make the evidence clause-specific and scope-specific. Mention only evidence that is logical for the clause; do not repeat the same generic evidence for every clause.\n"
+            . "Each objective evidence bullet must keep or create one sample reference in this format: three-letter client code, clause number, sequence, for example NOR-10.1-001. Treat these as internal sample references, not actual uploaded file names.\n"
             . "If evidence is weak or incomplete, write a cautious conformity note and tell the auditor to raise an NC separately instead of creating an NC inside this note.\n"
             . "Context JSON:\n" . json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n\n"
             . "Baseline local draft to improve:\n" . $fallbackText;
