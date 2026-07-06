@@ -32,4 +32,15 @@ class WorkflowGateWiringTest extends TestCase
         self::assertStringContainsString('uncoveredClientRequirementsForPersonnel($reviewerPersonnelId, $clientId)', $this->controller);
         self::assertStringContainsString('uncoveredClientRequirementsForPersonnel($decisionMakerPersonnelId, $clientId)', $this->controller);
     }
+
+    public function testWorkflowActionsUseRolePolicy(): void
+    {
+        $roleService = file_get_contents(__DIR__ . '/../../app/Services/WorkflowRoleService.php') ?: '';
+
+        self::assertStringContainsString("'audit_execute' => ['auditor', 'lead_auditor']", $roleService);
+        self::assertStringContainsString("'technical_review' => ['technical_reviewer', 'technical_manager']", $roleService);
+        self::assertStringContainsString("'decision' => ['certification_decision_maker']", $roleService);
+        self::assertStringContainsString("'gm_approval' => ['general_manager']", $roleService);
+        self::assertStringContainsString('denialReason(', $this->controller);
+    }
 }

@@ -28,12 +28,12 @@ class InitialAdminSeeder extends Seeder
         }
 
         $role = $this->db->query(
-            "SELECT id FROM roles WHERE tenant_id = ? AND code = 'administrator' LIMIT 1",
+            "SELECT id FROM roles WHERE tenant_id = ? AND code = 'super_admin' LIMIT 1",
             [(int) $tenant['id']]
         )->getRowArray();
 
         if ($role === null) {
-            throw new RuntimeException('Administrator role was not found. Run InitialAmsSeeder first.');
+            throw new RuntimeException('Super User role was not found. Run InitialAmsSeeder first.');
         }
 
         $existing = $this->db->query(

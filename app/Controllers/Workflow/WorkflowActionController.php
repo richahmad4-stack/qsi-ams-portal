@@ -26,6 +26,7 @@ use App\Services\AuditLogger;
 use App\Services\AuditAiDraftService;
 use App\Services\AuditDurationService;
 use App\Services\AuditReportNarrativeService;
+use App\Services\WorkflowRoleService;
 use CodeIgniter\Database\BaseConnection;
 use CodeIgniter\I18n\Time;
 use Config\Database;
@@ -57,6 +58,7 @@ class WorkflowActionController extends BaseController
     private AuditAiDraftService $aiDrafts;
     private AuditDurationService $durationService;
     private AuditReportNarrativeService $narratives;
+    private WorkflowRoleService $workflowRoles;
     private BaseConnection $db;
 
     public function __construct()
@@ -85,6 +87,7 @@ class WorkflowActionController extends BaseController
         $this->durationService = new AuditDurationService();
         $this->narratives = new AuditReportNarrativeService();
         $this->db = Database::connect();
+        $this->workflowRoles = new WorkflowRoleService($this->db);
     }
 
     public function review(int $clientId)
@@ -130,6 +133,13 @@ class WorkflowActionController extends BaseController
 
         $existing = $this->latestReview($clientId);
         $status = (string) $this->request->getPost('status');
+        $reviewStage = str_starts_with($status, 'tm_')
+            ? 'application_review_tm'
+            : (str_starts_with($status, 'qm_') ? 'application_review_qm' : 'application_review_manage');
+        if (($roleError = $this->workflowRoles->denialReason($reviewStage)) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
+        }
+
         $application = $this->latestCertificationApplication($clientId);
         $standards = $this->clientStandardRows($clientId);
         $reviewPayload = $this->reviewPayloadFromRequest();
@@ -239,6 +249,9 @@ class WorkflowActionController extends BaseController
         $vatPercent = $this->money('vat_percent', 15.00);
         $vatAmount = round($subtotal * ($vatPercent / 100), 2);
         $status = (string) $this->request->getPost('status');
+        if (($roleError = $this->workflowRoles->denialReason('proposal_manage')) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
+        }
 
         $payload = [
             'tenant_id' => (int) session()->get('tenant_id'),
@@ -322,6 +335,10 @@ class WorkflowActionController extends BaseController
             'signed_by_name' => 'permit_empty|max_length[180]',
         ])) {
             return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('contract_manage')) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
         }
 
         $existing = $this->latestContract($clientId);
@@ -418,6 +435,10 @@ class WorkflowActionController extends BaseController
             'recertification_days' => 'permit_empty|decimal',
         ])) {
             return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('audit_program_manage')) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
         }
 
         $existing = $this->latestProgram($clientId);
@@ -517,6 +538,10 @@ class WorkflowActionController extends BaseController
             return redirect()->back()->with('error', 'Selected audit event does not belong to this client.');
         }
 
+        if (($roleError = $this->workflowRoles->denialReason('appointment_manage', $eventId)) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
+        }
+
         $event = $this->events->find($eventId);
         if ($event !== null && ($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
             return redirect()->back()->withInput()->with('error', $lockMessage);
@@ -576,6 +601,10 @@ class WorkflowActionController extends BaseController
 
         if ($client === null || $program === null || $appointment === null || ! $this->eventBelongsToProgram((int) $appointment['audit_event_id'], (int) $program['id'])) {
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Appointment not found.');
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('appointment_manage', (int) $appointment['audit_event_id'])) !== null) {
+            return redirect()->back()->with('error', $roleError);
         }
 
         $this->appointments->delete($appointmentId);
@@ -643,6 +672,10 @@ class WorkflowActionController extends BaseController
             return redirect()->back()->with('error', 'Selected audit event does not belong to this client.');
         }
 
+        if (($roleError = $this->workflowRoles->denialReason('audit_plan_manage', $eventId)) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
+        }
+
         $event = $this->events->find($eventId);
         if ($event !== null && ($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
             return redirect()->back()->withInput()->with('error', $lockMessage);
@@ -696,6 +729,10 @@ class WorkflowActionController extends BaseController
         }
 
         $event = $this->eventForPlan($planId);
+        if ($event !== null && ($roleError = $this->workflowRoles->denialReason('audit_plan_manage', (int) $event['id'])) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
+        }
+
         if ($event !== null && ($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
             return redirect()->back()->withInput()->with('error', $lockMessage);
         }
@@ -730,6 +767,11 @@ class WorkflowActionController extends BaseController
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Audit plan item not found.');
         }
 
+        $event = $this->eventForPlan((int) $item['audit_plan_id']);
+        if ($event !== null && ($roleError = $this->workflowRoles->denialReason('audit_plan_manage', (int) $event['id'])) !== null) {
+            return redirect()->back()->with('error', $roleError);
+        }
+
         $this->planItems->delete($itemId);
         $this->auditLogger->record('delete', 'audit_plans', 'audit_plan_items', $itemId, $item, null);
 
@@ -743,6 +785,10 @@ class WorkflowActionController extends BaseController
 
         if ($client === null || $program === null || ! $this->eventBelongsToProgram($eventId, (int) $program['id'])) {
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Audit event not found.');
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return redirect()->to('/workflow/certification/' . $clientId)->with('error', $roleError);
         }
 
         $event = $this->events->find($eventId);
@@ -780,6 +826,10 @@ class WorkflowActionController extends BaseController
 
         if ($client === null || $program === null || ! $this->eventBelongsToProgram($eventId, (int) $program['id'])) {
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Audit event not found.');
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
         }
 
         $event = $this->events->find($eventId);
@@ -865,6 +915,10 @@ class WorkflowActionController extends BaseController
             ]);
         }
 
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return $this->jsonWorkflowDenied($roleError);
+        }
+
         $event = $this->events->find($eventId);
         if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
             return $this->response->setStatusCode(423)->setJSON([
@@ -924,6 +978,10 @@ class WorkflowActionController extends BaseController
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Report section not found.');
         }
 
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return redirect()->back()->with('error', $roleError);
+        }
+
         $event = $this->events->find($eventId);
         if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
             return redirect()->back()->with('error', $lockMessage);
@@ -964,6 +1022,10 @@ class WorkflowActionController extends BaseController
                 'csrfToken' => csrf_token(),
                 'csrfHash' => csrf_hash(),
             ]);
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return $this->jsonWorkflowDenied($roleError);
         }
 
         if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
@@ -1019,6 +1081,10 @@ class WorkflowActionController extends BaseController
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Finding not found.');
         }
 
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return redirect()->back()->with('error', $roleError);
+        }
+
         $event = $this->events->find($eventId);
         if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
             return redirect()->back()->with('error', $lockMessage);
@@ -1042,6 +1108,10 @@ class WorkflowActionController extends BaseController
 
         if ($client === null || $program === null || ! $this->eventBelongsToProgram($eventId, (int) $program['id'])) {
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Audit event not found.');
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
         }
 
         $event = $this->events->find($eventId);
@@ -1089,6 +1159,10 @@ class WorkflowActionController extends BaseController
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'NCR not found.');
         }
 
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
+        }
+
         $event = $this->events->find($eventId);
         if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
             return redirect()->back()->withInput()->with('error', $lockMessage);
@@ -1120,6 +1194,10 @@ class WorkflowActionController extends BaseController
 
         if ($client === null || $program === null || $ncr === null || (int) $ncr['audit_event_id'] !== $eventId || ! $this->eventBelongsToProgram($eventId, (int) $program['id'])) {
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'NCR not found.');
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
         }
 
         $event = $this->events->find($eventId);
@@ -1172,6 +1250,10 @@ class WorkflowActionController extends BaseController
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'CAPA not found.');
         }
 
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
+        }
+
         $event = $this->events->find($eventId);
         if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
             return redirect()->back()->withInput()->with('error', $lockMessage);
@@ -1208,6 +1290,10 @@ class WorkflowActionController extends BaseController
 
         if ($client === null || $program === null || $event === null || ! $this->eventBelongsToProgram($eventId, (int) $program['id'])) {
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Audit event not found.');
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return redirect()->back()->with('error', $roleError);
         }
 
         if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
@@ -1304,6 +1390,10 @@ class WorkflowActionController extends BaseController
         $eventId = (int) $this->request->getPost('audit_event_id');
         if (! $this->eventBelongsToProgram($eventId, (int) $program['id'])) {
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Audit event not found.');
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('technical_review', $eventId, (int) $this->request->getPost('reviewer_personnel_id'))) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
         }
 
         $status = (string) $this->request->getPost('status');
@@ -1420,6 +1510,12 @@ class WorkflowActionController extends BaseController
         }
 
         $decisionValue = (string) $this->request->getPost('decision');
+        $decisionStage = $status === 'gm_approved' ? 'gm_approval' : 'decision';
+        $decisionPersonnelId = $status === 'gm_approved' ? null : (int) $this->request->getPost('decision_maker_personnel_id');
+        if (($roleError = $this->workflowRoles->denialReason($decisionStage, (int) ($review['audit_event_id'] ?? 0), $decisionPersonnelId)) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
+        }
+
         if (in_array($status, ['approved', 'decided', 'gm_approved'], true) || in_array($decisionValue, ['approved', 'granted'], true)) {
             $gateFailures = $this->decisionGateFailures(
                 $review,
@@ -1502,6 +1598,10 @@ class WorkflowActionController extends BaseController
 
         if ($client === null || $decision === null || ($decision['status'] ?? '') !== 'gm_approved' || ! in_array($decision['decision'], ['granted', 'approved'], true)) {
             return redirect()->to('/workflow/certification/' . $clientId . '/certificates')->with('error', 'GM-approved granted decision is required before certificate issue.');
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('certificate_issue')) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
         }
 
         $issueDate = (string) $this->request->getPost('issue_date') ?: date('Y-m-d');
@@ -1588,6 +1688,10 @@ class WorkflowActionController extends BaseController
 
         if ($client === null) {
             return redirect()->to('/workflow/certification')->with('error', 'Client not found.');
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('feedback_manage')) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
         }
 
         $program = $this->latestProgram($clientId);
@@ -2395,6 +2499,16 @@ class WorkflowActionController extends BaseController
         }
 
         return $failures;
+    }
+
+    private function jsonWorkflowDenied(string $message)
+    {
+        return $this->response->setStatusCode(403)->setJSON([
+            'ok' => false,
+            'message' => $message,
+            'csrfToken' => csrf_token(),
+            'csrfHash' => csrf_hash(),
+        ]);
     }
 
     private function appointmentRequiresCompetence(string $role): bool

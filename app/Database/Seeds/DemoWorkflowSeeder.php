@@ -171,18 +171,12 @@ class DemoWorkflowSeeder extends Seeder
                 [$this->tenantId, $code, $name, $name . ' demo access role.']
             );
             $roleId = $this->roleId($code);
-            $this->db->query(
-                'INSERT IGNORE INTO role_permissions (role_id, permission_id) SELECT ?, id FROM permissions',
-                [$roleId]
-            );
-        }
-
-        foreach (['administrator', 'quality_manager', 'technical_manager', 'proposal_officer', 'auditor', 'lead_auditor', 'technical_reviewer', 'certification_decision_maker', 'finance'] as $code) {
-            $roleId = $this->roleId($code);
-            $this->db->query(
-                'INSERT IGNORE INTO role_permissions (role_id, permission_id) SELECT ?, id FROM permissions',
-                [$roleId]
-            );
+            if ($code === 'super_admin') {
+                $this->db->query(
+                    'INSERT IGNORE INTO role_permissions (role_id, permission_id) SELECT ?, id FROM permissions',
+                    [$roleId]
+                );
+            }
         }
     }
 

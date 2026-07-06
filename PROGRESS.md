@@ -24,15 +24,17 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Audit report conformity sections now track source type, auditor confirmation, confirmation date/user, and confirmation notes. Audit completion requires every conformity section to be confirmed.
 - Finance dashboard route and sidebar visibility now use the `finance:view` permission instead of proposal access.
 - PHPUnit smoke tests cover the audit-duration service and critical workflow gate wiring.
+- Multiple roles per user are supported, with `super_admin` as the only full-access tenant owner role. Operational roles are normalized, and workflow actions now enforce per-stage roles plus assignment/conflict rules for auditors, reviewers, decision makers, GM approval, certificate issue, and feedback.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus
 
-Project-owner compliance hardening and workflow validation: core gates are now in place for audit duration basis, multi-standard competence coverage, full-file Technical Review/Decision readiness, surveillance locks, and auditor confirmation of generated report clauses.
+Project-owner compliance hardening and workflow validation: core gates are now in place for audit duration basis, multi-standard competence coverage, full-file Technical Review/Decision readiness, surveillance locks, auditor confirmation of generated report clauses, and role-based workflow authority.
 
 ## Next
 
 - Expand tests from wiring/smoke tests into database-backed feature tests for surveillance locks, appointment gates, audit completion, Technical Review, Decision, PDF routes, and audit duration edge cases.
+- Build a user/role management screen so Super Users can assign multiple roles from the portal instead of relying on seed/migration data.
 - Review official licensed MD/scheme tables with the Certification Body and tune the controlled audit-duration rule set where needed.
 - Add richer controlled checklist/question banks per standard without copying licensed standard text.
 - Continue refining controlled PDF templates against the user-provided document formats, especially certificate issuance and client feedback.

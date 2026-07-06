@@ -98,7 +98,8 @@ class InitialAmsSeeder extends Seeder
     private function seedRoles(): void
     {
         $roles = [
-            ['administrator', 'Administrator', 'Full system administration and tenant configuration.', true],
+            ['super_admin', 'Super User', 'Full tenant owner access to every module and workflow action.', true],
+            ['administrator', 'Administrator', 'Day-to-day certification operations administration.', true],
             ['quality_manager', 'Quality Manager', 'Quality system oversight, approval, and audit trail review.', true],
             ['technical_manager', 'Technical Manager', 'Application review, technical controls, and competence oversight.', true],
             ['proposal_officer', 'Proposal Officer', 'Client enquiries, proposals, contracts, and commercial records.', true],
@@ -133,12 +134,12 @@ class InitialAmsSeeder extends Seeder
 
     private function seedRolePermissions(): void
     {
-        $administratorId = $this->roleId('administrator');
+        $superAdminId = $this->roleId('super_admin');
 
         $this->db->query(
             'INSERT IGNORE INTO role_permissions (role_id, permission_id)
              SELECT ?, id FROM permissions',
-            [$administratorId]
+            [$superAdminId]
         );
 
         $viewerId = $this->roleId('viewer');
@@ -150,6 +151,12 @@ class InitialAmsSeeder extends Seeder
         );
 
         $roleRules = [
+            'administrator' => [
+                'dashboard', 'clients', 'legacy_imports', 'standards', 'personnel', 'competency_matrix',
+                'application_reviews', 'proposals', 'contracts', 'audit_programs', 'auditor_appointments',
+                'audit_plans', 'reports', 'ncrs', 'capas', 'technical_reviews', 'certification_decisions',
+                'certificates', 'document_templates', 'finance', 'global_search',
+            ],
             'quality_manager' => [
                 'dashboard', 'clients', 'standards', 'questionnaires', 'application_reviews',
                 'audit_programs', 'clause_library', 'reports', 'ncrs', 'capas', 'internal_audits',
