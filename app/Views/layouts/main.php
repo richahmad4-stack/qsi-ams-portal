@@ -136,31 +136,51 @@
 $currentPath = trim(uri_string(), '/');
 $currentUser = current_user();
 $currentRoles = $currentUser['roles'] ?? [];
-$financeRoles = ['administrator', 'finance', 'general_manager', 'coo', 'finance_officer', 'admin'];
-$showFinance = can('finance', 'view') || array_intersect($financeRoles, $currentRoles) !== [];
+$hasAnyRole = static fn (array $roles): bool => array_intersect($roles, $currentRoles) !== [];
+$isOperationsUser = $hasAnyRole([
+    'super_admin',
+    'administrator',
+    'certification_manager',
+    'technical_manager',
+    'quality_manager',
+    'general_manager',
+    'chief_operating_officer',
+    'proposal_officer',
+    'sales_executive',
+    'document_controller',
+]);
+$isAuditUser = $hasAnyRole(['auditor', 'lead_auditor']);
+$isReviewer = $hasAnyRole(['technical_reviewer']);
+$isDecisionMaker = $hasAnyRole(['certification_decision_maker']);
+$isFinanceUser = $hasAnyRole(['finance']) || can('finance', 'view');
+
+$visibleItems = static fn (array $items): array => array_values(array_filter($items, static fn (?array $item): bool => $item !== null && ($item['show'] ?? true)));
 
 $nav = [
-    'Core' => [
+    'Core' => $visibleItems([
         ['label' => 'Dashboard', 'icon' => 'fa-chart-line', 'href' => site_url('dashboard'), 'match' => 'dashboard'],
-        ['label' => 'Workflow', 'icon' => 'fa-diagram-project', 'href' => site_url('workflow/certification'), 'match' => 'workflow/certification'],
-        ['label' => 'Clients', 'icon' => 'fa-building', 'href' => site_url('masters/clients'), 'match' => 'masters/clients'],
-        ['label' => 'Legacy Import', 'icon' => 'fa-file-import', 'href' => site_url('masters/imports'), 'match' => 'masters/imports'],
-        ['label' => 'Standards', 'icon' => 'fa-certificate', 'href' => site_url('masters/standards'), 'match' => 'masters/standards'],
-    ],
-    'Finance' => array_filter([
-        $showFinance ? ['label' => 'Finance Dashboard', 'icon' => 'fa-coins', 'href' => site_url('finance'), 'match' => 'finance'] : null,
+        ['label' => 'Workflow', 'icon' => 'fa-diagram-project', 'href' => site_url('workflow/certification'), 'match' => 'workflow/certification', 'show' => $isOperationsUser && can('clients', 'view')],
+        ['label' => 'Clients', 'icon' => 'fa-building', 'href' => site_url('masters/clients'), 'match' => 'masters/clients', 'show' => $isOperationsUser && can('clients', 'view')],
+        ['label' => 'My Audits', 'icon' => 'fa-clipboard-check', 'href' => site_url('dashboard/section/my_audits'), 'match' => 'dashboard/section/my_audits', 'show' => $isAuditUser],
+        ['label' => 'My Reviews', 'icon' => 'fa-user-check', 'href' => site_url('dashboard/section/my_technical_reviews'), 'match' => 'dashboard/section/my_technical_reviews', 'show' => $isReviewer],
+        ['label' => 'My Decisions', 'icon' => 'fa-stamp', 'href' => site_url('dashboard/section/my_decisions'), 'match' => 'dashboard/section/my_decisions', 'show' => $isDecisionMaker],
+        ['label' => 'Legacy Import', 'icon' => 'fa-file-import', 'href' => site_url('masters/imports'), 'match' => 'masters/imports', 'show' => $isOperationsUser && can('legacy_imports', 'view')],
+        ['label' => 'Standards', 'icon' => 'fa-certificate', 'href' => site_url('masters/standards'), 'match' => 'masters/standards', 'show' => $isOperationsUser && can('standards', 'view')],
     ]),
-    'References' => [
-        ['label' => 'IAF Codes', 'icon' => 'fa-tags', 'href' => site_url('masters/references/iaf'), 'match' => 'masters/references/iaf'],
-        ['label' => 'NACE Codes', 'icon' => 'fa-industry', 'href' => site_url('masters/references/nace'), 'match' => 'masters/references/nace'],
-        ['label' => 'Food Categories', 'icon' => 'fa-utensils', 'href' => site_url('masters/references/food'), 'match' => 'masters/references/food'],
-        ['label' => 'Medical Categories', 'icon' => 'fa-kit-medical', 'href' => site_url('masters/references/medical'), 'match' => 'masters/references/medical'],
-    ],
-    'Resources' => [
-        ['label' => 'Personnel', 'icon' => 'fa-users', 'href' => site_url('masters/personnel'), 'match' => 'masters/personnel'],
-        ['label' => 'Clause Library', 'icon' => 'fa-book-open', 'href' => site_url('masters/clauses'), 'match' => 'masters/clauses'],
-        ['label' => 'Templates', 'icon' => 'fa-file-lines', 'href' => site_url('masters/templates'), 'match' => 'masters/templates'],
-    ],
+    'Finance' => $visibleItems([
+        ['label' => 'Finance Dashboard', 'icon' => 'fa-coins', 'href' => site_url('finance'), 'match' => 'finance', 'show' => $isFinanceUser],
+    ]),
+    'References' => $visibleItems([
+        ['label' => 'IAF Codes', 'icon' => 'fa-tags', 'href' => site_url('masters/references/iaf'), 'match' => 'masters/references/iaf', 'show' => $isOperationsUser && can('standards', 'view')],
+        ['label' => 'NACE Codes', 'icon' => 'fa-industry', 'href' => site_url('masters/references/nace'), 'match' => 'masters/references/nace', 'show' => $isOperationsUser && can('standards', 'view')],
+        ['label' => 'Food Categories', 'icon' => 'fa-utensils', 'href' => site_url('masters/references/food'), 'match' => 'masters/references/food', 'show' => $isOperationsUser && can('standards', 'view')],
+        ['label' => 'Medical Categories', 'icon' => 'fa-kit-medical', 'href' => site_url('masters/references/medical'), 'match' => 'masters/references/medical', 'show' => $isOperationsUser && can('standards', 'view')],
+    ]),
+    'Resources' => $visibleItems([
+        ['label' => 'Personnel', 'icon' => 'fa-users', 'href' => site_url('masters/personnel'), 'match' => 'masters/personnel', 'show' => $isOperationsUser && can('personnel', 'view')],
+        ['label' => 'Clause Library', 'icon' => 'fa-book-open', 'href' => site_url('masters/clauses'), 'match' => 'masters/clauses', 'show' => ($isOperationsUser || $isAuditUser) && can('clause_library', 'view')],
+        ['label' => 'Templates', 'icon' => 'fa-file-lines', 'href' => site_url('masters/templates'), 'match' => 'masters/templates', 'show' => $isOperationsUser && can('document_templates', 'view')],
+    ]),
 ];
 ?>
 <div class="app-shell">
@@ -168,6 +188,9 @@ $nav = [
         <div class="sidebar-brand">QSI AMS</div>
         <nav class="nav flex-column">
             <?php foreach ($nav as $section => $items): ?>
+                <?php if ($items === []): ?>
+                    <?php continue; ?>
+                <?php endif; ?>
                 <div class="sidebar-section"><?= esc($section) ?></div>
                 <?php foreach ($items as $item): ?>
                     <?php $active = str_starts_with($currentPath, $item['match']); ?>

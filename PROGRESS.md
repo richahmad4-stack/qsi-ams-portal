@@ -25,11 +25,14 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Finance dashboard route and sidebar visibility now use the `finance:view` permission instead of proposal access.
 - PHPUnit smoke tests cover the audit-duration service and critical workflow gate wiring.
 - Multiple roles per user are supported, with `super_admin` as the only full-access tenant owner role. Operational roles are normalized, and workflow actions now enforce per-stage roles plus assignment/conflict rules for auditors, reviewers, decision makers, GM approval, certificate issue, and feedback.
+- Role-specific dashboards are now active: global management roles keep the management dashboard, while auditors/lead auditors see their assigned audit queue, technical reviewers see assigned reviews, decision makers see assigned decisions, and finance users see finance work.
+- Sidebar visibility is now role-aware so task users only see relevant navigation such as My Audits, My Reviews, My Decisions, Finance, or Clause Library as applicable.
+- Auditor appointment saves now create in-app notifications and can send appointment emails when SMTP/email notifications are configured.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus
 
-Project-owner compliance hardening and workflow validation: core gates are now in place for audit duration basis, multi-standard competence coverage, full-file Technical Review/Decision readiness, surveillance locks, auditor confirmation of generated report clauses, and role-based workflow authority.
+Project-owner compliance hardening and workflow validation: core gates are now in place for audit duration basis, multi-standard competence coverage, full-file Technical Review/Decision readiness, surveillance locks, auditor confirmation of generated report clauses, role-based workflow authority, and first-pass role-specific dashboards.
 
 ## Next
 
@@ -41,4 +44,4 @@ Project-owner compliance hardening and workflow validation: core gates are now i
 - Continue checking multi-standard client files such as HACCP + ISO 22000 + ISO 9001 for stage-specific workflow, competence matching, and PDF consistency.
 - Continue generating/reviewing sample PDFs for application review, proposal, contract, audit programme, audit plans, audit reports, technical review, decision, certificate, and feedback.
 - Continue polish across certification, surveillance, and recertification workflow screens where the user finds unclear grouping.
-- Add stronger user-login/personnel-client separation and role-specific access flows.
+- Configure real SMTP settings for live email delivery, then test appointment emails outside the local demo environment.

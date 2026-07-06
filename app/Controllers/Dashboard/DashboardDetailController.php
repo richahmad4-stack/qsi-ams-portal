@@ -7,9 +7,23 @@ use Config\Database;
 
 class DashboardDetailController extends BaseController
 {
+    private const GLOBAL_DASHBOARD_ROLES = [
+        'super_admin',
+        'administrator',
+        'certification_manager',
+        'technical_manager',
+        'quality_manager',
+        'general_manager',
+        'chief_operating_officer',
+    ];
+
     public function show(string $section)
     {
         $tenantId = (int) session()->get('tenant_id');
+        if (! $this->canOpenSection($section)) {
+            return redirect()->to('/dashboard')->with('error', 'This dashboard section is not assigned to your role.');
+        }
+
         $definition = $this->definition($section, $tenantId);
 
         if ($definition === null) {
@@ -26,14 +40,36 @@ class DashboardDetailController extends BaseController
         ]);
     }
 
+    private function canOpenSection(string $section): bool
+    {
+        $roles = (array) session()->get('role_codes');
+        if (array_intersect(self::GLOBAL_DASHBOARD_ROLES, $roles) !== []) {
+            return true;
+        }
+
+        if ($section === 'my_finance_items') {
+            return in_array('finance', $roles, true);
+        }
+
+        return str_starts_with($section, 'my_');
+    }
+
     private function definition(string $section, int $tenantId): ?array
     {
         $today = date('Y-m-d');
         $next30 = date('Y-m-d', strtotime('+30 days'));
         $next90 = date('Y-m-d', strtotime('+90 days'));
         $db = Database::connect();
+        $personnelId = $this->currentPersonnelId($tenantId);
 
         return match ($section) {
+            'my_audits', 'my_open_audits' => $personnelId === null ? $this->emptySection('My open audits', ['Client', 'Audit', 'Stage', 'Role', 'Start', 'Status']) : $this->myAuditSection('My open audits', $personnelId, false),
+            'my_closed_audits' => $personnelId === null ? $this->emptySection('My closed audits', ['Client', 'Audit', 'Stage', 'Role', 'Start', 'Status']) : $this->myAuditSection('My closed audits', $personnelId, true),
+            'my_audits_due' => $personnelId === null ? $this->emptySection('Audits due in 30 days', ['Client', 'Audit', 'Stage', 'Role', 'Start', 'Status']) : $this->myAuditSection('Audits due in 30 days', $personnelId, false, $today, $next30),
+            'my_open_ncrs' => $personnelId === null ? $this->emptySection('My open NCRs', ['NCR', 'Client', 'Audit stage', 'Class', 'Status', 'Target']) : $this->myNcrSection($personnelId),
+            'my_technical_reviews' => $personnelId === null ? $this->emptySection('My technical reviews', ['Client', 'Audit stage', 'Audit', 'Recommendation', 'Status']) : $this->myTechnicalReviewSection($personnelId),
+            'my_decisions' => $personnelId === null ? $this->emptySection('My decisions', ['Client', 'Audit stage', 'Audit', 'Decision', 'Status']) : $this->myDecisionSection($personnelId),
+            'my_finance_items' => $this->proposalSection('My finance items'),
             'total_clients' => $this->clientSection('Total clients', $db->table('clients')->where('tenant_id', $tenantId)->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
             'legacy_clients' => $this->clientSection('Legacy clients', $db->table('clients')->where('tenant_id', $tenantId)->where('is_legacy', 1)->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
             'active_clients' => $this->clientSection('Active clients', $db->table('clients')->where('tenant_id', $tenantId)->whereIn('certification_status', ['certified', 'active'])->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
@@ -55,6 +91,15 @@ class DashboardDetailController extends BaseController
             'monthly_revenue' => $this->proposalSection('Monthly revenue source proposals'),
             default => null,
         };
+    }
+
+    private function emptySection(string $title, array $columns): array
+    {
+        return [
+            'title' => $title,
+            'columns' => $columns,
+            'rows' => [],
+        ];
     }
 
     private function clientSection(string $title, array $clients): array
@@ -274,6 +319,129 @@ class DashboardDetailController extends BaseController
         ];
     }
 
+    private function myAuditSection(string $title, int $personnelId, bool $closed, ?string $from = null, ?string $to = null): array
+    {
+        $builder = Database::connect()->table('audit_events')
+            ->select("audit_events.id, audit_events.audit_program_id, audit_events.event_type, audit_events.audit_number, audit_events.planned_start_date, audit_events.planned_end_date, audit_events.actual_start_date, audit_events.actual_end_date, audit_events.audit_window_start, audit_events.audit_window_end, audit_events.duration_days, audit_events.status, audit_events.created_at, audit_events.updated_at, clients.id AS client_id, clients.company, GROUP_CONCAT(DISTINCT auditor_appointments.appointment_role ORDER BY auditor_appointments.appointment_role SEPARATOR ', ') AS appointment_role", false)
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('clients', 'clients.id = audit_programs.client_id')
+            ->join('auditor_appointments', 'auditor_appointments.audit_event_id = audit_events.id')
+            ->where('audit_programs.tenant_id', (int) session()->get('tenant_id'))
+            ->where('auditor_appointments.personnel_id', $personnelId)
+            ->whereIn('auditor_appointments.status', ['appointed', 'accepted', 'confirmed', 'approved', 'active']);
+
+        if ($closed) {
+            $builder->whereIn('audit_events.status', ['completed', 'closed']);
+        } else {
+            $builder->whereNotIn('audit_events.status', ['completed', 'closed', 'cancelled']);
+        }
+
+        if ($from !== null) {
+            $builder->where('audit_events.planned_start_date >=', $from);
+        }
+
+        if ($to !== null) {
+            $builder->where('audit_events.planned_start_date <=', $to);
+        }
+
+        $rows = $builder
+            ->groupBy('audit_events.id, audit_events.audit_program_id, audit_events.event_type, audit_events.audit_number, audit_events.planned_start_date, audit_events.planned_end_date, audit_events.actual_start_date, audit_events.actual_end_date, audit_events.audit_window_start, audit_events.audit_window_end, audit_events.duration_days, audit_events.status, audit_events.created_at, audit_events.updated_at, clients.id, clients.company')
+            ->orderBy('audit_events.planned_start_date', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        return [
+            'title' => $title,
+            'columns' => ['Client', 'Audit', 'Stage', 'Role', 'Start', 'Status'],
+            'rows' => array_map(fn (array $event): array => [
+                'cells' => [$event['company'], $event['audit_number'], str_replace('_', ' ', $event['event_type']), str_replace('_', ' ', $event['appointment_role']), $event['planned_start_date'], $event['status']],
+                'view' => site_url('workflow/certification/' . $event['client_id'] . '/audit-events/' . $event['id'] . '/file'),
+                'edit' => site_url('workflow/certification/' . $event['client_id'] . '/audit-events/' . $event['id'] . '/execute'),
+                'pdf' => site_url('workflow/certification/' . $event['client_id'] . '/audit-events/' . $event['id'] . '/documents/audit_report'),
+            ], $rows),
+        ];
+    }
+
+    private function myNcrSection(int $personnelId): array
+    {
+        $rows = Database::connect()->table('ncrs')
+            ->select('ncrs.*, clients.id AS client_id, clients.company, audit_events.event_type')
+            ->join('audit_events', 'audit_events.id = ncrs.audit_event_id')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('clients', 'clients.id = audit_programs.client_id')
+            ->join('auditor_appointments', 'auditor_appointments.audit_event_id = audit_events.id')
+            ->where('audit_programs.tenant_id', (int) session()->get('tenant_id'))
+            ->where('auditor_appointments.personnel_id', $personnelId)
+            ->whereIn('auditor_appointments.status', ['appointed', 'accepted', 'confirmed', 'approved', 'active'])
+            ->whereNotIn('ncrs.status', ['closed', 'verified_closed', 'cancelled'])
+            ->distinct()
+            ->orderBy('ncrs.id', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        return [
+            'title' => 'My open NCRs',
+            'columns' => ['NCR', 'Client', 'Audit stage', 'Class', 'Status', 'Target'],
+            'rows' => array_map(fn (array $ncr): array => [
+                'cells' => [$ncr['ncr_number'], $ncr['company'], str_replace('_', ' ', $ncr['event_type']), strtoupper($ncr['classification']), $ncr['status'], $ncr['target_date']],
+                'view' => site_url('workflow/certification/' . $ncr['client_id'] . '/audit-events/' . $ncr['audit_event_id'] . '/file'),
+                'edit' => site_url('workflow/certification/' . $ncr['client_id'] . '/audit-events/' . $ncr['audit_event_id'] . '/execute'),
+                'pdf' => site_url('workflow/certification/' . $ncr['client_id'] . '/audit-events/' . $ncr['audit_event_id'] . '/documents/ncr_capa'),
+            ], $rows),
+        ];
+    }
+
+    private function myTechnicalReviewSection(int $personnelId): array
+    {
+        $rows = Database::connect()->table('technical_reviews')
+            ->select('technical_reviews.*, clients.id AS client_id, clients.company, audit_events.event_type, audit_events.audit_number')
+            ->join('audit_events', 'audit_events.id = technical_reviews.audit_event_id')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('clients', 'clients.id = audit_programs.client_id')
+            ->where('technical_reviews.tenant_id', (int) session()->get('tenant_id'))
+            ->where('technical_reviews.reviewer_personnel_id', $personnelId)
+            ->orderBy('technical_reviews.id', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        return [
+            'title' => 'My technical reviews',
+            'columns' => ['Client', 'Audit stage', 'Audit', 'Recommendation', 'Status'],
+            'rows' => array_map(fn (array $review): array => [
+                'cells' => [$review['company'], str_replace('_', ' ', $review['event_type']), $review['audit_number'], str_replace('_', ' ', (string) $review['recommendation']), $review['status']],
+                'view' => site_url('workflow/certification/' . $review['client_id'] . '/audit-events/' . $review['audit_event_id'] . '/file'),
+                'edit' => site_url('workflow/certification/' . $review['client_id'] . '/technical-review?event_id=' . $review['audit_event_id']),
+                'pdf' => site_url('workflow/certification/' . $review['client_id'] . '/audit-events/' . $review['audit_event_id'] . '/documents/technical_review'),
+            ], $rows),
+        ];
+    }
+
+    private function myDecisionSection(int $personnelId): array
+    {
+        $rows = Database::connect()->table('certification_decisions')
+            ->select('certification_decisions.*, technical_reviews.audit_event_id, clients.id AS client_id, clients.company, audit_events.event_type, audit_events.audit_number')
+            ->join('technical_reviews', 'technical_reviews.id = certification_decisions.technical_review_id')
+            ->join('audit_events', 'audit_events.id = technical_reviews.audit_event_id')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('clients', 'clients.id = audit_programs.client_id')
+            ->where('certification_decisions.tenant_id', (int) session()->get('tenant_id'))
+            ->where('certification_decisions.decision_maker_personnel_id', $personnelId)
+            ->orderBy('certification_decisions.id', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        return [
+            'title' => 'My decisions',
+            'columns' => ['Client', 'Audit stage', 'Audit', 'Decision', 'Status'],
+            'rows' => array_map(fn (array $decision): array => [
+                'cells' => [$decision['company'], str_replace('_', ' ', $decision['event_type']), $decision['audit_number'], str_replace('_', ' ', $decision['decision']), $decision['status']],
+                'view' => site_url('workflow/certification/' . $decision['client_id'] . '/audit-events/' . $decision['audit_event_id'] . '/file'),
+                'edit' => site_url('workflow/certification/' . $decision['client_id'] . '/decision?event_id=' . $decision['audit_event_id']),
+                'pdf' => site_url('workflow/certification/' . $decision['client_id'] . '/audit-events/' . $decision['audit_event_id'] . '/documents/decision_report'),
+            ], $rows),
+        ];
+    }
+
     private function proposalSection(string $title): array
     {
         $monthStart = date('Y-m-01');
@@ -335,5 +503,18 @@ class DashboardDetailController extends BaseController
         }
 
         return $builder->orderBy('certificates.expiry_date', 'ASC')->get()->getResultArray();
+    }
+
+    private function currentPersonnelId(int $tenantId): ?int
+    {
+        $row = Database::connect()->table('personnel')
+            ->select('id')
+            ->where('tenant_id', $tenantId)
+            ->where('user_id', (int) session()->get('user_id'))
+            ->where('deleted_at', null)
+            ->get()
+            ->getRowArray();
+
+        return $row === null ? null : (int) $row['id'];
     }
 }

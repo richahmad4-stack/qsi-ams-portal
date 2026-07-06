@@ -13,10 +13,14 @@ class DashboardController extends BaseController
     {
         $user = (new AuthService())->currentUser();
 
+        $dashboardService = new DashboardService();
+        $dashboard = $dashboardService->dashboardForUser((int) $user['tenant_id'], (int) $user['id'], (array) $user['roles']);
+
         return view('dashboard/index', [
             'title' => 'Dashboard',
             'user' => $user,
-            'dashboard' => (new DashboardService())->metrics((int) $user['tenant_id']),
+            'dashboardMode' => $dashboard['mode'],
+            'dashboard' => $dashboard['data'],
             'notifications' => Database::connect()->table('notifications')
                 ->where('tenant_id', (int) $user['tenant_id'])
                 ->where('user_id', (int) $user['id'])

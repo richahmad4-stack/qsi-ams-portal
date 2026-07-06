@@ -6,6 +6,16 @@ use Config\Database;
 
 class DashboardService
 {
+    private const GLOBAL_DASHBOARD_ROLES = [
+        'super_admin',
+        'administrator',
+        'certification_manager',
+        'technical_manager',
+        'quality_manager',
+        'general_manager',
+        'chief_operating_officer',
+    ];
+
     public function metrics(int $tenantId): array
     {
         $today = date('Y-m-d');
@@ -48,6 +58,37 @@ class DashboardService
             'upcoming_surveillance_table' => $this->auditCalendar($tenantId, $today, $next90, ['surveillance1', 'surveillance2']),
             'expiring_certificates' => $this->expiringCertificateRows($tenantId, $today, $next90),
             'recent_activities' => $this->recentActivities($tenantId),
+        ];
+    }
+
+    public function dashboardForUser(int $tenantId, int $userId, array $roles): array
+    {
+        if (array_intersect(self::GLOBAL_DASHBOARD_ROLES, $roles) !== []) {
+            return [
+                'mode' => 'global',
+                'data' => $this->metrics($tenantId),
+            ];
+        }
+
+        $personnelId = $this->personnelIdForUser($tenantId, $userId);
+
+        return [
+            'mode' => 'personal',
+            'data' => [
+                'cards' => [
+                    'my_open_audits' => $personnelId === null ? 0 : $this->assignedAuditCount($tenantId, $personnelId, false),
+                    'my_closed_audits' => $personnelId === null ? 0 : $this->assignedAuditCount($tenantId, $personnelId, true),
+                    'my_due_30' => $personnelId === null ? 0 : $this->assignedAuditDueCount($tenantId, $personnelId),
+                    'my_open_ncrs' => $personnelId === null ? 0 : $this->assignedNcrCount($tenantId, $personnelId),
+                    'my_reviews' => $personnelId === null ? 0 : $this->assignedTechnicalReviewCount($tenantId, $personnelId),
+                    'my_decisions' => $personnelId === null ? 0 : $this->assignedDecisionCount($tenantId, $personnelId),
+                    'finance_items' => in_array('finance', $roles, true) ? $this->financeWorkCount($tenantId) : 0,
+                ],
+                'assigned_audits' => $personnelId === null ? [] : $this->assignedAudits($tenantId, $personnelId),
+                'assigned_reviews' => $personnelId === null ? [] : $this->assignedTechnicalReviews($tenantId, $personnelId),
+                'assigned_decisions' => $personnelId === null ? [] : $this->assignedDecisions($tenantId, $personnelId),
+                'finance_summary' => in_array('finance', $roles, true) ? $this->feeSummary($tenantId) : [],
+            ],
         ];
     }
 
@@ -351,6 +392,138 @@ class DashboardService
             ->limit(12)
             ->get()
             ->getResultArray();
+    }
+
+    private function personnelIdForUser(int $tenantId, int $userId): ?int
+    {
+        $row = $this->db()->table('personnel')
+            ->select('id')
+            ->where('tenant_id', $tenantId)
+            ->where('user_id', $userId)
+            ->where('deleted_at', null)
+            ->get()
+            ->getRowArray();
+
+        return $row === null ? null : (int) $row['id'];
+    }
+
+    private function assignedAuditCount(int $tenantId, int $personnelId, bool $closed): int
+    {
+        $builder = $this->assignedAuditBase($tenantId, $personnelId);
+
+        if ($closed) {
+            $builder->whereIn('audit_events.status', ['completed', 'closed']);
+        } else {
+            $builder->whereNotIn('audit_events.status', ['completed', 'closed', 'cancelled']);
+        }
+
+        return (int) $builder->select('audit_events.id')->distinct()->countAllResults();
+    }
+
+    private function assignedAuditDueCount(int $tenantId, int $personnelId): int
+    {
+        return (int) $this->assignedAuditBase($tenantId, $personnelId)
+            ->select('audit_events.id')
+            ->distinct()
+            ->where('audit_events.planned_start_date >=', date('Y-m-d'))
+            ->where('audit_events.planned_start_date <=', date('Y-m-d', strtotime('+30 days')))
+            ->whereNotIn('audit_events.status', ['completed', 'closed', 'cancelled'])
+            ->countAllResults();
+    }
+
+    private function assignedNcrCount(int $tenantId, int $personnelId): int
+    {
+        return (int) $this->db()->table('ncrs')
+            ->join('audit_events', 'audit_events.id = ncrs.audit_event_id')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('auditor_appointments', 'auditor_appointments.audit_event_id = audit_events.id')
+            ->where('audit_programs.tenant_id', $tenantId)
+            ->where('auditor_appointments.personnel_id', $personnelId)
+            ->whereIn('auditor_appointments.status', ['appointed', 'accepted', 'confirmed', 'approved', 'active'])
+            ->whereNotIn('ncrs.status', ['closed', 'verified_closed', 'cancelled'])
+            ->select('ncrs.id')
+            ->distinct()
+            ->countAllResults();
+    }
+
+    private function assignedTechnicalReviewCount(int $tenantId, int $personnelId): int
+    {
+        return (int) $this->db()->table('technical_reviews')
+            ->where('tenant_id', $tenantId)
+            ->where('reviewer_personnel_id', $personnelId)
+            ->whereNotIn('status', ['approved', 'closed', 'completed', 'cancelled'])
+            ->countAllResults();
+    }
+
+    private function assignedDecisionCount(int $tenantId, int $personnelId): int
+    {
+        return (int) $this->db()->table('certification_decisions')
+            ->where('tenant_id', $tenantId)
+            ->where('decision_maker_personnel_id', $personnelId)
+            ->whereNotIn('status', ['approved', 'closed', 'completed', 'cancelled'])
+            ->countAllResults();
+    }
+
+    private function financeWorkCount(int $tenantId): int
+    {
+        return (int) $this->db()->table('proposals')
+            ->where('tenant_id', $tenantId)
+            ->where('deleted_at', null)
+            ->whereIn('status', ['accepted', 'contracted'])
+            ->countAllResults();
+    }
+
+    private function assignedAudits(int $tenantId, int $personnelId): array
+    {
+        return $this->assignedAuditBase($tenantId, $personnelId)
+            ->select("audit_events.id, audit_events.audit_program_id, audit_events.event_type, audit_events.audit_number, audit_events.planned_start_date, audit_events.planned_end_date, audit_events.actual_start_date, audit_events.actual_end_date, audit_events.audit_window_start, audit_events.audit_window_end, audit_events.duration_days, audit_events.status, audit_events.created_at, audit_events.updated_at, audit_programs.client_id, clients.company, GROUP_CONCAT(DISTINCT auditor_appointments.appointment_role ORDER BY auditor_appointments.appointment_role SEPARATOR ', ') AS appointment_role", false)
+            ->groupBy('audit_events.id, audit_events.audit_program_id, audit_events.event_type, audit_events.audit_number, audit_events.planned_start_date, audit_events.planned_end_date, audit_events.actual_start_date, audit_events.actual_end_date, audit_events.audit_window_start, audit_events.audit_window_end, audit_events.duration_days, audit_events.status, audit_events.created_at, audit_events.updated_at, audit_programs.client_id, clients.company')
+            ->orderBy('audit_events.planned_start_date', 'DESC')
+            ->limit(25)
+            ->get()
+            ->getResultArray();
+    }
+
+    private function assignedTechnicalReviews(int $tenantId, int $personnelId): array
+    {
+        return $this->db()->table('technical_reviews')
+            ->select('technical_reviews.*, clients.id AS client_id, clients.company, audit_events.event_type, audit_events.audit_number')
+            ->join('audit_events', 'audit_events.id = technical_reviews.audit_event_id')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('clients', 'clients.id = audit_programs.client_id')
+            ->where('technical_reviews.tenant_id', $tenantId)
+            ->where('technical_reviews.reviewer_personnel_id', $personnelId)
+            ->orderBy('technical_reviews.id', 'DESC')
+            ->limit(15)
+            ->get()
+            ->getResultArray();
+    }
+
+    private function assignedDecisions(int $tenantId, int $personnelId): array
+    {
+        return $this->db()->table('certification_decisions')
+            ->select('certification_decisions.*, technical_reviews.audit_event_id, clients.id AS client_id, clients.company, audit_events.event_type, audit_events.audit_number')
+            ->join('technical_reviews', 'technical_reviews.id = certification_decisions.technical_review_id')
+            ->join('audit_events', 'audit_events.id = technical_reviews.audit_event_id')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('clients', 'clients.id = audit_programs.client_id')
+            ->where('certification_decisions.tenant_id', $tenantId)
+            ->where('certification_decisions.decision_maker_personnel_id', $personnelId)
+            ->orderBy('certification_decisions.id', 'DESC')
+            ->limit(15)
+            ->get()
+            ->getResultArray();
+    }
+
+    private function assignedAuditBase(int $tenantId, int $personnelId)
+    {
+        return $this->db()->table('audit_events')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('clients', 'clients.id = audit_programs.client_id')
+            ->join('auditor_appointments', 'auditor_appointments.audit_event_id = audit_events.id')
+            ->where('audit_programs.tenant_id', $tenantId)
+            ->where('auditor_appointments.personnel_id', $personnelId)
+            ->whereIn('auditor_appointments.status', ['appointed', 'accepted', 'confirmed', 'approved', 'active']);
     }
 
     private function hasSoftDelete(string $table): bool

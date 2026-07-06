@@ -17,11 +17,12 @@
 <?= $this->section('content') ?>
 <?php
 $cards = $dashboard['cards'];
-$pipeline = $dashboard['proposal_pipeline'];
-$workload = $dashboard['auditor_workload'];
-$calendar = $dashboard['audit_calendar'];
-$auditStatus = $dashboard['audit_status'];
-$activities = $dashboard['recent_activities'];
+$dashboardMode = $dashboardMode ?? 'global';
+$pipeline = $dashboard['proposal_pipeline'] ?? [];
+$workload = $dashboard['auditor_workload'] ?? [];
+$calendar = $dashboard['audit_calendar'] ?? [];
+$auditStatus = $dashboard['audit_status'] ?? [];
+$activities = $dashboard['recent_activities'] ?? [];
 $notifications = $notifications ?? [];
 
 $pipelineLabels = array_column($pipeline, 'status');
@@ -31,6 +32,172 @@ $statusData = array_map('intval', array_column($auditStatus, 'total'));
 $workloadLabels = array_column($workload, 'full_name');
 $workloadData = array_map('intval', array_column($workload, 'total'));
 ?>
+
+<?php if ($dashboardMode === 'personal'): ?>
+    <?php
+    $assignedAudits = $dashboard['assigned_audits'] ?? [];
+    $assignedReviews = $dashboard['assigned_reviews'] ?? [];
+    $assignedDecisions = $dashboard['assigned_decisions'] ?? [];
+    $financeSummary = $dashboard['finance_summary'] ?? [];
+    $personalCards = [
+        ['My open audits', $cards['my_open_audits'] ?? 0, 'fa-clipboard-check', 'my_open_audits'],
+        ['My closed audits', $cards['my_closed_audits'] ?? 0, 'fa-folder-closed', 'my_closed_audits'],
+        ['Due in 30 days', $cards['my_due_30'] ?? 0, 'fa-calendar-days', 'my_audits_due'],
+        ['My open NCRs', $cards['my_open_ncrs'] ?? 0, 'fa-triangle-exclamation', 'my_open_ncrs'],
+        ['My reviews', $cards['my_reviews'] ?? 0, 'fa-user-check', 'my_technical_reviews'],
+        ['My decisions', $cards['my_decisions'] ?? 0, 'fa-stamp', 'my_decisions'],
+        ['Finance items', $cards['finance_items'] ?? 0, 'fa-coins', 'my_finance_items'],
+    ];
+    ?>
+
+    <div class="row g-3 mb-3">
+        <?php foreach ($personalCards as [$label, $value, $icon, $section]): ?>
+            <?php if ((int) $value === 0 && in_array($section, ['my_technical_reviews', 'my_decisions', 'my_finance_items'], true)): ?>
+                <?php continue; ?>
+            <?php endif; ?>
+            <div class="col-sm-6 col-xl-3">
+                <a class="metric d-block text-decoration-none text-reset" href="<?= site_url('dashboard/section/' . $section) ?>">
+                    <div class="d-flex justify-content-between gap-3">
+                        <div>
+                            <div class="text-secondary small"><?= esc($label) ?></div>
+                            <div class="metric-value"><?= esc((string) $value) ?></div>
+                        </div>
+                        <i class="fa-solid <?= esc($icon) ?> text-primary fs-4" aria-hidden="true"></i>
+                    </div>
+                </a>
+            </div>
+        <?php endforeach; ?>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12">
+            <section class="panel">
+                <div class="panel-title">My assigned audits</div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                        <tr>
+                            <th>Client</th>
+                            <th>Audit</th>
+                            <th>Stage</th>
+                            <th>Role</th>
+                            <th>Planned dates</th>
+                            <th>Status</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if ($assignedAudits === []): ?>
+                            <tr><td colspan="7" class="text-secondary">No assigned audits.</td></tr>
+                        <?php endif; ?>
+                        <?php foreach ($assignedAudits as $audit): ?>
+                            <tr>
+                                <td><?= esc($audit['company']) ?></td>
+                                <td><?= esc($audit['audit_number']) ?></td>
+                                <td><?= esc(str_replace('_', ' ', $audit['event_type'])) ?></td>
+                                <td><?= esc(str_replace('_', ' ', $audit['appointment_role'])) ?></td>
+                                <td><?= esc($audit['planned_start_date'] . ' to ' . $audit['planned_end_date']) ?></td>
+                                <td><?= esc($audit['status']) ?></td>
+                                <td class="text-end">
+                                    <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('workflow/certification/' . $audit['client_id'] . '/audit-events/' . $audit['id'] . '/file') ?>">
+                                        <i class="fa-solid fa-folder-open me-1" aria-hidden="true"></i>File
+                                    </a>
+                                    <a class="btn btn-primary btn-sm" href="<?= site_url('workflow/certification/' . $audit['client_id'] . '/audit-events/' . $audit['id'] . '/execute') ?>">
+                                        <i class="fa-solid fa-clipboard-list me-1" aria-hidden="true"></i>Execute
+                                    </a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <?php if ($assignedReviews !== []): ?>
+            <div class="col-xl-6">
+                <section class="panel h-100">
+                    <div class="panel-title">My technical reviews</div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th>Client</th><th>Audit</th><th>Status</th><th class="text-end">Action</th></tr></thead>
+                            <tbody>
+                            <?php foreach ($assignedReviews as $review): ?>
+                                <tr>
+                                    <td><?= esc($review['company']) ?></td>
+                                    <td><?= esc($review['audit_number']) ?></td>
+                                    <td><?= esc($review['status']) ?></td>
+                                    <td class="text-end"><a class="btn btn-outline-primary btn-sm" href="<?= site_url('workflow/certification/' . $review['client_id'] . '/technical-review?event_id=' . $review['audit_event_id']) ?>">Open</a></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($assignedDecisions !== []): ?>
+            <div class="col-xl-6">
+                <section class="panel h-100">
+                    <div class="panel-title">My decisions</div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th>Client</th><th>Audit</th><th>Status</th><th class="text-end">Action</th></tr></thead>
+                            <tbody>
+                            <?php foreach ($assignedDecisions as $decision): ?>
+                                <tr>
+                                    <td><?= esc($decision['company']) ?></td>
+                                    <td><?= esc($decision['audit_number']) ?></td>
+                                    <td><?= esc($decision['status']) ?></td>
+                                    <td class="text-end"><a class="btn btn-outline-primary btn-sm" href="<?= site_url('workflow/certification/' . $decision['client_id'] . '/decision?event_id=' . $decision['audit_event_id']) ?>">Open</a></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        <?php endif; ?>
+
+        <div class="col-12">
+            <section class="panel">
+                <div class="panel-title">Notifications</div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead><tr><th>Time</th><th>Title</th><th>Message</th><th>Status</th></tr></thead>
+                        <tbody>
+                        <?php if ($notifications === []): ?>
+                            <tr><td colspan="4" class="text-secondary">No notifications</td></tr>
+                        <?php endif; ?>
+                        <?php foreach ($notifications as $notification): ?>
+                            <tr>
+                                <td><?= esc($notification['created_at']) ?></td>
+                                <td><?= esc($notification['title']) ?></td>
+                                <td><?= esc($notification['body']) ?></td>
+                                <td><?= esc($notification['status']) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <?php if ($financeSummary !== []): ?>
+            <div class="col-12">
+                <section class="panel">
+                    <div class="panel-title">My finance summary</div>
+                    <div class="row g-3">
+                        <div class="col-md-4"><div class="fw-semibold">Certification</div><div><?= esc(number_format((float) ($financeSummary['certification_fee'] ?? 0), 2)) ?></div></div>
+                        <div class="col-md-4"><div class="fw-semibold">Surveillance 1</div><div><?= esc(number_format((float) ($financeSummary['surveillance1_fee'] ?? 0), 2)) ?></div></div>
+                        <div class="col-md-4"><div class="fw-semibold">Surveillance 2</div><div><?= esc(number_format((float) ($financeSummary['surveillance2_fee'] ?? 0), 2)) ?></div></div>
+                    </div>
+                </section>
+            </div>
+        <?php endif; ?>
+    </div>
+<?php else: ?>
 
 <div class="row g-3 mb-3">
     <?php
@@ -185,6 +352,7 @@ $workloadData = array_map('intval', array_column($workload, 'total'));
         </section>
     </div>
 </div>
+<?php endif; ?>
 <?= $this->endSection() ?>
 
 <?= $this->section('scripts') ?>

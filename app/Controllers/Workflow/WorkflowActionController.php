@@ -26,6 +26,7 @@ use App\Services\AuditLogger;
 use App\Services\AuditAiDraftService;
 use App\Services\AuditDurationService;
 use App\Services\AuditReportNarrativeService;
+use App\Services\NotificationService;
 use App\Services\WorkflowRoleService;
 use CodeIgniter\Database\BaseConnection;
 use CodeIgniter\I18n\Time;
@@ -59,6 +60,7 @@ class WorkflowActionController extends BaseController
     private AuditDurationService $durationService;
     private AuditReportNarrativeService $narratives;
     private WorkflowRoleService $workflowRoles;
+    private NotificationService $notifications;
     private BaseConnection $db;
 
     public function __construct()
@@ -86,6 +88,7 @@ class WorkflowActionController extends BaseController
         $this->aiDrafts = new AuditAiDraftService();
         $this->durationService = new AuditDurationService();
         $this->narratives = new AuditReportNarrativeService();
+        $this->notifications = new NotificationService();
         $this->db = Database::connect();
         $this->workflowRoles = new WorkflowRoleService($this->db);
     }
@@ -586,8 +589,13 @@ class WorkflowActionController extends BaseController
             $id = (int) $this->appointments->insert($payload);
             $this->auditLogger->record('create', 'auditor_appointments', 'auditor_appointments', $id, null, $payload);
         } else {
+            $id = (int) $existing['id'];
             $this->appointments->update((int) $existing['id'], $payload);
             $this->auditLogger->record('update', 'auditor_appointments', 'auditor_appointments', (int) $existing['id'], $existing, $payload);
+        }
+
+        if ($this->isActiveAppointmentStatus($appointmentStatus)) {
+            $this->notifications->notifyAuditorAppointment($id);
         }
 
         return redirect()->to('/workflow/certification/' . $clientId . '/appointments')->with('success', 'Auditor appointment saved.');
