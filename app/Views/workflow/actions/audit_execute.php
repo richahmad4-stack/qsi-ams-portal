@@ -275,6 +275,9 @@ $eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
                                                             <label class="form-label mb-0" for="conformity_note_<?= esc($clauseId) ?>">Conformity note</label>
                                                             <span class="small text-success" id="autosave_status_<?= esc($clauseId) ?>">Auto saved</span>
                                                         </div>
+                                                        <div class="alert alert-warning py-2 small mb-2">
+                                                            System/AI text is a draft only. The auditor must verify the sampled evidence and edit this note before relying on it in the final report.
+                                                        </div>
                                                         <textarea
                                                             class="form-control mb-2"
                                                             id="conformity_note_<?= esc($clauseId) ?>"

@@ -18,7 +18,7 @@ class AuditReportNarrativeService
         $clauseFocus = $this->clauseFocus($clauseNumber, $clauseTitle);
 
         return trim(
-            "Conformity note:\n"
+            "Draft conformity note - auditor confirmation required:\n"
             . "Sampled during {$stage}" . ($auditNumber !== '' ? " ({$auditNumber})" : '') . " for {$standard} {$clauseNumber} - {$clauseTitle}. "
             . "The audit trail covered {$processes} within the scope \"{$scope}\". "
             . "Evidence reviewed was generally consistent with the requirement for {$clauseFocus}; no NC was raised from this sample.\n\n"

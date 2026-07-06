@@ -16,16 +16,20 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Separate workflow areas for Certification Audit, Surveillance Audit #01, Surveillance Audit #02, and Recertification/Expiry.
 - Separate event PDFs for Stage 1, Stage 2, Surveillance 1, Surveillance 2, and recertification plans/reports.
 - Dashboard cards with linked detail sections and PDF actions.
+- Compliance hardening pass added backend gates for auditor appointment competence/impartiality, surveillance due-date locking, audit completion readiness, Technical Review approval, and Certification Decision independence.
+- Audit conformity notes are now clearly marked as system/AI drafts requiring auditor confirmation, and placeholder clause requirement wording is replaced with internal checklist-question language.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus
 
-Project-owner UI/PDF review: keep the previous AMS workflow screens intact, with Finance separated as its own dashboard/module.
+Project-owner compliance hardening: enforce ISO/IEC 17021-style approval gates, competence/impartiality checks, surveillance locks, controlled checklist wording, and clearer auditor responsibility over generated audit notes.
 
 ## Next
 
+- Strengthen the audit duration engine into a more defensible MD 5 / MD 11 / scheme-specific rules module with auditable calculation tables.
+- Add richer controlled checklist/question banks per standard without copying licensed standard text.
 - Continue refining controlled PDF templates against the user-provided document formats, especially certificate issuance and client feedback.
-- Continue checking multi-standard client files such as HACCP + ISO 22000 + ISO 9001 for stage-specific workflow and PDF consistency.
+- Continue checking multi-standard client files such as HACCP + ISO 22000 + ISO 9001 for stage-specific workflow, competence matching, and PDF consistency.
 - Continue generating/reviewing sample PDFs for application review, proposal, contract, audit programme, audit plans, audit reports, technical review, decision, certificate, and feedback.
 - Continue polish across certification, surveillance, and recertification workflow screens where the user finds unclear grouping.
 - Add stronger user-login/personnel-client separation and role-specific access flows.

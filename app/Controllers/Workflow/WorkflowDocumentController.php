@@ -7,6 +7,8 @@ use App\Models\CertificateModel;
 use App\Models\ClientModel;
 use App\Services\AuditLogger;
 use App\Services\DocumentGeneratorService;
+use Config\Database;
+use DateTimeImmutable;
 
 class WorkflowDocumentController extends BaseController
 {
@@ -75,6 +77,15 @@ class WorkflowDocumentController extends BaseController
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Event document type not available.');
         }
 
+        $event = $this->eventForClient($tenantId, $clientId, $eventId);
+        if ($event === null) {
+            return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Audit event not found.');
+        }
+
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->to('/workflow/certification/' . $clientId)->with('error', $lockMessage);
+        }
+
         $document = $this->generator->generateEventDocument($tenantId, $clientId, $eventId, $documentKey, (int) session()->get('user_id'));
         $this->auditLogger->record('download', 'documents', 'generated_documents', (int) $document['id'], null, $document);
 
@@ -101,5 +112,48 @@ class WorkflowDocumentController extends BaseController
     private function downloadName(string $title): string
     {
         return preg_replace('/[^a-zA-Z0-9_-]+/', '-', strtolower($title)) . '.pdf';
+    }
+
+    private function eventForClient(int $tenantId, int $clientId, int $eventId): ?array
+    {
+        $row = Database::connect()->table('audit_events')
+            ->select('audit_events.*, audit_programs.surveillance_1_due_date, audit_programs.surveillance_2_due_date')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->where('audit_programs.tenant_id', $tenantId)
+            ->where('audit_programs.client_id', $clientId)
+            ->where('audit_events.id', $eventId)
+            ->get(1)
+            ->getRowArray();
+
+        return $row === null ? null : $row;
+    }
+
+    private function surveillanceLockMessage(array $event): ?string
+    {
+        if (! in_array((string) ($event['event_type'] ?? ''), ['surveillance1', 'surveillance2'], true)) {
+            return null;
+        }
+
+        if (in_array((string) ($event['status'] ?? ''), ['completed', 'closed'], true)) {
+            return null;
+        }
+
+        $dueDate = (string) ($event['event_type'] === 'surveillance1'
+            ? ($event['surveillance_1_due_date'] ?? '')
+            : ($event['surveillance_2_due_date'] ?? ''));
+
+        if ($dueDate === '') {
+            return null;
+        }
+
+        $today = new DateTimeImmutable(date('Y-m-d'));
+        $due = new DateTimeImmutable($dueDate);
+        if ($today >= $due) {
+            return null;
+        }
+
+        $label = $event['event_type'] === 'surveillance1' ? 'Surveillance Audit #01' : 'Surveillance Audit #02';
+
+        return $label . ' is locked until its due date (' . $due->format('Y-m-d') . ').';
     }
 }

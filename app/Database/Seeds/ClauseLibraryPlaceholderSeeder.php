@@ -165,7 +165,7 @@ class ClauseLibraryPlaceholderSeeder extends Seeder
             'standard_id' => $standardId,
             'clause_number' => $number,
             'clause_title' => $title,
-            'requirement' => 'Placeholder for licensed ' . $standardCode . ' requirement text covering ' . $focus . '. Replace with approved licensed clause wording or internal checklist questions.',
+            'requirement' => 'Internal audit checklist question for ' . $standardCode . ': verify that controls for ' . $focus . ' are defined, implemented, monitored and supported by retained evidence. Do not treat this text as a substitute for licensed standard wording.',
             'predefined_conformity_note' => 'Evidence reviewed indicates the process for ' . $focus . ' is defined, implemented and maintained.',
             'positive_finding' => 'The organization demonstrated effective practice in ' . $focus . ', with clear evidence and responsible ownership.',
             'opportunity_for_improvement' => 'The organization may improve consistency, evidence retention or performance monitoring related to ' . $focus . '.',

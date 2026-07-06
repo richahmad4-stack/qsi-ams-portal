@@ -517,17 +517,36 @@ class WorkflowActionController extends BaseController
             return redirect()->back()->with('error', 'Selected audit event does not belong to this client.');
         }
 
+        $event = $this->events->find($eventId);
+        if ($event !== null && ($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->back()->withInput()->with('error', $lockMessage);
+        }
+
+        $personnelId = (int) $this->request->getPost('personnel_id');
+        $appointmentRole = (string) $this->request->getPost('appointment_role');
+        $appointmentStatus = (string) $this->request->getPost('status');
+        $competenceConfirmed = $this->request->getPost('competence_confirmed') === '1';
+        $impartialityConfirmed = $this->request->getPost('impartiality_confirmed') === '1';
+        $conflictOfInterest = $this->request->getPost('conflict_of_interest') === '1';
+
+        if ($this->isActiveAppointmentStatus($appointmentStatus)) {
+            $errors = $this->appointmentGateFailures($clientId, $personnelId, $appointmentRole, $competenceConfirmed, $impartialityConfirmed, $conflictOfInterest);
+            if ($errors !== []) {
+                return redirect()->back()->withInput()->with('error', implode(' ', $errors));
+            }
+        }
+
         $payload = [
             'audit_event_id' => $eventId,
-            'personnel_id' => (int) $this->request->getPost('personnel_id'),
-            'appointment_role' => (string) $this->request->getPost('appointment_role'),
+            'personnel_id' => $personnelId,
+            'appointment_role' => $appointmentRole,
             'appointed_by' => (int) session()->get('user_id'),
             'appointed_at' => date('Y-m-d H:i:s'),
-            'status' => (string) $this->request->getPost('status'),
+            'status' => $appointmentStatus,
             'conflict_check_json' => json_encode([
-                'competence_confirmed' => $this->request->getPost('competence_confirmed') === '1',
-                'impartiality_confirmed' => $this->request->getPost('impartiality_confirmed') === '1',
-                'conflict_of_interest' => $this->request->getPost('conflict_of_interest') === '1',
+                'competence_confirmed' => $competenceConfirmed,
+                'impartiality_confirmed' => $impartialityConfirmed,
+                'conflict_of_interest' => $conflictOfInterest,
                 'notes' => $this->nullableText('conflict_notes'),
             ], JSON_THROW_ON_ERROR),
         ];
@@ -578,13 +597,21 @@ class WorkflowActionController extends BaseController
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Generate an audit program before preparing audit plans.');
         }
 
+        $selectedEventId = $this->intQueryOrNull('event_id');
+        if ($selectedEventId !== null) {
+            $selectedEvent = $this->events->find($selectedEventId);
+            if ($selectedEvent !== null && $this->eventBelongsToProgram($selectedEventId, (int) $program['id']) && ($lockMessage = $this->surveillanceLockMessage($selectedEvent)) !== null) {
+                return redirect()->to('/workflow/certification/' . $clientId)->with('error', $lockMessage);
+            }
+        }
+
         return view('workflow/actions/audit_plan', [
             'title' => 'Audit Plan',
             'pageTitle' => 'Audit Plan',
             'pageSubtitle' => $client['company'],
             'client' => $client,
             'events' => $this->programEvents((int) $program['id']),
-            'selectedEventId' => $this->intQueryOrNull('event_id'),
+            'selectedEventId' => $selectedEventId,
             'plans' => $this->planRows((int) $program['id']),
             'items' => $this->planItemRows((int) $program['id']),
             'auditors' => $this->appointmentPersonnel((int) $program['id']),
@@ -614,6 +641,11 @@ class WorkflowActionController extends BaseController
         $eventId = (int) $this->request->getPost('audit_event_id');
         if (! $this->eventBelongsToProgram($eventId, (int) $program['id'])) {
             return redirect()->back()->with('error', 'Selected audit event does not belong to this client.');
+        }
+
+        $event = $this->events->find($eventId);
+        if ($event !== null && ($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->back()->withInput()->with('error', $lockMessage);
         }
 
         $status = (string) $this->request->getPost('status');
@@ -663,6 +695,11 @@ class WorkflowActionController extends BaseController
             return redirect()->back()->with('error', 'Selected audit plan does not belong to this client.');
         }
 
+        $event = $this->eventForPlan($planId);
+        if ($event !== null && ($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->back()->withInput()->with('error', $lockMessage);
+        }
+
         $payload = [
             'audit_plan_id' => $planId,
             'audit_date' => (string) $this->request->getPost('audit_date'),
@@ -709,6 +746,10 @@ class WorkflowActionController extends BaseController
         }
 
         $event = $this->events->find($eventId);
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->to('/workflow/certification/' . $clientId)->with('error', $lockMessage);
+        }
+
         $clauses = $this->clausesForClient($clientId);
         $report = $this->ensureReport($eventId);
         $auditTeam = $this->eventTeamRows($eventId);
@@ -775,6 +816,11 @@ class WorkflowActionController extends BaseController
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Audit event not found.');
         }
 
+        $event = $this->events->find($eventId);
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->back()->withInput()->with('error', $lockMessage);
+        }
+
         if (! $this->validate([
             'section_title' => 'required|max_length[255]',
             'section_content' => 'required',
@@ -809,6 +855,16 @@ class WorkflowActionController extends BaseController
             return $this->response->setStatusCode(404)->setJSON([
                 'ok' => false,
                 'message' => 'Conformity note not found.',
+                'csrfToken' => csrf_token(),
+                'csrfHash' => csrf_hash(),
+            ]);
+        }
+
+        $event = $this->events->find($eventId);
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return $this->response->setStatusCode(423)->setJSON([
+                'ok' => false,
+                'message' => $lockMessage,
                 'csrfToken' => csrf_token(),
                 'csrfHash' => csrf_hash(),
             ]);
@@ -861,6 +917,15 @@ class WorkflowActionController extends BaseController
             ]);
         }
 
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return $this->response->setStatusCode(423)->setJSON([
+                'ok' => false,
+                'message' => $lockMessage,
+                'csrfToken' => csrf_token(),
+                'csrfHash' => csrf_hash(),
+            ]);
+        }
+
         $clause = null;
         foreach ($this->clausesForClient($clientId) as $candidate) {
             if ((int) ($candidate['id'] ?? 0) === $clauseId) {
@@ -905,6 +970,11 @@ class WorkflowActionController extends BaseController
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Finding not found.');
         }
 
+        $event = $this->events->find($eventId);
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->back()->with('error', $lockMessage);
+        }
+
         $report = $this->reports->find((int) $section['report_draft_id']);
         if ($report === null || (int) $report['audit_event_id'] !== $eventId) {
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Finding not found.');
@@ -923,6 +993,11 @@ class WorkflowActionController extends BaseController
 
         if ($client === null || $program === null || ! $this->eventBelongsToProgram($eventId, (int) $program['id'])) {
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Audit event not found.');
+        }
+
+        $event = $this->events->find($eventId);
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->back()->withInput()->with('error', $lockMessage);
         }
 
         if (! $this->validate([
@@ -965,6 +1040,11 @@ class WorkflowActionController extends BaseController
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'NCR not found.');
         }
 
+        $event = $this->events->find($eventId);
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->back()->withInput()->with('error', $lockMessage);
+        }
+
         $draft = $this->narratives->ncrCorrectionSet($ncr, $client);
         $payload = [
             'correction' => $this->nullableText('correction') ?: $draft['correction'],
@@ -991,6 +1071,11 @@ class WorkflowActionController extends BaseController
 
         if ($client === null || $program === null || $ncr === null || (int) $ncr['audit_event_id'] !== $eventId || ! $this->eventBelongsToProgram($eventId, (int) $program['id'])) {
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'NCR not found.');
+        }
+
+        $event = $this->events->find($eventId);
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->back()->withInput()->with('error', $lockMessage);
         }
 
         if (! $this->validate([
@@ -1038,6 +1123,11 @@ class WorkflowActionController extends BaseController
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'CAPA not found.');
         }
 
+        $event = $this->events->find($eventId);
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->back()->withInput()->with('error', $lockMessage);
+        }
+
         if (! $this->validate([
             'verification' => 'required',
             'effectiveness' => 'required',
@@ -1069,6 +1159,15 @@ class WorkflowActionController extends BaseController
 
         if ($client === null || $program === null || $event === null || ! $this->eventBelongsToProgram($eventId, (int) $program['id'])) {
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Audit event not found.');
+        }
+
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->to('/workflow/certification/' . $clientId)->with('error', $lockMessage);
+        }
+
+        $completionFailures = $this->auditCompletionGateFailures($eventId);
+        if ($completionFailures !== []) {
+            return redirect()->back()->with('error', implode(' ', $completionFailures));
         }
 
         $payload = [
@@ -1159,6 +1258,17 @@ class WorkflowActionController extends BaseController
         }
 
         $status = (string) $this->request->getPost('status');
+        if (in_array($status, ['approved', 'completed'], true)) {
+            $gateFailures = $this->technicalReviewGateFailures(
+                $clientId,
+                $eventId,
+                (int) $this->request->getPost('reviewer_personnel_id')
+            );
+            if ($gateFailures !== []) {
+                return redirect()->back()->withInput()->with('error', implode(' ', $gateFailures));
+            }
+        }
+
         $payload = [
             'tenant_id' => (int) session()->get('tenant_id'),
             'audit_event_id' => $eventId,
@@ -1260,11 +1370,24 @@ class WorkflowActionController extends BaseController
             $status = 'gm_approved';
         }
 
+        $decisionValue = (string) $this->request->getPost('decision');
+        if (in_array($status, ['approved', 'decided', 'gm_approved'], true) || in_array($decisionValue, ['approved', 'granted'], true)) {
+            $gateFailures = $this->decisionGateFailures(
+                $review,
+                (int) $this->request->getPost('decision_maker_personnel_id'),
+                $decisionValue,
+                $status
+            );
+            if ($gateFailures !== []) {
+                return redirect()->back()->withInput()->with('error', implode(' ', $gateFailures));
+            }
+        }
+
         $payload = [
             'tenant_id' => (int) session()->get('tenant_id'),
             'technical_review_id' => (int) $review['id'],
             'decision_maker_personnel_id' => (int) $this->request->getPost('decision_maker_personnel_id'),
-            'decision' => (string) $this->request->getPost('decision'),
+            'decision' => $decisionValue,
             'reason' => $this->nullableText('reason'),
             'electronic_signature' => $this->nullableText('electronic_signature'),
             'decision_payload' => json_encode([
@@ -2143,6 +2266,350 @@ class WorkflowActionController extends BaseController
         return $event['status'] ?? null;
     }
 
+    private function surveillanceLockMessage(?array $event): ?string
+    {
+        if ($event === null || ! in_array((string) ($event['event_type'] ?? ''), ['surveillance1', 'surveillance2'], true)) {
+            return null;
+        }
+
+        if (in_array((string) ($event['status'] ?? ''), ['completed', 'closed'], true)) {
+            return null;
+        }
+
+        $program = $this->programs->find((int) $event['audit_program_id']);
+        if ($program === null) {
+            return null;
+        }
+
+        $dueDate = (string) ($event['event_type'] === 'surveillance1'
+            ? ($program['surveillance_1_due_date'] ?? '')
+            : ($program['surveillance_2_due_date'] ?? ''));
+
+        if ($dueDate === '') {
+            return null;
+        }
+
+        $today = new DateTimeImmutable(date('Y-m-d'));
+        $due = new DateTimeImmutable($dueDate);
+        if ($today >= $due) {
+            return null;
+        }
+
+        $label = $event['event_type'] === 'surveillance1' ? 'Surveillance Audit #01' : 'Surveillance Audit #02';
+
+        return $label . ' is locked until its due date (' . $due->format('Y-m-d') . ').';
+    }
+
+    private function isActiveAppointmentStatus(string $status): bool
+    {
+        return in_array(strtolower(trim($status)), ['appointed', 'accepted', 'confirmed', 'approved', 'active'], true);
+    }
+
+    private function appointmentGateFailures(
+        int $clientId,
+        int $personnelId,
+        string $appointmentRole,
+        bool $competenceConfirmed,
+        bool $impartialityConfirmed,
+        bool $conflictOfInterest
+    ): array {
+        $failures = [];
+        $person = $this->personnelForTenant($personnelId);
+
+        if ($person === null) {
+            $failures[] = 'Selected person is not an approved tenant personnel record.';
+            return $failures;
+        }
+
+        if (($person['approval_status'] ?? '') !== 'approved') {
+            $failures[] = 'Selected person is not approved in Personnel Master.';
+        }
+
+        if (($person['personnel_type'] ?? '') === 'client_representative') {
+            $failures[] = 'Client personnel cannot be appointed as the certification-body audit team.';
+        }
+
+        if (! $competenceConfirmed) {
+            $failures[] = 'Auditor competence confirmation is required before appointment.';
+        }
+
+        if (! $impartialityConfirmed) {
+            $failures[] = 'Impartiality confirmation is required before appointment.';
+        }
+
+        if ($conflictOfInterest) {
+            $failures[] = 'Appointment cannot be active while a conflict of interest is recorded.';
+        }
+
+        if ($this->appointmentRequiresCompetence($appointmentRole) && ! $this->personnelHasApprovedCompetenceForClient($personnelId, $clientId)) {
+            $failures[] = 'No approved matching competence record was found for this person against the client standard/scope categories.';
+        }
+
+        return $failures;
+    }
+
+    private function appointmentRequiresCompetence(string $role): bool
+    {
+        $role = strtolower($role);
+
+        return ! str_contains($role, 'observer')
+            && ! str_contains($role, 'trainee')
+            && ! str_contains($role, 'witness');
+    }
+
+    private function technicalReviewGateFailures(int $clientId, int $eventId, int $reviewerPersonnelId): array
+    {
+        $failures = [];
+        $event = $this->events->find($eventId);
+        $report = $this->reportForEvent($eventId);
+
+        if ($event === null) {
+            return ['Audit event not found.'];
+        }
+
+        if (! in_array((string) ($event['status'] ?? ''), ['completed', 'closed'], true)) {
+            $failures[] = 'Audit event must be completed before Technical Review approval.';
+        }
+
+        if ($report === null || ! in_array((string) ($report['status'] ?? ''), ['submitted', 'approved'], true)) {
+            $failures[] = 'Audit report must be submitted before Technical Review approval.';
+        }
+
+        if ($this->openNcrCountForEvent($eventId) > 0 || $this->openCapaCountForEvent($eventId) > 0) {
+            $failures[] = 'All NCR/CAPA records for this audit event must be closed before Technical Review approval.';
+        }
+
+        $teamFailures = $this->auditTeamGateFailures($clientId, $eventId);
+        $failures = array_merge($failures, $teamFailures);
+
+        $reviewer = $this->personnelForTenant($reviewerPersonnelId);
+        if ($reviewer === null || ($reviewer['approval_status'] ?? '') !== 'approved') {
+            $failures[] = 'Technical reviewer must be an approved Personnel Master record.';
+        }
+
+        if ($this->personnelIsOnAuditTeam($reviewerPersonnelId, $eventId)) {
+            $failures[] = 'Technical reviewer cannot be part of the audit team for the same audit event.';
+        }
+
+        if (! $this->personnelHasApprovedCompetenceForClient($reviewerPersonnelId, $clientId)) {
+            $failures[] = 'Technical reviewer has no approved matching competence record for this client standard/scope.';
+        }
+
+        foreach ([
+            'competency_confirmed' => 'competence',
+            'duration_confirmed' => 'audit duration',
+            'application_confirmed' => 'application/scope',
+            'reports_confirmed' => 'audit report completeness',
+            'ncr_capa_confirmed' => 'NCR/CAPA closure',
+            'scope_dates_confirmed' => 'scope and dates',
+            'impartiality_confirmed' => 'impartiality',
+        ] as $field => $label) {
+            if (! $this->checkbox($field)) {
+                $failures[] = 'Technical Review approval requires confirmation of ' . $label . '.';
+            }
+        }
+
+        return array_values(array_unique($failures));
+    }
+
+    private function decisionGateFailures(array $review, int $decisionMakerPersonnelId, string $decision, string $status): array
+    {
+        $failures = [];
+        $eventId = (int) ($review['audit_event_id'] ?? 0);
+        $event = $this->events->find($eventId);
+        $clientId = $event === null ? 0 : $this->clientIdForEvent($eventId);
+
+        if (! in_array((string) ($review['status'] ?? ''), ['approved', 'completed'], true)) {
+            $failures[] = 'Certification decision requires an approved Technical Review.';
+        }
+
+        if ($event === null || $clientId <= 0) {
+            $failures[] = 'Decision audit event/client link is missing.';
+            return $failures;
+        }
+
+        if ($this->openNcrCountForEvent($eventId) > 0 || $this->openCapaCountForEvent($eventId) > 0) {
+            $failures[] = 'Certification decision cannot be approved while NCR/CAPA records are open.';
+        }
+
+        $decisionMaker = $this->personnelForTenant($decisionMakerPersonnelId);
+        if ($decisionMaker === null || ($decisionMaker['approval_status'] ?? '') !== 'approved') {
+            $failures[] = 'Decision maker must be an approved Personnel Master record.';
+        }
+
+        if ($this->personnelIsOnAuditTeam($decisionMakerPersonnelId, $eventId)) {
+            $failures[] = 'Decision maker cannot be part of the audit team for the same audit event.';
+        }
+
+        if ($decisionMakerPersonnelId === (int) ($review['reviewer_personnel_id'] ?? 0)) {
+            $failures[] = 'Decision maker must be independent from the Technical Reviewer.';
+        }
+
+        if (! $this->personnelHasApprovedCompetenceForClient($decisionMakerPersonnelId, $clientId)) {
+            $failures[] = 'Decision maker has no approved matching competence record for this client standard/scope.';
+        }
+
+        if ($status === 'gm_approved' && ! in_array($decision, ['approved', 'granted'], true)) {
+            $failures[] = 'General Manager final approval can only be recorded for an approved/granted decision.';
+        }
+
+        return array_values(array_unique($failures));
+    }
+
+    private function auditCompletionGateFailures(int $eventId): array
+    {
+        $failures = [];
+        $event = $this->events->find($eventId);
+        $clientId = $event === null ? 0 : $this->clientIdForEvent($eventId);
+
+        if ($event === null || $clientId <= 0) {
+            return ['Audit event/client link is missing.'];
+        }
+
+        $teamFailures = $this->auditTeamGateFailures($clientId, $eventId);
+        $failures = array_merge($failures, $teamFailures);
+
+        if ($this->eventPlanItemRows($eventId) === []) {
+            $failures[] = 'Audit plan timetable must be recorded before marking the audit completed.';
+        }
+
+        if ($this->reportSectionRows((int) $this->ensureReport($eventId)['id']) === []) {
+            $failures[] = 'Audit report checklist must contain saved clause records before completion.';
+        }
+
+        return array_values(array_unique($failures));
+    }
+
+    private function auditTeamGateFailures(int $clientId, int $eventId): array
+    {
+        $team = $this->eventTeamRows($eventId);
+        if ($team === []) {
+            return ['At least one approved auditor appointment is required.'];
+        }
+
+        $failures = [];
+        foreach ($team as $member) {
+            if (! $this->isActiveAppointmentStatus((string) ($member['status'] ?? ''))) {
+                continue;
+            }
+
+            $check = json_decode((string) ($member['conflict_check_json'] ?? '{}'), true) ?: [];
+            $name = (string) ($member['full_name'] ?? 'Selected auditor');
+            if (empty($check['competence_confirmed'])) {
+                $failures[] = $name . ' appointment is missing competence confirmation.';
+            }
+            if (empty($check['impartiality_confirmed'])) {
+                $failures[] = $name . ' appointment is missing impartiality confirmation.';
+            }
+            if (! empty($check['conflict_of_interest'])) {
+                $failures[] = $name . ' has a recorded conflict of interest.';
+            }
+            if ($this->appointmentRequiresCompetence((string) ($member['appointment_role'] ?? '')) && ! $this->personnelHasApprovedCompetenceForClient((int) $member['personnel_id'], $clientId)) {
+                $failures[] = $name . ' has no approved matching competence record for the client standard/scope.';
+            }
+        }
+
+        return $failures;
+    }
+
+    private function personnelForTenant(int $personnelId): ?array
+    {
+        if ($personnelId <= 0) {
+            return null;
+        }
+
+        return $this->personnel
+            ->where('tenant_id', (int) session()->get('tenant_id'))
+            ->where('id', $personnelId)
+            ->first();
+    }
+
+    private function personnelHasApprovedCompetenceForClient(int $personnelId, int $clientId): bool
+    {
+        if ($personnelId <= 0 || $clientId <= 0) {
+            return false;
+        }
+
+        $standards = $this->clientStandardRows($clientId);
+        if ($standards === []) {
+            return false;
+        }
+
+        $today = date('Y-m-d');
+        foreach ($standards as $standard) {
+            $builder = $this->db->table('personnel_competencies')
+                ->where('personnel_id', $personnelId)
+                ->where('approval_status', 'approved')
+                ->groupStart()
+                    ->where('valid_from', null)
+                    ->orWhere('valid_from <=', $today)
+                ->groupEnd()
+                ->groupStart()
+                    ->where('valid_until', null)
+                    ->orWhere('valid_until >=', $today)
+                ->groupEnd()
+                ->groupStart()
+                    ->where('standard_id', (int) ($standard['standard_id'] ?? 0));
+
+            foreach (['iaf_code_id', 'food_chain_category_id', 'medical_device_category_id'] as $field) {
+                if (! empty($standard[$field])) {
+                    $builder->orWhere($field, (int) $standard[$field]);
+                }
+            }
+
+            $matches = $builder
+                ->groupEnd()
+                ->countAllResults();
+
+            if ($matches > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function personnelIsOnAuditTeam(int $personnelId, int $eventId): bool
+    {
+        return $personnelId > 0
+            && $this->appointments
+                ->where('audit_event_id', $eventId)
+                ->where('personnel_id', $personnelId)
+                ->countAllResults() > 0;
+    }
+
+    private function openNcrCountForEvent(int $eventId): int
+    {
+        return (int) $this->ncrs
+            ->where('tenant_id', (int) session()->get('tenant_id'))
+            ->where('audit_event_id', $eventId)
+            ->whereNotIn('status', ['closed', 'verified_closed', 'cancelled'])
+            ->countAllResults();
+    }
+
+    private function openCapaCountForEvent(int $eventId): int
+    {
+        return (int) $this->db->table('capas')
+            ->join('ncrs', 'ncrs.id = capas.ncr_id')
+            ->where('capas.tenant_id', (int) session()->get('tenant_id'))
+            ->where('ncrs.audit_event_id', $eventId)
+            ->whereNotIn('capas.status', ['closed', 'verified_closed', 'cancelled'])
+            ->countAllResults();
+    }
+
+    private function clientIdForEvent(int $eventId): int
+    {
+        $row = $this->db->table('audit_events')
+            ->select('audit_programs.client_id')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->where('audit_events.id', $eventId)
+            ->where('audit_programs.tenant_id', (int) session()->get('tenant_id'))
+            ->get(1)
+            ->getRowArray();
+
+        return (int) ($row['client_id'] ?? 0);
+    }
+
     private function surveillanceCycleStatus(string $dueDate, ?string $eventStatus): string
     {
         if (in_array($eventStatus, ['completed', 'closed'], true)) {
@@ -2872,6 +3339,18 @@ class WorkflowActionController extends BaseController
             ->where('audit_plans.id', $planId)
             ->where('audit_events.audit_program_id', $programId)
             ->countAllResults() > 0;
+    }
+
+    private function eventForPlan(int $planId): ?array
+    {
+        $row = $this->db->table('audit_plans')
+            ->select('audit_events.*')
+            ->join('audit_events', 'audit_events.id = audit_plans.audit_event_id')
+            ->where('audit_plans.id', $planId)
+            ->get(1)
+            ->getRowArray();
+
+        return $row === null ? null : $row;
     }
 
     private function reportForEvent(int $eventId): ?array
