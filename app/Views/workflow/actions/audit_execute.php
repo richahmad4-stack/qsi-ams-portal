@@ -310,6 +310,7 @@ $eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
 
                                                         <label class="form-label" for="classification_<?= esc($clauseId) ?>">NC classification</label>
                                                         <select class="form-select form-select-sm mb-2" id="classification_<?= esc($clauseId) ?>" name="classification" required>
+                                                            <option value="">Select classification</option>
                                                             <option value="minor">Minor NC</option>
                                                             <option value="major">Major NC</option>
                                                         </select>
@@ -320,10 +321,10 @@ $eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
                                                         </div>
 
                                                         <label class="form-label" for="finding_<?= esc($clauseId) ?>">Finding</label>
-                                                        <textarea class="form-control mb-2" id="finding_<?= esc($clauseId) ?>" name="finding" rows="3" required><?= esc($clause['minor_nc'] ?? '') ?></textarea>
+                                                        <textarea class="form-control mb-2" id="finding_<?= esc($clauseId) ?>" name="finding" rows="3" placeholder="Record the actual nonconformity observed from the audit sample." required></textarea>
 
                                                         <label class="form-label" for="objective_evidence_<?= esc($clauseId) ?>">Objective evidence</label>
-                                                        <textarea class="form-control mb-2" id="objective_evidence_<?= esc($clauseId) ?>" name="objective_evidence" rows="2" required><?= esc($clause['evidence_examples'] ?? '') ?></textarea>
+                                                        <textarea class="form-control mb-2" id="objective_evidence_<?= esc($clauseId) ?>" name="objective_evidence" rows="2" placeholder="State the exact sampled record, interview, observation or missing evidence." required></textarea>
 
                                                         <div class="row g-2 mb-2">
                                                             <div class="col-md-6">

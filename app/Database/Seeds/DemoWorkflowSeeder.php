@@ -1065,11 +1065,12 @@ class DemoWorkflowSeeder extends Seeder
 
         for ($i = 1; $i <= $count; $i++) {
             $clause = $clauses[($i - 1) % count($clauses)];
-            $classification = $i % 5 === 0 ? 'major' : ($i % 3 === 0 ? 'ofi' : 'minor');
+            $classification = $i % 5 === 0 ? 'major' : 'minor';
             $status = $i % 4 === 0 ? 'open' : 'closed';
             $target = $start->add(new DateInterval('P' . (14 + $i * 2) . 'D'));
             $closed = $status === 'closed' ? $target->add(new DateInterval('P3D')) : null;
             $ncrNumber = 'NCR-DEMO-' . $clientNo . '-' . strtoupper(str_replace('_', '-', $type)) . '-' . str_pad((string) $i, 2, '0', STR_PAD_LEFT);
+            $nc = $this->ncrScenario($classification, $clause, $scenario, $type, $i);
 
             $this->db->table('ncrs')->insert([
                 'tenant_id' => $this->tenantId,
@@ -1077,15 +1078,15 @@ class DemoWorkflowSeeder extends Seeder
                 'clause_library_id' => (int) $clause['id'],
                 'ncr_number' => $ncrNumber,
                 'requirement' => $clause['requirement'] ?? ($clause['clause_title'] . ' requirement'),
-                'finding' => $this->findingText($classification, (string) $clause['clause_title'], $scenario),
-                'objective_evidence' => 'Evidence sampled: ' . $evidence[($i - 1) % count($evidence)] . ', interview with process owner and site observation.',
+                'finding' => $nc['finding'],
+                'objective_evidence' => $nc['objective_evidence'],
                 'classification' => $classification,
-                'correction' => 'Immediate correction recorded by process owner and verified by auditor.',
-                'root_cause' => 'Procedure awareness and monitoring frequency were not consistently maintained.',
-                'corrective_action' => 'Procedure revised, responsible staff briefed and monitoring checklist updated.',
+                'correction' => $nc['correction'],
+                'root_cause' => $nc['root_cause'],
+                'corrective_action' => $nc['corrective_action'],
                 'responsible_person' => $scenario['contact'],
                 'target_date' => $target->format('Y-m-d'),
-                'verification' => 'Auditor reviewed submitted evidence and verified implementation.',
+                'verification' => $nc['verification'],
                 'closure_notes' => $status === 'closed' ? 'Closed after evidence review and effectiveness verification.' : 'Awaiting complete evidence submission.',
                 'status' => $status,
                 'closed_at' => $closed?->format('Y-m-d 15:30:00'),
@@ -1109,18 +1110,18 @@ class DemoWorkflowSeeder extends Seeder
                 'ncr_id' => $ncrId,
                 'capa_number' => str_replace('NCR', 'CAPA', $ncrNumber),
                 'source' => 'audit_ncr',
-                'issue' => $this->findingText($classification, (string) $clause['clause_title'], $scenario),
-                'immediate_correction' => 'Responsible person corrected the affected record/control and informed the auditor.',
-                'root_cause' => 'Root cause analysis identified inconsistent ownership and insufficient verification frequency.',
-                'five_why' => json_encode(['Why 1' => 'Record was incomplete', 'Why 2' => 'Review was not performed on schedule', 'Why 3' => 'Responsibility was unclear'], JSON_THROW_ON_ERROR),
-                'fishbone' => json_encode(['People' => 'Awareness gap', 'Method' => 'Procedure not specific enough', 'Measurement' => 'Weak monitoring'], JSON_THROW_ON_ERROR),
-                'corrective_action' => 'Revise procedure, train responsible staff, add verification to monthly compliance checklist.',
-                'preventive_action' => 'Include this control in internal audit sampling and management review trend analysis.',
+                'issue' => $nc['finding'],
+                'immediate_correction' => $nc['correction'],
+                'root_cause' => $nc['root_cause'],
+                'five_why' => json_encode($nc['five_why'], JSON_THROW_ON_ERROR),
+                'fishbone' => json_encode($nc['fishbone'], JSON_THROW_ON_ERROR),
+                'corrective_action' => $nc['corrective_action'],
+                'preventive_action' => $nc['preventive_action'],
                 'responsible_person' => $scenario['contact'],
                 'target_date' => $target->format('Y-m-d'),
-                'evidence_reference' => 'EV-' . $start->format('Y') . '-' . str_pad((string) $i, 3, '0', STR_PAD_LEFT) . '.pdf; ' . $evidence[($i + 2) % count($evidence)],
-                'verification' => $capaStatus === 'closed' ? 'Evidence accepted by lead auditor.' : 'Evidence review pending or returned for correction.',
-                'effectiveness' => $capaStatus === 'closed' ? 'Effective. No recurrence found in follow-up sample.' : 'Effectiveness verification pending.',
+                'evidence_reference' => $nc['evidence_reference'] . '; ' . $evidence[($i + 2) % count($evidence)],
+                'verification' => $capaStatus === 'closed' ? $nc['verification'] : 'Evidence review pending or returned for correction.',
+                'effectiveness' => $capaStatus === 'closed' ? $nc['effectiveness'] : 'Effectiveness verification pending.',
                 'closure_notes' => $capaStatus === 'closed' ? 'CAPA closed after verification.' : 'CAPA remains under client action.',
                 'status' => $capaStatus,
                 'closed_at' => $capaStatus === 'closed' ? $target->add(new DateInterval('P5D'))->format('Y-m-d 13:00:00') : null,
@@ -1434,6 +1435,133 @@ class DemoWorkflowSeeder extends Seeder
             ->limit($limit)
             ->get()
             ->getResultArray();
+    }
+
+    private function ncrScenario(string $classification, array $clause, array $scenario, string $eventType, int $index): array
+    {
+        $standard = strtoupper((string) ($clause['standard_code'] ?? ''));
+        $title = (string) ($clause['clause_title'] ?? 'applicable requirement');
+        $context = strtolower($standard . ' ' . $title . ' ' . $scenario['scope']);
+        $process = $scenario['processes'][($index - 1) % count($scenario['processes'])];
+        $severityText = $classification === 'major'
+            ? 'The absence of effective control could affect confidence in the system if not corrected before certification/maintenance decision.'
+            : 'The issue was isolated in the sampled record and no direct product/service release impact was confirmed from the audit sample.';
+
+        if ($scenario['food'] !== null || str_contains($context, 'haccp') || str_contains($context, 'food') || str_contains($context, '22000')) {
+            if (str_contains($context, 'trace') || str_contains($context, 'recall') || str_contains($context, 'withdrawal') || str_contains($context, 'release')) {
+                return $this->ncrPayload(
+                    $classification,
+                    "Traceability sample for {$process} was not fully completed from receiving lot to dispatch reference; one intermediate preparation/packing record was not linked.",
+                    'Traceability exercise sample selected during ' . str_replace('_', ' ', $eventType) . ' could not demonstrate complete one-step-back/one-step-forward linkage for the selected lot.',
+                    'The affected traceability record was completed after reconciliation with receiving, production and dispatch logs, and the lot file was rechecked by QA.',
+                    'The traceability form did not require verification of all intermediate process references before release of the file.',
+                    'Revise the traceability checklist to include receiving, processing/packing, holding and dispatch references; brief QA/dispatch staff; add monthly mock trace sample.',
+                    'Updated traceability checklist, corrected lot file, staff briefing record and next mock traceability result.',
+                    'Auditor reviewed corrected lot file and sampled one additional dispatch lot for full linkage.',
+                    $severityText
+                );
+            }
+
+            if (str_contains($context, 'clean') || str_contains($context, 'sanitation') || str_contains($context, 'prp') || str_contains($context, 'hygiene')) {
+                return $this->ncrPayload(
+                    $classification,
+                    "Cleaning verification for {$process} was not recorded for one sampled shift although the cleaning activity was marked as completed.",
+                    'Cleaning record sample showed completion tick/signature, but verification column and supervisor release were blank for the selected area/date.',
+                    'Supervisor completed verification of the affected area and recorded the result before next production use.',
+                    'Shift handover practice did not clearly define who verifies cleaning records before area release.',
+                    'Update sanitation record review responsibility, brief supervisors, and include cleaning verification in weekly PRP verification checks.',
+                    'Revised sanitation checklist, supervisor briefing record and weekly PRP verification log.',
+                    'Auditor sampled subsequent cleaning records and confirmed verification was completed before area release.',
+                    $severityText
+                );
+            }
+
+            return $this->ncrPayload(
+                $classification,
+                "CCP/OPRP monitoring record for {$process} did not show documented action when a value approached the defined action criterion.",
+                'Sampled monitoring sheet contained a borderline/out-of-trend entry without documented evaluation, correction or supervisor review.',
+                'QA reviewed the affected batch/shift record, documented evaluation, and confirmed product disposition was acceptable.',
+                'Monitoring personnel understood the limit but the form did not prompt action recording for near-limit or abnormal trend situations.',
+                'Revise monitoring form to require action/comment for near-limit readings, retrain monitoring staff, and review first month of records.',
+                'Updated CCP/OPRP monitoring form, training attendance and QA review of subsequent monitoring records.',
+                'Auditor verified revised form use and sampled subsequent monitoring records for action recording.',
+                $severityText
+            );
+        }
+
+        if (str_contains($context, '14001') || str_contains($context, 'environment') || str_contains($context, 'aspect') || str_contains($context, 'compliance')) {
+            return $this->ncrPayload(
+                $classification,
+                "Environmental control evidence for {$process} was incomplete; the sampled operational inspection did not record follow-up for an identified observation.",
+                'Environmental inspection record identified an issue, but corrective follow-up, responsible person and closure evidence were not recorded.',
+                'The observation was corrected and the inspection record was updated with action owner and closure evidence.',
+                'Inspection form did not make action owner, due date and closure evidence mandatory for environmental observations.',
+                'Revise the inspection form, brief responsible supervisors and review open environmental actions weekly until closed.',
+                'Updated inspection form, action tracker and closed environmental observation evidence.',
+                'Auditor reviewed the updated tracker and verified closure evidence for the sampled observation.',
+                $severityText
+            );
+        }
+
+        if (str_contains($context, '45001') || str_contains($context, 'safety') || str_contains($context, 'hazard') || str_contains($context, 'incident')) {
+            return $this->ncrPayload(
+                $classification,
+                "OH&S risk control record for {$process} did not show verification that assigned controls remained effective after a process change.",
+                'Risk assessment/process change sample showed control updates, but no documented post-change verification or worker consultation evidence.',
+                'Responsible supervisor completed post-change verification and recorded consultation with affected workers.',
+                'Change review checklist did not explicitly require post-change effectiveness confirmation for OH&S controls.',
+                'Update change review checklist, brief supervisors, and add post-change control verification to the monthly HSE review.',
+                'Updated change checklist, consultation record and HSE review evidence.',
+                'Auditor reviewed the revised checklist and sampled one completed post-change verification record.',
+                $severityText
+            );
+        }
+
+        return $this->ncrPayload(
+            $classification,
+            "Sampled evidence for {$title} in {$process} was incomplete and did not fully demonstrate implementation of the defined control.",
+            'Record/interview sample showed the activity was performed, but required review, approval or follow-up evidence was missing for one selected case.',
+            'The affected record was completed/reviewed by the process owner and the sample was checked for any similar missing entries.',
+            'Responsibility for record review and escalation was not clear enough in the local process arrangement.',
+            'Clarify review responsibility, update the checklist/procedure, brief responsible personnel and verify implementation through next internal audit sample.',
+            'Updated checklist/procedure, briefing record and internal audit follow-up sample.',
+            'Auditor verified the corrected record and sampled one additional case for complete review evidence.',
+            $severityText
+        );
+    }
+
+    private function ncrPayload(
+        string $classification,
+        string $finding,
+        string $objectiveEvidence,
+        string $correction,
+        string $rootCause,
+        string $correctiveAction,
+        string $evidenceReference,
+        string $verification,
+        string $effectiveness
+    ): array {
+        return [
+            'finding' => ucfirst($classification) . ' nonconformity: ' . $finding,
+            'objective_evidence' => $objectiveEvidence,
+            'correction' => $correction,
+            'root_cause' => $rootCause,
+            'corrective_action' => $correctiveAction,
+            'preventive_action' => 'Apply the revised control to similar records/processes and trend recurrence during internal audit or management review.',
+            'evidence_reference' => $evidenceReference,
+            'verification' => $verification,
+            'effectiveness' => $effectiveness,
+            'five_why' => [
+                'Why 1' => 'Required evidence was missing or incomplete in the sampled record.',
+                'Why 2' => 'Review did not detect the gap before the audit sample.',
+                'Why 3' => 'The local checklist/procedure did not define the verification point clearly enough.',
+            ],
+            'fishbone' => [
+                'People' => 'Role awareness or handover weakness',
+                'Method' => 'Checklist/procedure lacked a clear verification step',
+                'Measurement' => 'Review frequency or escalation criteria were weak',
+            ],
+        ];
     }
 
     private function findingText(string $classification, string $clauseTitle, array $scenario): string

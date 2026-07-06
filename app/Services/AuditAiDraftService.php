@@ -63,10 +63,11 @@ class AuditAiDraftService
             ], $planItems),
         ];
 
-        return "You are a senior certification body auditor writing an audit report conformity note.\n"
-            . "Write in professional auditor language. Do not invent exact document numbers unless provided. Use sampled evidence wording, not absolute guarantees.\n"
-            . "Include these headings exactly: Conformity statement, Documents and controls reviewed, Records and objective evidence sampled, Detailed sample trail, Interview evidence, Observation evidence, Auditor conclusion.\n"
-            . "Make the evidence detailed and clause-specific. If HACCP/food scope is present, include HACCP plan, hazard analysis, PRP, CCP/OPRP, traceability and dispatch/temperature controls as applicable.\n"
+        return "You are a senior certification body auditor writing a concise audit report conformity note.\n"
+            . "Write 90 to 140 words maximum. Use sampled evidence wording, not absolute guarantees. Do not invent exact document numbers, record IDs, dates or names unless provided in the context.\n"
+            . "Use these headings exactly: Conformity note, Objective evidence sampled, Auditor remark.\n"
+            . "Make the evidence clause-specific and scope-specific. Mention only evidence that is logical for the clause; do not repeat the same generic evidence for every clause.\n"
+            . "If evidence is weak or incomplete, write a cautious conformity note and tell the auditor to raise an NC separately instead of creating an NC inside this note.\n"
             . "Context JSON:\n" . json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n\n"
             . "Baseline local draft to improve:\n" . $fallbackText;
     }
@@ -87,7 +88,7 @@ class AuditAiDraftService
                 ],
             ],
             'temperature' => 0.2,
-            'max_output_tokens' => 1400,
+            'max_output_tokens' => 450,
         ];
 
         $curl = curl_init('https://api.openai.com/v1/responses');

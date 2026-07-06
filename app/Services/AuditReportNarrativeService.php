@@ -13,32 +13,19 @@ class AuditReportNarrativeService
         $stage = $this->stageLabel((string) ($event['event_type'] ?? 'audit'));
         $processes = $this->processTrail($planItems, $standard, $clauseTitle, $scope);
         $evidence = $this->evidenceTrail($standard, $clauseTitle, (string) ($clause['evidence_examples'] ?? ''), $scope);
-        $documents = $this->documentEvidence($standard, $clauseTitle, $scope);
-        $records = $this->recordEvidence($standard, $clauseTitle, $scope);
-        $interviews = $this->interviewEvidence($standard, $clauseTitle, $auditTeam);
-        $observations = $this->observationEvidence($standard, $clauseTitle, $scope, $processes);
-        $auditors = $this->auditorNames($auditTeam);
         $auditNumber = trim((string) ($event['audit_number'] ?? ''));
-        $auditDate = trim((string) (($event['planned_start_date'] ?? '') ?: ($event['actual_start_date'] ?? '')));
+        $sampledEvidence = array_slice($evidence, 0, 3);
+        $clauseFocus = $this->clauseFocus($clauseNumber, $clauseTitle);
 
         return trim(
-            "Conformity statement:\n"
-            . "During the {$stage}" . ($auditNumber !== '' ? " ({$auditNumber})" : '') . ($auditDate !== '' ? " conducted from {$auditDate}" : '') . ", the audit team evaluated {$clauseNumber} {$clauseTitle} against the certified scope \"{$scope}\". "
-            . "The audit trail was followed through {$processes}. The sampled evidence confirmed that the requirement is established, implemented, monitored and retained as documented information for the audited activities. "
-            . "No objective evidence of nonconformity was identified for this clause at the time of audit.\n\n"
-            . "Documents and controls reviewed:\n"
-            . $this->bulletList($documents)
-            . "\nRecords and objective evidence sampled:\n"
-            . $this->bulletList($evidence)
-            . "\nDetailed sample trail:\n"
-            . $this->bulletList($records)
-            . "\nInterview evidence:\n"
-            . $this->bulletList($interviews)
-            . "\nObservation evidence:\n"
-            . $this->bulletList($observations)
-            . "\nAuditor conclusion:\n"
-            . "The reviewed documents, retained records, staff interviews and process observations were mutually consistent. Controls were implemented in line with the organization's documented arrangements and the applicable clause intent. "
-            . "The conformity conclusion was recorded by " . ($auditors !== '' ? $auditors : 'the appointed audit team') . " based on sampling, objective evidence and professional judgement."
+            "Conformity note:\n"
+            . "Sampled during {$stage}" . ($auditNumber !== '' ? " ({$auditNumber})" : '') . " for {$standard} {$clauseNumber} - {$clauseTitle}. "
+            . "The audit trail covered {$processes} within the scope \"{$scope}\". "
+            . "Evidence reviewed was generally consistent with the requirement for {$clauseFocus}; no NC was raised from this sample.\n\n"
+            . "Objective evidence sampled:\n"
+            . $this->bulletList($sampledEvidence)
+            . "\nAuditor remark:\n"
+            . "This is a sampled conformity conclusion. The auditor may edit the note or raise a separate NC if conflicting evidence is found."
         );
     }
 
@@ -47,6 +34,72 @@ class AuditReportNarrativeService
         $requirement = trim((string) ($ncr['requirement'] ?? 'the applicable requirement'));
         $finding = trim((string) ($ncr['finding'] ?? 'the nonconformity'));
         $scope = trim((string) ($client['scope'] ?? 'the audited process'));
+        $text = strtolower($requirement . ' ' . $finding . ' ' . $scope);
+
+        if ($this->isFood($text) || $this->containsAny($text, ['ccp', 'oprp', 'haccp', 'cleaning', 'traceability', 'temperature', 'pest'])) {
+            if ($this->containsAny($text, ['trace', 'recall', 'withdrawal', 'dispatch'])) {
+                return [
+                    'correction' => 'Reconcile the affected lot/file against receiving, production/handling and dispatch records, then complete the missing traceability link and verify no other lot file has the same gap.',
+                    'root_cause' => 'The traceability check did not require confirmation of all intermediate process references before the file was considered complete.',
+                    'corrective_action' => 'Revise the traceability checklist, brief QA/dispatch personnel, and perform a scheduled mock trace sample to confirm full one-step-back/one-step-forward linkage.',
+                    'preventive_action' => 'Include traceability completion rate and mock recall results in food safety team review and management review.',
+                    'evidence_reference' => 'Corrected lot traceability file; revised traceability checklist; briefing record; mock traceability result.',
+                    'verification' => 'Auditor to sample the corrected lot file and one additional lot to confirm full linkage from receiving to dispatch.',
+                    'effectiveness' => 'Effectiveness confirmed when subsequent mock traceability is completed within the defined target time with complete linkage.',
+                    'closure_notes' => 'CAPA closure must be linked to the original traceability finding: ' . $finding,
+                ];
+            }
+
+            if ($this->containsAny($text, ['cleaning', 'sanitation', 'hygiene', 'pest', 'prp'])) {
+                return [
+                    'correction' => 'Complete verification of the affected PRP/cleaning record, inspect the area/control point, and document acceptability before continued use.',
+                    'root_cause' => 'Shift-level verification responsibility and handover checks were not clearly defined for the affected PRP record.',
+                    'corrective_action' => 'Update the PRP/cleaning verification checklist, brief supervisors, and review a defined sample of PRP records for completion each week.',
+                    'preventive_action' => 'Trend PRP verification completion and recurring gaps during food safety team review.',
+                    'evidence_reference' => 'Corrected PRP record; revised checklist; supervisor briefing; weekly PRP verification sample.',
+                    'verification' => 'Auditor to verify completed PRP records and interview the responsible supervisor on verification responsibility.',
+                    'effectiveness' => 'Effectiveness confirmed when follow-up PRP samples show complete verification before area/process release.',
+                    'closure_notes' => 'CAPA closure must be linked to the original PRP/cleaning finding: ' . $finding,
+                ];
+            }
+
+            return [
+                'correction' => 'Review the affected CCP/OPRP or food safety monitoring record, document product/process disposition, and confirm no unsafe release occurred.',
+                'root_cause' => 'The monitoring form and personnel briefing did not clearly require documented action for abnormal or near-limit results.',
+                'corrective_action' => 'Revise monitoring records to require action/comment for abnormal trends, brief monitoring staff, and review the next month of records.',
+                'preventive_action' => 'Include CCP/OPRP monitoring completion and abnormal-result follow-up in verification and management review inputs.',
+                'evidence_reference' => 'Updated CCP/OPRP monitoring form; affected record review; staff briefing; follow-up monitoring sample.',
+                'verification' => 'Auditor to verify revised monitoring record use and sample subsequent CCP/OPRP records for action recording.',
+                'effectiveness' => 'Effectiveness confirmed when follow-up samples show complete action recording and supervisor verification.',
+                'closure_notes' => 'CAPA closure must be linked to the original food safety control finding: ' . $finding,
+            ];
+        }
+
+        if ($this->containsAny($text, ['competence', 'training', 'awareness'])) {
+            return [
+                'correction' => 'Review the affected personnel competence record, complete missing evaluation/training evidence, and confirm the person remains competent for assigned work.',
+                'root_cause' => 'Competence evidence review was not consistently performed after role assignment or training completion.',
+                'corrective_action' => 'Update the competence matrix review step, assign an owner, and sample competence records during the next internal audit.',
+                'preventive_action' => 'Trend competence record completion and overdue evaluations during management review.',
+                'evidence_reference' => 'Updated competence matrix; training/evaluation record; internal audit follow-up sample.',
+                'verification' => 'Auditor to sample the updated competence file and interview the process owner on competence controls.',
+                'effectiveness' => 'Effectiveness confirmed when sampled records show current competence evaluation before task assignment.',
+                'closure_notes' => 'CAPA closure must be linked to the original competence finding: ' . $finding,
+            ];
+        }
+
+        if ($this->containsAny($text, ['document', 'record', 'documented information'])) {
+            return [
+                'correction' => 'Correct or complete the affected documented information, verify current revision/approval, and remove or mark obsolete information where applicable.',
+                'root_cause' => 'Documented information review and point-of-use control were not applied consistently for the sampled record/document.',
+                'corrective_action' => 'Clarify document/record review responsibility, update the control checklist, and perform a sample check at point of use.',
+                'preventive_action' => 'Add documented information control to periodic internal audit sampling.',
+                'evidence_reference' => 'Corrected record/document; updated control checklist; point-of-use sample check.',
+                'verification' => 'Auditor to verify corrected documented information and sample another controlled document/record.',
+                'effectiveness' => 'Effectiveness confirmed when follow-up sampling shows correct approval, revision and retention control.',
+                'closure_notes' => 'CAPA closure must be linked to the original documented information finding: ' . $finding,
+            ];
+        }
 
         return [
             'correction' => 'The affected record/process was immediately corrected, the missing information was completed where applicable, and the responsible process owner reviewed the affected sample to confirm containment.',
@@ -106,8 +159,11 @@ class AuditReportNarrativeService
     {
         $evidence = array_values(array_filter(array_map('trim', preg_split('/[,;\n]+/', $examples) ?: [])));
         $lower = strtolower($standard . ' ' . $clauseTitle . ' ' . $scope);
+        $specific = $this->clauseSpecificEvidence($standard, $clauseTitle, $scope);
 
-        if (str_contains($lower, 'haccp') || str_contains($lower, 'food') || str_contains($lower, 'kitchen') || str_contains($lower, 'meal')) {
+        if ($specific !== []) {
+            $evidence = array_merge($specific, $evidence);
+        } elseif (str_contains($lower, 'haccp') || str_contains($lower, 'food') || str_contains($lower, 'kitchen') || str_contains($lower, 'meal')) {
             $evidence = array_merge([
                 'approved HACCP plan, hazard analysis and CCP/OPRP monitoring records',
                 'PRP records covering cleaning, pest control, personnel hygiene and temperature monitoring',
@@ -128,6 +184,140 @@ class AuditReportNarrativeService
         }
 
         return array_slice(array_values(array_unique($evidence)), 0, 5);
+    }
+
+    private function clauseSpecificEvidence(string $standard, string $clauseTitle, string $scope): array
+    {
+        $text = strtolower($standard . ' ' . $clauseTitle . ' ' . $scope);
+
+        if ($this->isFood($text)) {
+            if ($this->containsAny($text, ['hazard', 'haccp', 'ccp', 'oprp', 'critical limit'])) {
+                return [
+                    'hazard analysis worksheet reviewed for product/process step, significant hazards and control measure selection',
+                    'CCP/OPRP monitoring sample checked against defined limit/action criteria and corrective follow-up rule',
+                    'food safety team discussion confirmed validation/verification method for selected controls',
+                ];
+            }
+
+            if ($this->containsAny($text, ['prp', 'clean', 'sanitation', 'pest', 'hygiene', 'temperature', 'storage'])) {
+                return [
+                    'cleaning/sanitation record sample checked for area, chemical, frequency and verification sign-off',
+                    'pest control and hygiene inspection records reviewed for trend and corrective follow-up',
+                    'cold storage or holding temperature log sample checked for limit breach response',
+                ];
+            }
+
+            if ($this->containsAny($text, ['trace', 'recall', 'withdrawal', 'release', 'dispatch'])) {
+                return [
+                    'traceability sample followed from receiving through preparation/processing to dispatch/customer reference',
+                    'product release or dispatch record checked for identification, quantity, date and responsible approval',
+                    'mock recall/withdrawal evidence reviewed for traceability result and corrective actions',
+                ];
+            }
+        }
+
+        if ($this->containsAny($text, ['context', 'interested part', 'scope'])) {
+            return [
+                'scope statement and process interaction reviewed against activities, sites and outsourced processes',
+                'interested-party and internal/external issue review checked for current applicability',
+                'management interview confirmed how scope boundaries and certification requirements are maintained',
+            ];
+        }
+
+        if ($this->containsAny($text, ['leadership', 'policy', 'responsibilit', 'authority'])) {
+            return [
+                'policy communication and responsibility matrix reviewed for current approval and availability',
+                'management interview confirmed accountability for objectives, customer/legal requirements and process performance',
+                'meeting minutes sampled for management follow-up on system performance and resource needs',
+            ];
+        }
+
+        if ($this->containsAny($text, ['risk', 'objective', 'planning', 'change'])) {
+            return [
+                'risk/opportunity register sampled for action owner, due date and review status',
+                'objective/KPI record checked for target, actual performance, trend and action where required',
+                'planned-change sample reviewed for controls, responsibility and implementation evidence',
+            ];
+        }
+
+        if ($this->containsAny($text, ['competence', 'awareness', 'training'])) {
+            return [
+                'competence matrix sampled against assigned job role and audit scope activities',
+                'training/awareness record checked for completion, evaluation and follow-up where gaps were identified',
+                'interviewed personnel explained relevant procedure, monitoring record and escalation point',
+            ];
+        }
+
+        if ($this->containsAny($text, ['document', 'information', 'record'])) {
+            return [
+                'documented information sample checked for approval, revision status and availability at point of use',
+                'retained record sample checked for identification, legibility, retention and protection',
+                'obsolete or superseded document control method reviewed with the process owner',
+            ];
+        }
+
+        if ($this->containsAny($text, ['operation', 'production', 'service', 'control', 'supplier', 'external provider'])) {
+            return [
+                'operational record sampled against planned criteria, acceptance result and responsible sign-off',
+                'supplier/external provider file reviewed for approval, monitoring and re-evaluation evidence',
+                'process walkthrough confirmed controls were available and understood at the point of use',
+            ];
+        }
+
+        if ($this->containsAny($text, ['internal audit', 'management review', 'performance', 'monitor', 'measurement'])) {
+            return [
+                'internal audit programme/report sampled for criteria, scope, findings and follow-up status',
+                'management review minutes checked for required inputs, decisions, actions and assigned responsibility',
+                'monitoring/KPI record reviewed for trend, analysis and action where performance was outside target',
+            ];
+        }
+
+        if ($this->containsAny($text, ['nonconformity', 'corrective', 'improvement'])) {
+            return [
+                'corrective action sample checked for correction, cause analysis, action plan and verification result',
+                'complaint or nonconforming output sample reviewed for containment, disposition and follow-up',
+                'improvement action log checked for status, owner and evidence of completion',
+            ];
+        }
+
+        if ($this->containsAny($text, ['environment', 'aspect', 'legal', 'compliance', 'emergency'])) {
+            return [
+                'environmental aspect/impact register sampled for significance criteria and operational controls',
+                'legal compliance register and evaluation evidence checked for current obligations',
+                'emergency preparedness record sampled for test result, learning points and follow-up action',
+            ];
+        }
+
+        if ($this->containsAny($text, ['safety', 'hazard', 'incident', 'consultation', 'participation', 'oh&s', 'ohs'])) {
+            return [
+                'hazard identification and risk assessment sample checked for control hierarchy and residual risk',
+                'incident/near-miss record reviewed for investigation, action and effectiveness follow-up',
+                'consultation/participation evidence checked for worker input and communication of OH&S controls',
+            ];
+        }
+
+        return [];
+    }
+
+    private function clauseFocus(string $clauseNumber, string $clauseTitle): string
+    {
+        $title = trim($clauseTitle);
+        if ($title !== '') {
+            return strtolower($title);
+        }
+
+        return trim($clauseNumber) !== '' ? 'clause ' . $clauseNumber : 'the audited requirement';
+    }
+
+    private function containsAny(string $text, array $needles): bool
+    {
+        foreach ($needles as $needle) {
+            if (str_contains($text, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function documentEvidence(string $standard, string $clauseTitle, string $scope): array
