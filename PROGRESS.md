@@ -37,16 +37,19 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Prepared cycle files now auto-confirm system-prepared conformity notes under the assigned auditor, accept approved all-standard/all-scope competence for Food/IAF/Medical categories, and prepare 4 NCR/CAPA records by default for applicable audit stages.
 - Content Library / Clause Pool has been added as a master-data module with approved reusable templates, CSV import/export, scope/standard/stage/content filters, and report-screen matching. Auto-filled conformity notes now use the Clause Pool first, remain editable, and are auto-confirmed under the assigned auditor when prepared by the system.
 - The supplied QSI detailed HACCP/ISO 22000/ISO 9001/ISO 14001/ISO 45001 NC/CAPA workbook has been imported into Clause Pool: 5,076 controlled templates covering conformity answers, NCs, objective evidence, requirement criteria, root causes, correction, corrective action, preventive action, verification, acceptance criteria, CAPA bundles, CAPA options, and industry guidance. Cycle Builder NCR/CAPA creation now uses these pool templates.
+- A shared Smart Audit Content Engine now drives report conformity notes and NCR/CAPA packages across audit execution and Cycle Builder. It combines approved Clause Pool material with clause-specific evidence references so each clause has aligned evidence, document references, CAPA text, and auditor-confirmed status without duplicating existing report or NCR/CAPA rows.
+- Cycle Builder preview wording now shows that application review, audit evidence, Technical Review, and Decision basis will be system-prepared from controlled inputs instead of saying those items are still pending manual completion.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus
 
-Project-owner compliance hardening and workflow validation: core gates are now in place for audit duration basis, multi-standard competence coverage, full-file Technical Review/Decision readiness, surveillance locks, auditor confirmation of report clauses, role-based workflow authority, first-pass role-specific dashboards, and controlled Super User lifecycle preparation. The current focus is validating prepared file quality across HACCP, ISO 9001, and multi-standard clients.
+Project-owner compliance hardening and workflow validation: core gates are now in place for audit duration basis, multi-standard competence coverage, full-file Technical Review/Decision readiness, surveillance locks, auditor confirmation of report clauses, role-based workflow authority, role-specific dashboards, controlled Super User lifecycle preparation, and shared Clause Pool based report/NCR/CAPA content. The current focus is validating prepared file quality across HACCP, ISO 9001, and multi-standard clients.
 
 ## Next
 
 - Browser-test the Cycle Builder with one HACCP file, one ISO 9001 file, and one multi-standard file, then review the prepared workflow screens and PDFs.
-- Continue refining Clause Pool matching and screen actions so auditors can generate all clauses, regenerate individual clause answers, and regenerate NC/CAPA records from approved templates.
+- Browser-test the new Smart Audit Content Engine on HACCP, ISO 9001, and multi-standard client files to confirm report clauses and NCR/CAPA records are varied, clause-aligned, and not duplicated.
+- Continue refining Clause Pool matching and screen actions so auditors can prepare all clauses, refresh individual clause answers, and refresh NC/CAPA records from approved templates.
 - Convert the user-supplied official forms into richer controlled HTML/PDF sections for application, review, proposal, contract, audit programme, appointment, plan, report, NCR/CAPA, technical review, decision, certificate and feedback.
 - Expand tests from wiring/smoke tests into database-backed feature tests for surveillance locks, appointment gates, audit completion, Technical Review, Decision, PDF routes, and audit duration edge cases.
 - Build a user/role management screen so Super Users can assign multiple roles from the portal instead of relying on seed/migration data.

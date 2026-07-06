@@ -110,11 +110,11 @@ $warnings = $preview['warnings'];
     <div class="panel-title">Evidence and approval controls</div>
     <div class="table-responsive">
         <table class="table table-sm">
-            <tr><th>Application review basis</th><td><?= esc($input['application_review_notes'] ?: 'To be completed during application review') ?></td></tr>
-            <tr><th>Audit plan notes</th><td><?= esc($input['audit_plan_notes'] ?: 'Process timing will be prepared from selected scope, standards and audit duration') ?></td></tr>
-            <tr><th>Audit evidence summary</th><td><?= esc($input['audit_evidence_summary'] ?: 'Auditor will complete clause evidence during audit execution') ?></td></tr>
-            <tr><th>Technical review notes</th><td><?= esc($input['technical_review_notes'] ?: 'Technical Review will remain pending') ?></td></tr>
-            <tr><th>Decision basis</th><td><?= esc($input['decision_basis'] ?: 'Decision and certificate issue will remain pending') ?></td></tr>
+            <tr><th>Application review basis</th><td><?= esc($input['application_review_notes'] ?: 'System will prepare application review from selected standards, scope, competence, resources and audit-duration rules.') ?></td></tr>
+            <tr><th>Audit plan notes</th><td><?= esc($input['audit_plan_notes'] ?: 'System will prepare process timing from selected scope, standards, audit duration and auditor capacity.') ?></td></tr>
+            <tr><th>Audit evidence summary</th><td><?= esc($input['audit_evidence_summary'] ?: 'System will prepare clause evidence from approved Clause Pool, audit stage and selected client scope.') ?></td></tr>
+            <tr><th>Technical review notes</th><td><?= esc($input['technical_review_notes'] ?: 'System will prepare Technical Review basis from audit reports, confirmed clauses and NCR/CAPA status.') ?></td></tr>
+            <tr><th>Decision basis</th><td><?= esc($input['decision_basis'] ?: 'System will prepare Decision basis from Technical Review, audit conclusion, NCR/CAPA status and certificate cycle rules.') ?></td></tr>
         </table>
     </div>
 </section>

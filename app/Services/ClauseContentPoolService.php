@@ -151,7 +151,7 @@ class ClauseContentPoolService
             '{reference}' => $this->reference($client, $clause, (int) ($template['id'] ?? 0)),
         ];
 
-        return strtr($text, $tokens) . "\n\nTemplate reference: CP-" . (int) ($template['id'] ?? 0) . '. Generated from Clause Pool; editable by auditor.';
+        return strtr($text, $tokens) . "\n\nTemplate reference: CP-" . (int) ($template['id'] ?? 0) . '. Prepared from approved Clause Pool; editable by auditor.';
     }
 
     private function reference(array $client, array $clause, int $templateId): string

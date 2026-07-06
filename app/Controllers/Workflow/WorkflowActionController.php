@@ -27,6 +27,7 @@ use App\Services\AuditAiDraftService;
 use App\Services\AuditDurationService;
 use App\Services\AuditReportNarrativeService;
 use App\Services\ClauseContentPoolService;
+use App\Services\SmartAuditContentEngine;
 use App\Services\NotificationService;
 use App\Services\WorkflowRoleService;
 use CodeIgniter\Database\BaseConnection;
@@ -61,6 +62,7 @@ class WorkflowActionController extends BaseController
     private AuditDurationService $durationService;
     private AuditReportNarrativeService $narratives;
     private ClauseContentPoolService $contentPool;
+    private SmartAuditContentEngine $contentEngine;
     private WorkflowRoleService $workflowRoles;
     private NotificationService $notifications;
     private BaseConnection $db;
@@ -91,6 +93,7 @@ class WorkflowActionController extends BaseController
         $this->durationService = new AuditDurationService();
         $this->narratives = new AuditReportNarrativeService();
         $this->contentPool = new ClauseContentPoolService();
+        $this->contentEngine = new SmartAuditContentEngine($this->contentPool, $this->narratives);
         $this->notifications = new NotificationService();
         $this->db = Database::connect();
         $this->workflowRoles = new WorkflowRoleService($this->db);
@@ -1065,16 +1068,17 @@ class WorkflowActionController extends BaseController
             ]);
         }
 
-        $poolText = $this->contentPool->conformityNote($client, $event, $clause);
-        $draft = $poolText === null
-            ? $this->aiDrafts->conformityNote(
-                $client,
-                $event,
-                $clause,
-                $this->eventPlanItemRows($eventId),
-                $this->eventTeamRows($eventId)
-            )
-            : ['source' => 'clause_pool', 'text' => $poolText];
+        $package = $this->contentEngine->conformitySection(
+            $client,
+            $event,
+            $clause,
+            $this->eventPlanItemRows($eventId),
+            $this->eventTeamRows($eventId)
+        );
+        $draft = [
+            'source' => $package['source_type'],
+            'text' => $package['content'],
+        ];
 
         return $this->response->setJSON([
             'ok' => true,
@@ -3789,17 +3793,18 @@ class WorkflowActionController extends BaseController
                 continue;
             }
 
+            $package = $this->contentEngine->conformitySection($client, $event, $clause, $planItems, $auditTeam);
             $payload = [
                 'report_draft_id' => $reportId,
                 'clause_library_id' => $clauseId,
                 'section_key' => 'conformity',
                 'section_title' => trim((string) $clause['standard_code'] . ' ' . (string) $clause['clause_number'] . ' - ' . (string) $clause['clause_title']),
-                'section_content' => $this->clausePoolConformityNote($client, $event, $clause, $planItems, $auditTeam),
-                'source_type' => 'clause_pool',
+                'section_content' => $package['content'],
+                'source_type' => $package['source_type'],
                 'auditor_confirmed' => 1,
                 'confirmed_by_user_id' => $this->leadAuditorUserId($auditTeam) ?? (int) session()->get('user_id'),
                 'confirmed_at' => date('Y-m-d H:i:s'),
-                'confirmation_note' => 'Auto-confirmed on behalf of the assigned auditor from approved Clause Pool / system content.',
+                'confirmation_note' => $package['confirmation_note'],
                 'sort_order' => $index + 1,
             ];
 
@@ -3812,7 +3817,7 @@ class WorkflowActionController extends BaseController
     {
         $notes = [];
         foreach ($clauses as $clause) {
-            $notes[(int) $clause['id']] = $this->clausePoolConformityNote($client, $event, $clause, $planItems, $auditTeam);
+            $notes[(int) $clause['id']] = $this->contentEngine->conformitySection($client, $event, $clause, $planItems, $auditTeam)['content'];
         }
 
         return $notes;
