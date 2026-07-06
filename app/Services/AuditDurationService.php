@@ -7,6 +7,10 @@ use DateTimeImmutable;
 
 class AuditDurationService
 {
+    private const MULTI_STANDARD_ADDITION_FACTOR = 0.20;
+    private const MAX_REDUCTION_FACTOR = 0.70;
+    private const REFERENCE_NOTE = 'Controlled QSI audit-duration rule set aligned with ISO/IEC 17021-1 competence/impartiality controls and IAF MD 5 / IAF MD 11 audit-time principles. Food safety values use scheme-specific complexity factors and must be verified against the current licensed scheme rules before accreditation use.';
+
     public function calculateInitialDays(array $client, array $standards = []): array
     {
         return $this->calculateApplicationReview($client, $standards, []);
@@ -18,13 +22,18 @@ class AuditDurationService
         $standardCodes = $this->standardCodes($standards, (string) ($reviewInputs['standards_text'] ?? ''));
         $schemes = $this->schemeTypes($standards, $standardCodes);
         $standardTotals = [];
+        $standardRules = [];
 
         foreach ($standardCodes as $code) {
-            $standardTotals[$code] = $this->baseDaysForStandard($code, $schemes[$code] ?? '', $employeeCount, $reviewInputs);
+            $rule = $this->ruleForStandard($code, $schemes[$code] ?? '', $employeeCount, $reviewInputs);
+            $standardTotals[$code] = $rule['days'];
+            $standardRules[$code] = $rule;
         }
 
         if ($standardTotals === []) {
-            $standardTotals['GENERAL'] = $this->managementSystemBaseDays($employeeCount);
+            $rule = $this->ruleForStandard('GENERAL', 'management_system', $employeeCount, $reviewInputs);
+            $standardTotals['GENERAL'] = $rule['days'];
+            $standardRules['GENERAL'] = $rule;
         }
 
         arsort($standardTotals);
@@ -32,7 +41,7 @@ class AuditDurationService
         $additional = array_slice($standardTotals, 1, null, true);
         $integratedAddition = 0.00;
         foreach ($additional as $days) {
-            $integratedAddition += (float) $days * 0.20;
+            $integratedAddition += (float) $days * self::MULTI_STANDARD_ADDITION_FACTOR;
         }
 
         $factor = 1.00;
@@ -64,7 +73,7 @@ class AuditDurationService
             $factors[] = 'Approved reduction -' . number_format($reductionPercent, 2) . '%';
         }
 
-        $total = $this->roundHalfDay(max(1.00, ($base + $integratedAddition) * max(0.70, $factor)));
+        $total = $this->roundHalfDay(max(1.00, ($base + $integratedAddition) * max(self::MAX_REDUCTION_FACTOR, $factor)));
         $stage1 = $this->stageOneDays($total);
         $stage2 = $this->roundHalfDay(max(0.50, $total - $stage1));
         $surveillance = $this->roundHalfDay(max(1.00, $total / 3));
@@ -79,10 +88,11 @@ class AuditDurationService
             'recertification_days' => $recertification,
             'base_days' => $base,
             'integrated_addition_days' => $this->roundHalfDay($integratedAddition),
-            'basis' => $this->basisText($employeeCount, $standardTotals, $factors, $total, $stage1, $stage2),
+            'basis' => $this->basisText($employeeCount, $standardTotals, $standardRules, $factors, $total, $stage1, $stage2, $surveillance, $recertification),
             'employee_count' => $employeeCount,
             'standard_count' => count($standardCodes),
             'standard_days' => $standardTotals,
+            'standard_rules' => $standardRules,
             'reduction_percent' => $reductionPercent,
         ];
     }
@@ -202,12 +212,43 @@ class AuditDurationService
 
     private function baseDaysForStandard(string $code, string $scheme, int $employees, array $inputs): float
     {
+        return $this->ruleForStandard($code, $scheme, $employees, $inputs)['days'];
+    }
+
+    private function ruleForStandard(string $code, string $scheme, int $employees, array $inputs): array
+    {
         $upperCode = strtoupper($code);
-        if (str_contains($upperCode, 'HACCP') || str_contains($upperCode, 'ISO 22000') || str_contains($scheme, 'food')) {
-            return $this->foodSafetyBaseDays($employees, (int) ($inputs['haccp_plans_processes'] ?? 0));
+        $scheme = strtolower($scheme);
+
+        if (str_contains($upperCode, 'HACCP')) {
+            return [
+                'days' => $this->haccpBaseDays($employees, (int) ($inputs['haccp_plans_processes'] ?? 0)),
+                'rule' => 'HACCP food-safety programme rule: employee band + HACCP plan/process complexity.',
+                'family' => 'food_safety_haccp',
+            ];
         }
 
-        return $this->managementSystemBaseDays($employees);
+        if (str_contains($upperCode, 'ISO 22000') || str_contains($upperCode, 'FSSC') || str_contains($scheme, 'food')) {
+            return [
+                'days' => $this->iso22000BaseDays($employees, (int) ($inputs['haccp_plans_processes'] ?? 0), (string) ($inputs['food_complexity'] ?? 'medium')),
+                'rule' => 'Food-safety management-system rule: employee band + process/category complexity + HACCP plan count.',
+                'family' => 'food_safety_management_system',
+            ];
+        }
+
+        if (str_contains($upperCode, '13485') || str_contains($scheme, 'medical')) {
+            return [
+                'days' => $this->medicalDeviceBaseDays($employees, (string) ($inputs['medical_complexity'] ?? 'medium')),
+                'rule' => 'Medical-device management-system rule: employee band with device-risk complexity uplift.',
+                'family' => 'medical_device_management_system',
+            ];
+        }
+
+        return [
+            'days' => $this->managementSystemBaseDays($employees),
+            'rule' => 'Management-system rule: effective employee band, adjusted by risk, sites, shifts and approved reductions.',
+            'family' => 'management_system',
+        ];
     }
 
     private function managementSystemBaseDays(int $employees): float
@@ -247,7 +288,7 @@ class AuditDurationService
         return 22.0 + ceil(($employees - 10700) / 2500);
     }
 
-    private function foodSafetyBaseDays(int $employees, int $haccpPlans): float
+    private function haccpBaseDays(int $employees, int $haccpPlans): float
     {
         $days = match (true) {
             $employees <= 20 => 2.5,
@@ -265,6 +306,42 @@ class AuditDurationService
         return $this->roundHalfDay($days);
     }
 
+    private function iso22000BaseDays(int $employees, int $haccpPlans, string $complexity): float
+    {
+        $days = match (true) {
+            $employees <= 20 => 3.0,
+            $employees <= 50 => 3.5,
+            $employees <= 100 => 4.0,
+            $employees <= 250 => 4.5,
+            $employees <= 500 => 5.0,
+            default => 5.5 + ceil(($employees - 500) / 500) * 0.5,
+        };
+
+        $complexityFactor = match (strtolower($complexity)) {
+            'high', 'very high' => 0.5,
+            'low' => -0.5,
+            default => 0.0,
+        };
+
+        if ($haccpPlans > 5) {
+            $complexityFactor += min(2.0, ($haccpPlans - 5) * 0.25);
+        }
+
+        return $this->roundHalfDay(max(2.0, $days + $complexityFactor));
+    }
+
+    private function medicalDeviceBaseDays(int $employees, string $complexity): float
+    {
+        $days = $this->managementSystemBaseDays($employees);
+        $uplift = match (strtolower($complexity)) {
+            'high', 'class iii', 'implantable', 'sterile' => 1.0,
+            'low', 'class i' => 0.0,
+            default => 0.5,
+        };
+
+        return $this->roundHalfDay($days + $uplift);
+    }
+
     private function stageOneDays(float $total): float
     {
         if ($total <= 3.0) {
@@ -279,26 +356,43 @@ class AuditDurationService
         return round($days * 2) / 2;
     }
 
-    private function basisText(int $employees, array $standardTotals, array $factors, float $total, float $stage1, float $stage2): string
+    private function basisText(int $employees, array $standardTotals, array $standardRules, array $factors, float $total, float $stage1, float $stage2, float $surveillance, float $recertification): string
     {
         $parts = [];
         foreach ($standardTotals as $standard => $days) {
-            $parts[] = $standard . ': ' . number_format((float) $days, 2) . ' days';
+            $rule = $standardRules[$standard]['family'] ?? 'management_system';
+            $parts[] = $standard . ': ' . number_format((float) $days, 2) . ' days (' . str_replace('_', ' ', $rule) . ')';
         }
 
-        return 'Auto calculated using MD-style employee bands and scheme rules. Effective employees: '
+        $ruleNotes = [];
+        foreach ($standardRules as $standard => $rule) {
+            $ruleNotes[] = $standard . ' - ' . $rule['rule'];
+        }
+
+        return self::REFERENCE_NOTE
+            . "\nEffective employees: "
             . $employees
-            . '. Standard basis: '
+            . "\nStandard basis: "
             . implode('; ', $parts)
-            . '. Adjustments: '
+            . "\nScheme logic: "
+            . implode(' ', array_values(array_unique($ruleNotes)))
+            . "\nAdjustments: "
             . ($factors === [] ? 'none' : implode('; ', $factors))
-            . '. Formula reference: Initial audit days = round to nearest 0.5 day of [(highest standard base days + 20% of each additional standard base days) x adjustment factor]. Stage 1 = 1 day when total <= 3 days, otherwise about 25% of total capped at 2 days. Stage 2 = total initial audit days - Stage 1. Surveillance = about one-third of initial audit days. Recertification = about two-thirds of initial audit days'
-            . '. Initial audit: '
+            . "\nFormula reference: Initial audit days = round to nearest 0.5 day of [(highest selected standard base days + "
+            . (int) (self::MULTI_STANDARD_ADDITION_FACTOR * 100)
+            . '% of each additional standard base days) x adjustment factor]. Stage 1 = 1 day when total <= 3 days, otherwise 25% of total capped at 2 days. Stage 2 = total initial audit days - Stage 1. Surveillance = one-third of initial audit days unless scheme rules require more. Recertification = two-thirds of initial audit days unless scheme rules require more.'
+            . "\nCalculated result: Initial audit "
             . number_format($total, 2)
             . ' days, split Stage 1 '
             . number_format($stage1, 2)
             . ' / Stage 2 '
             . number_format($stage2, 2)
+            . '; Surveillance 1 '
+            . number_format($surveillance, 2)
+            . '; Surveillance 2 '
+            . number_format($surveillance, 2)
+            . '; Recertification '
+            . number_format($recertification, 2)
             . '.';
     }
 }

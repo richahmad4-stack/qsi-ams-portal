@@ -15,6 +15,11 @@ class ReportSectionModel extends Model
         'section_key',
         'section_title',
         'section_content',
+        'source_type',
+        'auditor_confirmed',
+        'confirmed_by_user_id',
+        'confirmed_at',
+        'confirmation_note',
         'sort_order',
     ];
 }

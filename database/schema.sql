@@ -1,4 +1,4 @@
-﻿
+
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
@@ -197,7 +197,7 @@ CREATE TABLE `audit_logs` (
   KEY `idx_audit_logs_entity` (`entity_table`,`entity_id`),
   CONSTRAINT `fk_audit_logs_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_audit_logs_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=336 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=391 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `audit_plan_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -392,7 +392,7 @@ CREATE TABLE `certificate_public_events` (
   PRIMARY KEY (`id`),
   KEY `idx_certificate_public_events_certificate` (`certificate_id`,`created_at`),
   CONSTRAINT `fk_certificate_public_events_certificate` FOREIGN KEY (`certificate_id`) REFERENCES `certificates` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=41 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=42 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `certificates`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -475,6 +475,7 @@ CREATE TABLE `certification_decisions` (
   `decision` varchar(40) NOT NULL,
   `reason` text DEFAULT NULL,
   `electronic_signature` varchar(255) DEFAULT NULL,
+  `decision_payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`decision_payload`)),
   `decided_at` datetime DEFAULT NULL,
   `status` varchar(40) NOT NULL DEFAULT 'pending',
   `gm_approved_by_user_id` bigint(20) unsigned DEFAULT NULL,
@@ -830,7 +831,7 @@ CREATE TABLE `generated_documents` (
   CONSTRAINT `fk_generated_documents_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_generated_documents_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`),
   CONSTRAINT `fk_generated_documents_user` FOREIGN KEY (`generated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=118 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=138 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `global_search_index`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -992,7 +993,7 @@ CREATE TABLE `login_attempts` (
   KEY `idx_login_attempts_throttle` (`email`,`ip_address`,`attempted_at`),
   KEY `idx_login_attempts_tenant` (`tenant_id`,`attempted_at`),
   CONSTRAINT `fk_login_attempts_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=40 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `management_review_actions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1063,7 +1064,7 @@ CREATE TABLE `migrations` (
   `time` int(11) NOT NULL,
   `batch` int(11) unsigned NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `nace_codes`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1129,7 +1130,7 @@ CREATE TABLE `ncrs` (
   CONSTRAINT `fk_ncrs_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_ncrs_event` FOREIGN KEY (`audit_event_id`) REFERENCES `audit_events` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_ncrs_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=150 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=151 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `notification_rules`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1223,7 +1224,7 @@ CREATE TABLE `permissions` (
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_permissions_module_action` (`module`,`action`)
-) ENGINE=InnoDB AUTO_INCREMENT=1585 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1588 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `personnel`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1567,13 +1568,20 @@ CREATE TABLE `report_sections` (
   `section_key` varchar(120) NOT NULL,
   `section_title` varchar(255) NOT NULL,
   `section_content` mediumtext NOT NULL,
+  `source_type` varchar(40) NOT NULL DEFAULT 'system_draft',
+  `auditor_confirmed` tinyint(1) NOT NULL DEFAULT 0,
+  `confirmed_by_user_id` bigint(20) unsigned DEFAULT NULL,
+  `confirmed_at` datetime DEFAULT NULL,
+  `confirmation_note` text DEFAULT NULL,
   `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `idx_report_sections_report` (`report_draft_id`,`sort_order`),
   KEY `idx_report_sections_clause` (`clause_library_id`),
+  KEY `idx_report_sections_confirmation` (`report_draft_id`,`section_key`,`auditor_confirmed`),
+  KEY `idx_report_sections_confirmed_by` (`confirmed_by_user_id`),
   CONSTRAINT `fk_report_sections_clause` FOREIGN KEY (`clause_library_id`) REFERENCES `clause_library` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_report_sections_report` FOREIGN KEY (`report_draft_id`) REFERENCES `report_drafts` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3116 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3536 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `role_permissions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

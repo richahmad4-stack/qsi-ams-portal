@@ -836,6 +836,11 @@ class WorkflowActionController extends BaseController
             'section_key' => (string) $this->request->getPost('section_key'),
             'section_title' => (string) $this->request->getPost('section_title'),
             'section_content' => (string) $this->request->getPost('section_content'),
+            'source_type' => 'manual_note',
+            'auditor_confirmed' => 1,
+            'confirmed_by_user_id' => (int) session()->get('user_id'),
+            'confirmed_at' => date('Y-m-d H:i:s'),
+            'confirmation_note' => 'Manual audit note entered by auditor.',
             'sort_order' => (int) ($this->request->getPost('sort_order') ?: 0),
         ];
 
@@ -890,7 +895,14 @@ class WorkflowActionController extends BaseController
             ]);
         }
 
-        $payload = ['section_content' => $content];
+        $payload = [
+            'section_content' => $content,
+            'source_type' => 'manual_edit',
+            'auditor_confirmed' => 0,
+            'confirmed_by_user_id' => null,
+            'confirmed_at' => null,
+            'confirmation_note' => null,
+        ];
         $this->reportSections->update($sectionId, $payload);
         $this->auditLogger->record('update', 'reports', 'report_sections', $sectionId, $section, $payload);
 
@@ -900,6 +912,43 @@ class WorkflowActionController extends BaseController
             'csrfToken' => csrf_token(),
             'csrfHash' => csrf_hash(),
         ]);
+    }
+
+    public function confirmReportSection(int $clientId, int $eventId, int $sectionId)
+    {
+        $client = $this->tenantClient($clientId);
+        $program = $this->latestProgram($clientId);
+        $section = $this->reportSections->find($sectionId);
+
+        if ($client === null || $program === null || $section === null || ! $this->eventBelongsToProgram($eventId, (int) $program['id'])) {
+            return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Report section not found.');
+        }
+
+        $event = $this->events->find($eventId);
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return redirect()->back()->with('error', $lockMessage);
+        }
+
+        $report = $this->reports->find((int) $section['report_draft_id']);
+        if ($report === null || (int) $report['audit_event_id'] !== $eventId || $section['section_key'] !== 'conformity') {
+            return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Conformity section not found.');
+        }
+
+        if (trim((string) $section['section_content']) === '') {
+            return redirect()->back()->with('error', 'Conformity note cannot be confirmed while empty.');
+        }
+
+        $payload = [
+            'auditor_confirmed' => 1,
+            'confirmed_by_user_id' => (int) session()->get('user_id'),
+            'confirmed_at' => date('Y-m-d H:i:s'),
+            'confirmation_note' => $this->nullableText('confirmation_note') ?: 'Auditor confirmed the sampled evidence and conformity note.',
+        ];
+
+        $this->reportSections->update($sectionId, $payload);
+        $this->auditLogger->record('update', 'reports', 'report_sections', $sectionId, $section, $payload);
+
+        return redirect()->to('/workflow/certification/' . $clientId . '/audit-events/' . $eventId . '/execute')->with('success', 'Conformity note confirmed by auditor.');
     }
 
     public function generateConformityDraft(int $clientId, int $eventId, int $clauseId)
@@ -2381,6 +2430,7 @@ class WorkflowActionController extends BaseController
 
         $teamFailures = $this->auditTeamGateFailures($clientId, $eventId);
         $failures = array_merge($failures, $teamFailures);
+        $failures = array_merge($failures, $this->auditTeamCoverageFailures($clientId, $eventId));
 
         $reviewer = $this->personnelForTenant($reviewerPersonnelId);
         if ($reviewer === null || ($reviewer['approval_status'] ?? '') !== 'approved') {
@@ -2391,9 +2441,13 @@ class WorkflowActionController extends BaseController
             $failures[] = 'Technical reviewer cannot be part of the audit team for the same audit event.';
         }
 
-        if (! $this->personnelHasApprovedCompetenceForClient($reviewerPersonnelId, $clientId)) {
-            $failures[] = 'Technical reviewer has no approved matching competence record for this client standard/scope.';
+        $reviewerMissing = $this->uncoveredClientRequirementsForPersonnel($reviewerPersonnelId, $clientId);
+        if ($reviewerMissing !== []) {
+            $failures[] = 'Technical reviewer does not cover all selected client standards/scopes: ' . implode(', ', $reviewerMissing) . '.';
         }
+
+        $fileFailures = $this->certificationFileGateFailures($clientId, $eventId);
+        $failures = array_merge($failures, $fileFailures);
 
         foreach ([
             'competency_confirmed' => 'competence',
@@ -2445,9 +2499,13 @@ class WorkflowActionController extends BaseController
             $failures[] = 'Decision maker must be independent from the Technical Reviewer.';
         }
 
-        if (! $this->personnelHasApprovedCompetenceForClient($decisionMakerPersonnelId, $clientId)) {
-            $failures[] = 'Decision maker has no approved matching competence record for this client standard/scope.';
+        $decisionMissing = $this->uncoveredClientRequirementsForPersonnel($decisionMakerPersonnelId, $clientId);
+        if ($decisionMissing !== []) {
+            $failures[] = 'Decision maker does not cover all selected client standards/scopes: ' . implode(', ', $decisionMissing) . '.';
         }
+
+        $fileFailures = $this->certificationFileGateFailures($clientId, $eventId);
+        $failures = array_merge($failures, $fileFailures);
 
         if ($status === 'gm_approved' && ! in_array($decision, ['approved', 'granted'], true)) {
             $failures[] = 'General Manager final approval can only be recorded for an approved/granted decision.';
@@ -2468,13 +2526,19 @@ class WorkflowActionController extends BaseController
 
         $teamFailures = $this->auditTeamGateFailures($clientId, $eventId);
         $failures = array_merge($failures, $teamFailures);
+        $failures = array_merge($failures, $this->auditTeamCoverageFailures($clientId, $eventId));
 
         if ($this->eventPlanItemRows($eventId) === []) {
             $failures[] = 'Audit plan timetable must be recorded before marking the audit completed.';
         }
 
-        if ($this->reportSectionRows((int) $this->ensureReport($eventId)['id']) === []) {
+        $report = $this->reportForEvent($eventId);
+        if ($report === null) {
+            $failures[] = 'Audit report draft must exist before completion.';
+        } elseif ($this->reportSectionRows((int) $report['id']) === []) {
             $failures[] = 'Audit report checklist must contain saved clause records before completion.';
+        } elseif ($this->unconfirmedConformitySectionCount((int) $report['id']) > 0) {
+            $failures[] = 'All conformity notes must be explicitly confirmed by the auditor before audit completion.';
         }
 
         return array_values(array_unique($failures));
@@ -2535,38 +2599,219 @@ class WorkflowActionController extends BaseController
             return false;
         }
 
-        $today = date('Y-m-d');
+        $competencies = $this->approvedCompetencyRowsForPersonnel($personnelId);
         foreach ($standards as $standard) {
-            $builder = $this->db->table('personnel_competencies')
-                ->where('personnel_id', $personnelId)
-                ->where('approval_status', 'approved')
-                ->groupStart()
-                    ->where('valid_from', null)
-                    ->orWhere('valid_from <=', $today)
-                ->groupEnd()
-                ->groupStart()
-                    ->where('valid_until', null)
-                    ->orWhere('valid_until >=', $today)
-                ->groupEnd()
-                ->groupStart()
-                    ->where('standard_id', (int) ($standard['standard_id'] ?? 0));
+            foreach ($competencies as $competency) {
+                if ($this->competencyCoversClientStandard($competency, $standard)) {
+                    return true;
+                }
+            }
+        }
 
-            foreach (['iaf_code_id', 'food_chain_category_id', 'medical_device_category_id'] as $field) {
-                if (! empty($standard[$field])) {
-                    $builder->orWhere($field, (int) $standard[$field]);
+        return false;
+    }
+
+    private function auditTeamCoverageFailures(int $clientId, int $eventId): array
+    {
+        $requirements = $this->clientStandardRows($clientId);
+        if ($requirements === []) {
+            return ['Client file has no selected standards/scope for competence coverage.'];
+        }
+
+        $activeAuditors = [];
+        foreach ($this->eventTeamRows($eventId) as $member) {
+            if ($this->isActiveAppointmentStatus((string) ($member['status'] ?? ''))
+                && $this->appointmentRequiresCompetence((string) ($member['appointment_role'] ?? ''))
+            ) {
+                $activeAuditors[] = (int) $member['personnel_id'];
+            }
+        }
+
+        if ($activeAuditors === []) {
+            return ['No active competent audit team members are appointed for coverage verification.'];
+        }
+
+        $failures = [];
+        foreach ($requirements as $requirement) {
+            $covered = false;
+            foreach (array_unique($activeAuditors) as $personnelId) {
+                foreach ($this->approvedCompetencyRowsForPersonnel($personnelId) as $competency) {
+                    if ($this->competencyCoversClientStandard($competency, $requirement)) {
+                        $covered = true;
+                        break 2;
+                    }
                 }
             }
 
-            $matches = $builder
-                ->groupEnd()
-                ->countAllResults();
+            if (! $covered) {
+                $failures[] = 'Audit team does not cover ' . $this->clientRequirementLabel($requirement) . '.';
+            }
+        }
 
-            if ($matches > 0) {
+        return $failures;
+    }
+
+    private function uncoveredClientRequirementsForPersonnel(int $personnelId, int $clientId): array
+    {
+        if ($personnelId <= 0) {
+            return ['all selected standards'];
+        }
+
+        $competencies = $this->approvedCompetencyRowsForPersonnel($personnelId);
+        $missing = [];
+
+        foreach ($this->clientStandardRows($clientId) as $requirement) {
+            $covered = false;
+            foreach ($competencies as $competency) {
+                if ($this->competencyCoversClientStandard($competency, $requirement)) {
+                    $covered = true;
+                    break;
+                }
+            }
+
+            if (! $covered) {
+                $missing[] = $this->clientRequirementLabel($requirement);
+            }
+        }
+
+        return $missing;
+    }
+
+    private function approvedCompetencyRowsForPersonnel(int $personnelId): array
+    {
+        if ($personnelId <= 0) {
+            return [];
+        }
+
+        $today = date('Y-m-d');
+
+        return $this->db->table('personnel_competencies')
+            ->where('personnel_id', $personnelId)
+            ->where('approval_status', 'approved')
+            ->groupStart()
+                ->where('valid_from', null)
+                ->orWhere('valid_from <=', $today)
+            ->groupEnd()
+            ->groupStart()
+                ->where('valid_until', null)
+                ->orWhere('valid_until >=', $today)
+            ->groupEnd()
+            ->get()
+            ->getResultArray();
+    }
+
+    private function competencyCoversClientStandard(array $competency, array $clientStandard): bool
+    {
+        $competencyStandardId = (int) ($competency['standard_id'] ?? 0);
+        $clientStandardId = (int) ($clientStandard['standard_id'] ?? 0);
+
+        if ($competencyStandardId > 0 && $clientStandardId > 0 && $competencyStandardId !== $clientStandardId) {
+            return false;
+        }
+
+        if ($competencyStandardId <= 0 && ! $this->competencyMatchesAnyScopeCategory($competency, $clientStandard)) {
+            return false;
+        }
+
+        foreach (['iaf_code_id', 'food_chain_category_id', 'medical_device_category_id'] as $field) {
+            $required = (int) ($clientStandard[$field] ?? 0);
+            $approved = (int) ($competency[$field] ?? 0);
+            if ($required > 0 && $approved > 0 && $approved !== $required) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function competencyMatchesAnyScopeCategory(array $competency, array $clientStandard): bool
+    {
+        foreach (['iaf_code_id', 'food_chain_category_id', 'medical_device_category_id'] as $field) {
+            if ((int) ($clientStandard[$field] ?? 0) > 0 && (int) ($competency[$field] ?? 0) === (int) $clientStandard[$field]) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private function clientRequirementLabel(array $requirement): string
+    {
+        $label = (string) ($requirement['standard_code'] ?? 'selected standard');
+        $scopeBits = [];
+        foreach (['iaf_code_id' => 'IAF', 'food_chain_category_id' => 'Food', 'medical_device_category_id' => 'Medical'] as $field => $prefix) {
+            if (! empty($requirement[$field])) {
+                $scopeBits[] = $prefix . ' #' . $requirement[$field];
+            }
+        }
+
+        return $scopeBits === [] ? $label : $label . ' (' . implode(', ', $scopeBits) . ')';
+    }
+
+    private function certificationFileGateFailures(int $clientId, int $eventId): array
+    {
+        $failures = [];
+
+        if ($this->clientStandardRows($clientId) === []) {
+            $failures[] = 'Certification file has no selected standard/scope.';
+        }
+
+        $review = $this->latestReview($clientId);
+        if ($review === null || ! in_array((string) ($review['status'] ?? ''), ['accepted', 'approved', 'qm_approved'], true)) {
+            $failures[] = 'Application Review must be accepted/approved before file approval.';
+        }
+
+        $proposal = $this->latestProposal($clientId);
+        if ($proposal === null || ! in_array((string) ($proposal['status'] ?? ''), ['accepted', 'approved'], true)) {
+            $failures[] = 'Accepted proposal must exist before file approval.';
+        }
+
+        $contract = $this->latestContract($clientId);
+        if ($contract === null || ! in_array((string) ($contract['status'] ?? ''), ['signed', 'approved', 'active'], true)) {
+            $failures[] = 'Signed/approved contract must exist before file approval.';
+        }
+
+        $program = $this->latestProgram($clientId);
+        if ($program === null) {
+            $failures[] = 'Audit programme must exist before file approval.';
+            return $failures;
+        }
+
+        foreach ($this->eventsRequiredForFileGate((int) $program['id'], $eventId) as $requiredEvent) {
+            $eventLabel = ucwords(str_replace('_', ' ', (string) $requiredEvent['event_type']));
+            if (! in_array((string) ($requiredEvent['status'] ?? ''), ['completed', 'closed'], true)) {
+                $failures[] = $eventLabel . ' must be completed before file approval.';
+            }
+
+            $report = $this->reportForEvent((int) $requiredEvent['id']);
+            if ($report === null || ! in_array((string) ($report['status'] ?? ''), ['submitted', 'approved', 'completed', 'closed'], true)) {
+                $failures[] = $eventLabel . ' audit report must be submitted before file approval.';
+            } elseif ($this->unconfirmedConformitySectionCount((int) $report['id']) > 0) {
+                $failures[] = $eventLabel . ' still has unconfirmed conformity notes.';
+            }
+        }
+
+        return $failures;
+    }
+
+    private function eventsRequiredForFileGate(int $programId, int $eventId): array
+    {
+        $events = $this->programEvents($programId);
+        $selected = $this->eventFromList($events, $eventId);
+        $selectedType = (string) ($selected['event_type'] ?? '');
+
+        if (str_contains($selectedType, 'surveillance') || str_contains($selectedType, 'recertification')) {
+            return $selected === null ? [] : [$selected];
+        }
+
+        $required = [];
+        foreach ($events as $event) {
+            if (in_array((string) ($event['event_type'] ?? ''), ['initial_stage1', 'stage1', 'initial_stage2', 'stage2'], true)) {
+                $required[] = $event;
+            }
+        }
+
+        return $required === [] && $selected !== null ? [$selected] : $required;
     }
 
     private function personnelIsOnAuditTeam(int $personnelId, int $eventId): bool
@@ -3410,6 +3655,8 @@ class WorkflowActionController extends BaseController
                 'section_content' => $client === []
                     ? (string) ($clause['predefined_conformity_note'] ?: 'Conformity verified for this clause.')
                     : $this->narratives->conformityNote($client, $event, $clause, $planItems, $auditTeam),
+                'source_type' => 'system_draft',
+                'auditor_confirmed' => 0,
                 'sort_order' => $index + 1,
             ];
 
@@ -3438,6 +3685,15 @@ class WorkflowActionController extends BaseController
             ->orderBy('report_sections.id', 'ASC')
             ->get()
             ->getResultArray();
+    }
+
+    private function unconfirmedConformitySectionCount(int $reportId): int
+    {
+        return (int) $this->db->table('report_sections')
+            ->where('report_draft_id', $reportId)
+            ->where('section_key', 'conformity')
+            ->where('auditor_confirmed', 0)
+            ->countAllResults();
     }
 
     private function ncrRows(int $eventId): array

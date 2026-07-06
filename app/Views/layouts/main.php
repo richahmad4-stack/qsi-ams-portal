@@ -136,8 +136,8 @@
 $currentPath = trim(uri_string(), '/');
 $currentUser = current_user();
 $currentRoles = $currentUser['roles'] ?? [];
-$financeRoles = ['super_admin', 'general_manager', 'coo', 'finance_officer', 'admin'];
-$showFinance = can('proposals', 'view') || array_intersect($financeRoles, $currentRoles) !== [];
+$financeRoles = ['administrator', 'finance', 'general_manager', 'coo', 'finance_officer', 'admin'];
+$showFinance = can('finance', 'view') || array_intersect($financeRoles, $currentRoles) !== [];
 
 $nav = [
     'Core' => [

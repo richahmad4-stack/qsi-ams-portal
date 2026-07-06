@@ -28,7 +28,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         'as' => 'dashboard',
     ]);
     $routes->get('dashboard/section/(:segment)', 'Dashboard\DashboardDetailController::show/$1', ['filter' => 'permission:dashboard,view']);
-    $routes->get('finance', 'Finance\FinanceController::index', ['filter' => 'permission:proposals,view']);
+    $routes->get('finance', 'Finance\FinanceController::index', ['filter' => 'permission:finance,view']);
 
     $routes->get('workflow/certification', 'Workflow\CertificationWorkflowController::index', ['filter' => 'permission:clients,view']);
     $routes->get('workflow/certification/(:num)', 'Workflow\CertificationWorkflowController::show/$1', ['filter' => 'permission:clients,view']);
@@ -54,6 +54,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->post('workflow/certification/(:num)/audit-events/(:num)/findings', 'Workflow\WorkflowActionController::saveFinding/$1/$2', ['filter' => 'permission:reports,edit']);
     $routes->post('workflow/certification/(:num)/audit-events/(:num)/clauses/(:num)/ai-conformity', 'Workflow\WorkflowActionController::generateConformityDraft/$1/$2/$3', ['filter' => 'permission:reports,edit']);
     $routes->post('workflow/certification/(:num)/audit-events/(:num)/findings/(:num)/autosave', 'Workflow\WorkflowActionController::autosaveConformityNote/$1/$2/$3', ['filter' => 'permission:reports,edit']);
+    $routes->post('workflow/certification/(:num)/audit-events/(:num)/findings/(:num)/confirm', 'Workflow\WorkflowActionController::confirmReportSection/$1/$2/$3', ['filter' => 'permission:reports,edit']);
     $routes->post('workflow/certification/(:num)/audit-events/(:num)/findings/(:num)/delete', 'Workflow\WorkflowActionController::deleteFinding/$1/$2/$3', ['filter' => 'permission:reports,delete']);
     $routes->post('workflow/certification/(:num)/audit-events/(:num)/ncrs', 'Workflow\WorkflowActionController::saveNcr/$1/$2', ['filter' => 'permission:ncrs,edit']);
     $routes->post('workflow/certification/(:num)/audit-events/(:num)/ncrs/(:num)/close', 'Workflow\WorkflowActionController::closeNcr/$1/$2/$3', ['filter' => 'permission:ncrs,edit']);

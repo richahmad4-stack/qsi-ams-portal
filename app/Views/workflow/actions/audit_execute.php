@@ -205,6 +205,11 @@ $eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
                                     <span><?= esc($clause['clause_title']) ?></span>
                                     <?php if ($conformitySection !== null): ?>
                                         <span class="badge text-bg-success ms-2">Conformity note</span>
+                                        <?php if ((int) ($conformitySection['auditor_confirmed'] ?? 0) === 1): ?>
+                                            <span class="badge text-bg-primary ms-2">Auditor confirmed</span>
+                                        <?php else: ?>
+                                            <span class="badge text-bg-warning ms-2">Needs confirmation</span>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                     <?php if ($clauseSections !== []): ?>
                                         <span class="badge text-bg-info ms-2"><?= esc(count($clauseSections)) ?> extra note(s)</span>
@@ -278,6 +283,14 @@ $eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
                                                         <div class="alert alert-warning py-2 small mb-2">
                                                             System/AI text is a draft only. The auditor must verify the sampled evidence and edit this note before relying on it in the final report.
                                                         </div>
+                                                        <?php if ($conformitySection !== null): ?>
+                                                            <div class="small mb-2 <?= (int) ($conformitySection['auditor_confirmed'] ?? 0) === 1 ? 'text-primary' : 'text-secondary' ?>">
+                                                                Confirmation:
+                                                                <?= (int) ($conformitySection['auditor_confirmed'] ?? 0) === 1
+                                                                    ? 'confirmed at ' . esc($conformitySection['confirmed_at'] ?? '')
+                                                                    : 'not yet confirmed by auditor' ?>
+                                                            </div>
+                                                        <?php endif; ?>
                                                         <textarea
                                                             class="form-control mb-2"
                                                             id="conformity_note_<?= esc($clauseId) ?>"
@@ -302,6 +315,16 @@ $eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
                                                                 Restore library note
                                                             </button>
                                                         </div>
+                                                        <?php if ($conformitySection !== null): ?>
+                                                            <form method="post" action="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/findings/' . $conformitySection['id'] . '/confirm') ?>" class="mt-2">
+                                                                <?= csrf_field() ?>
+                                                                <input type="hidden" name="confirmation_note" value="Auditor confirmed the sampled evidence and conformity note for this clause.">
+                                                                <button class="btn btn-success btn-sm" type="submit">
+                                                                    <i class="fa-solid fa-check me-1" aria-hidden="true"></i>
+                                                                    Confirm reviewed note
+                                                                </button>
+                                                            </form>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </div>
 

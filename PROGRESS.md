@@ -18,19 +18,22 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Dashboard cards with linked detail sections and PDF actions.
 - Compliance hardening pass added backend gates for auditor appointment competence/impartiality, surveillance due-date locking, audit completion readiness, Technical Review approval, and Certification Decision independence.
 - Audit conformity notes are now clearly marked as system/AI drafts requiring auditor confirmation, and placeholder clause requirement wording is replaced with internal checklist-question language.
+- Audit duration calculation now uses a controlled scheme-aware rule set with separate management-system, HACCP, food-safety, and medical-device bases, plus auditable calculation basis text.
+- Multi-standard competence controls now require full selected-standard/scope coverage for the audit team, Technical Reviewer, and Decision Maker while still allowing multiple auditors to share coverage.
+- Technical Review and Certification Decision approval now include file-level readiness checks for application review, accepted proposal, signed/approved contract, audit programme, required audit events, submitted reports, closed NCR/CAPA, and confirmed report clauses.
+- Audit report conformity sections now track source type, auditor confirmation, confirmation date/user, and confirmation notes. Audit completion requires every conformity section to be confirmed.
+- Finance dashboard route and sidebar visibility now use the `finance:view` permission instead of proposal access.
+- PHPUnit smoke tests cover the audit-duration service and critical workflow gate wiring.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus
 
-Project-owner compliance hardening and re-audit: backend gates are in place for ISO/IEC 17021-style approval controls, competence/impartiality checks, surveillance locks, controlled checklist wording, and clearer auditor responsibility over generated audit notes. The latest re-audit found the core prototype is working, but the audit duration engine, multi-standard competence coverage, file-level review/decision package, report-section confirmation, and automated tests still need strengthening before production/accreditation use.
+Project-owner compliance hardening and workflow validation: core gates are now in place for audit duration basis, multi-standard competence coverage, full-file Technical Review/Decision readiness, surveillance locks, and auditor confirmation of generated report clauses.
 
 ## Next
 
-- Strengthen the audit duration engine into a more defensible MD 5 / MD 11 / scheme-specific rules module with auditable calculation tables.
-- Strengthen competence matching so a multi-standard file requires team coverage across every selected standard/scope, not only one matching competence record.
-- Convert Technical Review and Certification Decision from event-only checks into a full certification-file approval package covering Stage 1, Stage 2, NCR/CAPA, scope, contract, audit programme, report submission, and impartiality evidence.
-- Add auditor confirmation tracking per report clause/section for generated conformity notes and objective evidence.
-- Add automated tests for surveillance locks, appointment gates, audit completion, Technical Review, Decision, PDF routes, and audit duration calculations.
+- Expand tests from wiring/smoke tests into database-backed feature tests for surveillance locks, appointment gates, audit completion, Technical Review, Decision, PDF routes, and audit duration edge cases.
+- Review official licensed MD/scheme tables with the Certification Body and tune the controlled audit-duration rule set where needed.
 - Add richer controlled checklist/question banks per standard without copying licensed standard text.
 - Continue refining controlled PDF templates against the user-provided document formats, especially certificate issuance and client feedback.
 - Continue checking multi-standard client files such as HACCP + ISO 22000 + ISO 9001 for stage-specific workflow, competence matching, and PDF consistency.
