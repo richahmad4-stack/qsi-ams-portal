@@ -1,5 +1,5 @@
 -- QSI AMS schema export
--- Generated 2026-07-06T17:47:42+02:00
+-- Generated 2026-07-06T18:04:53+02:00
 
 SET FOREIGN_KEY_CHECKS=0;
 
@@ -177,7 +177,7 @@ CREATE TABLE `audit_logs` (
   KEY `idx_audit_logs_entity` (`entity_table`,`entity_id`),
   CONSTRAINT `fk_audit_logs_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_audit_logs_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=454 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=460 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `audit_plan_items`;
 CREATE TABLE `audit_plan_items` (
@@ -518,7 +518,7 @@ CREATE TABLE `clause_content_pool` (
   CONSTRAINT `fk_clause_content_pool_clause` FOREIGN KEY (`clause_library_id`) REFERENCES `clause_library` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_clause_content_pool_standard` FOREIGN KEY (`standard_id`) REFERENCES `standards` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_clause_content_pool_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5077 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `clause_library`;
 CREATE TABLE `clause_library` (
@@ -819,7 +819,7 @@ CREATE TABLE `generated_documents` (
   CONSTRAINT `fk_generated_documents_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_generated_documents_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`),
   CONSTRAINT `fk_generated_documents_user` FOREIGN KEY (`generated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=159 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=160 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `global_search_index`;
 CREATE TABLE `global_search_index` (

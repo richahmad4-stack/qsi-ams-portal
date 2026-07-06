@@ -1373,6 +1373,16 @@ class CycleAutomationService
         $mode = $preview['input']['ncr_mode'];
         $confirmed = $this->workflowPackComplete($preview['input']);
         $evidenceSummary = $this->auditEvidenceSummary($preview['input'], $type);
+        $pool = new ClauseContentPoolService();
+        $poolClient = [
+            'tenant_id' => $tenantId,
+            'company' => $preview['input']['client_name'],
+            'scope' => $preview['input']['scope'],
+            'iaf_code_id' => $preview['input']['iaf_code_id'],
+            'food_chain_category_id' => $preview['input']['food_category_id'],
+            'medical_device_category_id' => $preview['input']['medical_category_id'],
+        ];
+        $poolEvent = ['event_type' => $type];
         $count = match ($mode) {
             'none' => 0,
             'major' => in_array($type, ['initial_stage2', 'surveillance1', 'surveillance2', 'recertification'], true) ? 4 : 2,
@@ -1385,8 +1395,17 @@ class CycleAutomationService
             $severity = $mode === 'major' && $i === 1 ? 'major' : 'minor';
             $closed = $confirmed && $event['status'] !== 'planned';
             $ncrNumber = $this->number('NCR-AUTO-' . strtoupper(str_replace('_', '-', $type)), $clientId) . '-' . str_pad((string) $i, 2, '0', STR_PAD_LEFT);
-            $finding = $this->findingText($clause, $preview['input'], $type, $severity);
+            $finding = $this->poolText($pool, $poolClient, $poolEvent, $clause, $severity === 'major' ? 'major_nc' : 'minor_nc', $severity)
+                ?? $this->findingText($clause, $preview['input'], $type, $severity);
             $target = (new DateTimeImmutable($event['end']))->add(new DateInterval('P21D'))->format('Y-m-d');
+            $objectiveEvidence = $this->poolText($pool, $poolClient, $poolEvent, $clause, 'objective_evidence', $severity)
+                ?? $this->evidenceText($preview['input']['client_name'], $clause, $evidenceSummary);
+            $rootCause = $this->poolText($pool, $poolClient, $poolEvent, $clause, 'root_cause', $severity);
+            $correction = $this->poolText($pool, $poolClient, $poolEvent, $clause, 'correction', $severity);
+            $correctiveAction = $this->poolText($pool, $poolClient, $poolEvent, $clause, 'corrective_action', $severity);
+            $preventiveAction = $this->poolText($pool, $poolClient, $poolEvent, $clause, 'preventive_action', $severity);
+            $verification = $this->poolText($pool, $poolClient, $poolEvent, $clause, 'verification_method', $severity);
+            $evidenceRequired = $this->poolText($pool, $poolClient, $poolEvent, $clause, 'evidence_required', $severity);
             $this->db->table('ncrs')->insert([
                 'tenant_id' => $tenantId,
                 'audit_event_id' => $eventId,
@@ -1394,14 +1413,14 @@ class CycleAutomationService
                 'ncr_number' => $ncrNumber,
                 'requirement' => (string) ($clause['requirement'] ?? $clause['clause_title']),
                 'finding' => $finding,
-                'objective_evidence' => $this->evidenceText($preview['input']['client_name'], $clause, $evidenceSummary),
+                'objective_evidence' => $objectiveEvidence,
                 'classification' => $severity,
-                'correction' => $closed ? 'Affected record corrected and responsible process owner briefed.' : 'To be completed by client.',
-                'root_cause' => $closed ? 'Process verification criteria did not require complete evidence cross-reference before record approval.' : 'To be completed by client using accepted root-cause method.',
-                'corrective_action' => $closed ? 'Update checklist, train responsible staff, and verify next sample for complete implementation.' : 'To be completed by client and verified by auditor.',
+                'correction' => $closed ? ($correction ?? 'Affected record corrected and responsible process owner briefed.') : 'To be completed by client.',
+                'root_cause' => $closed ? ($rootCause ?? 'Process verification criteria did not require complete evidence cross-reference before record approval.') : 'To be completed by client using accepted root-cause method.',
+                'corrective_action' => $closed ? ($correctiveAction ?? 'Update checklist, train responsible staff, and verify next sample for complete implementation.') : 'To be completed by client and verified by auditor.',
                 'responsible_person' => $preview['input']['contact_person'],
                 'target_date' => $target,
-                'verification' => $closed ? 'Corrective action evidence reviewed and accepted by the assigned auditor.' : 'Pending auditor verification.',
+                'verification' => $closed ? ($verification ?? 'Corrective action evidence reviewed and accepted by the assigned auditor.') : 'Pending auditor verification.',
                 'closure_notes' => $closed ? 'Closed from the prepared cycle file with linked correction, root cause, action and verification evidence.' : 'Open for client action.',
                 'status' => $closed ? 'closed' : 'open',
                 'closed_at' => $closed ? (new DateTimeImmutable($target))->add(new DateInterval('P3D'))->format('Y-m-d 15:00:00') : null,
@@ -1416,16 +1435,16 @@ class CycleAutomationService
                 'capa_number' => str_replace('NCR', 'CAPA', $ncrNumber),
                 'source' => 'audit_ncr',
                 'issue' => $finding,
-                'immediate_correction' => $closed ? 'Corrected affected sample and checked similar records.' : 'To be completed by client.',
-                'root_cause' => $closed ? 'Review responsibility and record completion criteria were not sufficiently clear.' : 'To be completed by client.',
-                'five_why' => json_encode($closed ? ['Why was evidence incomplete?' => 'Checklist did not require attachment reference.', 'Why was checklist weak?' => 'Template was not updated after process change.'] : ['status' => 'To be completed by client'], JSON_THROW_ON_ERROR),
-                'fishbone' => json_encode($closed ? ['method' => 'Checklist gap', 'people' => 'Reviewer awareness', 'records' => 'Incomplete reference'] : ['status' => 'To be completed by client'], JSON_THROW_ON_ERROR),
-                'corrective_action' => $closed ? 'Revise template, brief owners, and add monthly verification sample.' : 'To be completed by client.',
-                'preventive_action' => $closed ? 'Include evidence-reference check in internal audit sampling.' : 'To be completed by client where applicable.',
+                'immediate_correction' => $closed ? ($correction ?? 'Corrected affected sample and checked similar records.') : 'To be completed by client.',
+                'root_cause' => $closed ? ($rootCause ?? 'Review responsibility and record completion criteria were not sufficiently clear.') : 'To be completed by client.',
+                'five_why' => json_encode($closed ? ['Why was the issue raised?' => $rootCause ?? 'Control evidence was incomplete.', 'Why was it not detected?' => 'Verification did not identify the missing evidence before audit sampling.'] : ['status' => 'To be completed by client'], JSON_THROW_ON_ERROR),
+                'fishbone' => json_encode($closed ? ['method' => $rootCause ?? 'Method gap', 'records' => $objectiveEvidence, 'people' => 'Responsible staff awareness verified through CAPA evidence'] : ['status' => 'To be completed by client'], JSON_THROW_ON_ERROR),
+                'corrective_action' => $closed ? ($correctiveAction ?? 'Revise template, brief owners, and add monthly verification sample.') : 'To be completed by client.',
+                'preventive_action' => $closed ? ($preventiveAction ?? 'Include evidence-reference check in internal audit sampling.') : 'To be completed by client where applicable.',
                 'responsible_person' => $preview['input']['contact_person'],
                 'target_date' => $target,
-                'evidence_reference' => $this->docPrefix($preview['input']['client_name']) . '-' . $clause['clause_number'] . '-CAPA-' . str_pad((string) $i, 3, '0', STR_PAD_LEFT),
-                'verification' => $closed ? 'Evidence accepted by audit team from the prepared cycle file.' : 'Pending review.',
+                'evidence_reference' => $evidenceRequired ?? ($this->docPrefix($preview['input']['client_name']) . '-' . $clause['clause_number'] . '-CAPA-' . str_pad((string) $i, 3, '0', STR_PAD_LEFT)),
+                'verification' => $closed ? ($verification ?? 'Evidence accepted by audit team from the prepared cycle file.') : 'Pending review.',
                 'effectiveness' => $closed ? 'No repeat issue in follow-up sample.' : 'Pending effectiveness verification.',
                 'closure_notes' => $closed ? 'Closed from the prepared cycle file after auditor verification.' : 'Awaiting evidence.',
                 'status' => $closed ? 'closed' : 'open',
@@ -1729,6 +1748,13 @@ class CycleAutomationService
 
         return 'Objective evidence reference ' . $ref . '. Clause-aligned evidence expected: ' . $this->clauseEvidenceTrail($clause)
             . '. Supplied evidence summary: ' . $this->nonEmpty($evidenceSummary, 'To be completed by auditor from actual sampled records.');
+    }
+
+    private function poolText(ClauseContentPoolService $pool, array $client, ?array $event, array $clause, string $contentType, ?string $severity = null): ?string
+    {
+        $template = $pool->templateFor($client, $event, $clause, $contentType, $severity);
+
+        return $template === null ? null : $pool->renderTemplate($template, $client, $event, $clause);
     }
 
     private function clauseEvidenceTrail(array $clause): string

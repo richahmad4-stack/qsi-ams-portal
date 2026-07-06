@@ -25,6 +25,11 @@ class ClauseContentPoolService
         return $this->bestTemplate($client, $event, $clause, $contentType, $severity);
     }
 
+    public function renderTemplate(array $template, array $client, ?array $event, array $clause): string
+    {
+        return $this->fillTemplate($template, $client, $event, $clause);
+    }
+
     private function bestTemplate(array $client, ?array $event, array $clause, string $contentType, ?string $severity = null): ?array
     {
         if (! in_array('clause_content_pool', $this->db->listTables(), true)) {
@@ -57,7 +62,7 @@ class ClauseContentPoolService
             ->get()
             ->getResultArray();
 
-        $best = null;
+        $bestRows = [];
         $bestScore = -1;
         foreach ($rows as $row) {
             if ($severity !== null && ($row['severity'] ?? '') !== '' && $row['severity'] !== $severity) {
@@ -82,12 +87,25 @@ class ClauseContentPoolService
             }
 
             if ($score > $bestScore) {
-                $best = $row;
+                $bestRows = [$row];
                 $bestScore = $score;
+            } elseif ($score === $bestScore) {
+                $bestRows[] = $row;
             }
         }
 
-        return $best;
+        if ($bestRows === []) {
+            return null;
+        }
+
+        $seed = (string) ($client['company'] ?? $client['client_name'] ?? '')
+            . '|' . (string) ($clause['clause_number'] ?? '')
+            . '|' . $stage
+            . '|' . $contentType
+            . '|' . (string) $severity;
+        $index = abs((int) crc32($seed)) % count($bestRows);
+
+        return $bestRows[$index];
     }
 
     private function scopeMatches(string $keyword, string $scope): bool
