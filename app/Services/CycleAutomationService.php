@@ -320,7 +320,7 @@ class CycleAutomationService
             'current_cycle_stage' => $row['current_cycle_stage'] ?? 'auto',
             'risk_category' => $row['risk_category'] ?? 'medium',
             'special_notes' => $row['special_notes'] ?? '',
-            'ncr_mode' => $row['ncr_mode'] ?? 'none',
+            'ncr_mode' => $row['ncr_mode'] ?? 'sample_minor',
             'generation_mode' => $row['generation_mode'] ?? 'standard',
             'application_review_notes' => $row['application_review_notes'] ?? '',
             'audit_evidence_summary' => $row['audit_evidence_summary'] ?? '',
@@ -1357,10 +1357,10 @@ class CycleAutomationService
                     ? $this->conformityText($preview['input']['client_name'], $clause, $type, $evidenceSummary)
                     : $this->draftConformityText($preview['input']['client_name'], $clause, $type),
                 'source_type' => 'system_prepared',
-                'auditor_confirmed' => $confirmed && $event['status'] !== 'planned' ? 1 : 0,
-                'confirmed_by_user_id' => $confirmed && $event['status'] !== 'planned' ? ($lead['user_id'] ?? null) : null,
-                'confirmed_at' => $confirmed && $event['status'] !== 'planned' ? $event['end'] . ' 14:30:00' : null,
-                'confirmation_note' => $confirmed && $event['status'] !== 'planned' ? 'Confirmed by assigned auditor from the prepared cycle file and clause-aligned evidence trail.' : 'Auditor confirmation required before report submission.',
+                'auditor_confirmed' => $confirmed ? 1 : 0,
+                'confirmed_by_user_id' => $confirmed ? ($lead['user_id'] ?? null) : null,
+                'confirmed_at' => $confirmed ? $event['end'] . ' 14:30:00' : null,
+                'confirmation_note' => $confirmed ? 'Confirmed by assigned auditor from the prepared cycle file and clause-aligned evidence trail.' : 'Auditor confirmation required before report submission.',
                 'sort_order' => $sort + 1,
             ]);
         }
@@ -1375,8 +1375,8 @@ class CycleAutomationService
         $evidenceSummary = $this->auditEvidenceSummary($preview['input'], $type);
         $count = match ($mode) {
             'none' => 0,
-            'major' => 2,
-            default => in_array($type, ['initial_stage2', 'surveillance1'], true) ? 1 : 0,
+            'major' => in_array($type, ['initial_stage2', 'surveillance1', 'surveillance2', 'recertification'], true) ? 4 : 2,
+            default => in_array($type, ['initial_stage2', 'surveillance1', 'surveillance2', 'recertification'], true) ? 4 : 0,
         };
         $ids = [];
         $clauses = $this->clauses($preview['standards'], max(1, $count));

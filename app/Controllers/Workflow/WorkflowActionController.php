@@ -2831,7 +2831,10 @@ class WorkflowActionController extends BaseController
             return false;
         }
 
-        if ($competencyStandardId <= 0 && ! $this->competencyMatchesAnyScopeCategory($competency, $clientStandard)) {
+        if ($competencyStandardId <= 0
+            && ! $this->competencyCoversAllScopeCategories($competency)
+            && ! $this->competencyMatchesAnyScopeCategory($competency, $clientStandard)
+        ) {
             return false;
         }
 
@@ -2839,6 +2842,17 @@ class WorkflowActionController extends BaseController
             $required = (int) ($clientStandard[$field] ?? 0);
             $approved = (int) ($competency[$field] ?? 0);
             if ($required > 0 && $approved > 0 && $approved !== $required) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function competencyCoversAllScopeCategories(array $competency): bool
+    {
+        foreach (['iaf_code_id', 'food_chain_category_id', 'medical_device_category_id'] as $field) {
+            if ((int) ($competency[$field] ?? 0) > 0) {
                 return false;
             }
         }

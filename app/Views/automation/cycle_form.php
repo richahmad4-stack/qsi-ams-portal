@@ -157,7 +157,7 @@
             <div class="col-md-3">
                 <label class="form-label" for="ncr_mode">NCR/CAPA setup</label>
                 <select class="form-select" id="ncr_mode" name="ncr_mode">
-                    <option value="sample_minor">Prepare sample minor NCRs</option>
+                    <option value="sample_minor">Prepare 4 minor NCR/CAPA records</option>
                     <option value="none">No NCRs</option>
                     <option value="major">Include major NCR sample</option>
                 </select>

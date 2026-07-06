@@ -16,6 +16,8 @@ class WorkflowGateWiringTest extends TestCase
     public function testAuditCompletionRequiresConfirmedConformitySectionsWithoutCreatingReport(): void
     {
         self::assertStringContainsString('unconfirmedConformitySectionCount', $this->controller);
+        self::assertStringContainsString('competencyCoversAllScopeCategories', $this->controller);
+        self::assertStringContainsString('Confirmed by assigned auditor', file_get_contents(__DIR__ . '/../../app/Database/Migrations/2026-07-06-000012_ConfirmPreparedCycleReportSections.php') ?: '');
         self::assertStringContainsString('reportForEvent($eventId)', $this->controller);
         self::assertStringNotContainsString("reportSectionRows((int) \$this->ensureReport(\$eventId)['id'])", $this->controller);
     }
