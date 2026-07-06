@@ -60,23 +60,6 @@ $nameText = static function ($value): string {
 
     return trim((string) $value) !== '' ? (string) $value : 'Not assigned';
 };
-$stepName = static function (string $key) use ($responsible, $nameText): string {
-    return match ($key) {
-        'tm_application_review' => $nameText($responsible['technical_manager'] ?? null),
-        'qm_application_approval' => $nameText($responsible['quality_manager'] ?? null),
-        'proposal' => $nameText($responsible['proposal_created_by'] ?? null),
-        'contract' => $nameText($responsible['contract_signed_by'] ?? ($responsible['contract_created_by'] ?? null)),
-        'audit_program' => $nameText($responsible['audit_program_created_by'] ?? null),
-        'auditor_appointment' => $nameText($responsible['all_auditors'] ?? []),
-        'stage1' => $nameText($responsible['stage1_auditors'] ?? []),
-        'stage2' => $nameText($responsible['stage2_auditors'] ?? []),
-        'ncr_closure' => $nameText($responsible['stage2_auditors'] ?? []),
-        'tm_file_review' => $nameText($responsible['technical_reviewer'] ?? null),
-        'certification_decision' => $nameText($responsible['decision_maker'] ?? null),
-        'gm_final_approval' => $nameText($responsible['general_manager'] ?? null),
-        default => 'Not assigned',
-    };
-};
 $eventRoute = static function (?array $event, string $target) use ($client): ?string {
     if ($event === null) {
         return null;
@@ -724,40 +707,6 @@ $renderEventFileTable = static function (?array $event, string $emptyText) use (
         </div>
     </div>
 <?php endforeach; ?>
-
-<div class="panel mb-3">
-    <div class="panel-title">Certification workflow</div>
-    <div class="row g-3">
-        <?php foreach ($workflow['steps'] as $index => $step): ?>
-            <?php
-            $classes = $stateClasses[$step['state']] ?? $stateClasses['pending'];
-            $stepUrl = $stepLinks[$step['key']] ?? null;
-            $stepTag = $stepUrl === null ? 'div' : 'a';
-            $stepHref = $stepUrl === null ? '' : ' href="' . esc($stepUrl, 'attr') . '"';
-            ?>
-            <div class="col-lg-4 col-md-6">
-                <<?= $stepTag ?><?= $stepHref ?> class="workflow-card border <?= esc($classes[0]) ?> <?= $stepUrl === null ? 'workflow-card-disabled' : 'workflow-card-clickable' ?>">
-                    <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
-                        <div>
-                            <div class="text-secondary small">Step <?= esc($index + 1) ?> - <?= esc($step['owner']) ?></div>
-                            <div class="fw-semibold"><?= esc($step['label']) ?></div>
-                        </div>
-                        <span class="badge <?= esc($classes[1]) ?>">
-                            <i class="fa-solid <?= esc($classes[2]) ?> me-1" aria-hidden="true"></i>
-                            <?= esc(str_replace('_', ' ', $step['state'])) ?>
-                        </span>
-                    </div>
-                    <div class="small fw-semibold mb-2">
-                        <i class="fa-solid fa-user-check me-1 text-secondary" aria-hidden="true"></i>
-                        <?= esc($stepName($step['key'])) ?>
-                    </div>
-                    <div class="small mb-2"><?= esc($step['description']) ?></div>
-                    <div class="text-secondary small"><?= esc($step['note']) ?></div>
-                </<?= $stepTag ?>>
-            </div>
-        <?php endforeach; ?>
-    </div>
-</div>
 
 <div class="row g-3">
     <div class="col-lg-6">
