@@ -16,6 +16,7 @@ class CertificationDecisionModel extends Model
         'decision',
         'reason',
         'electronic_signature',
+        'decision_payload',
         'decided_at',
         'status',
         'gm_approved_by_user_id',

@@ -1165,6 +1165,18 @@ class WorkflowActionController extends BaseController
             'reviewer_personnel_id' => (int) $this->request->getPost('reviewer_personnel_id'),
             'checklist_payload' => json_encode([
                 'review_notes' => $this->nullableText('review_notes'),
+                'audit_result' => $this->nullableText('audit_result'),
+                'audit_category_nace' => $this->nullableText('audit_category_nace'),
+                'transfer_status' => $this->nullableText('transfer_status'),
+                'accredited_scope_ias_saac' => $this->nullableText('accredited_scope_ias_saac'),
+                'accredited_scope_fssc' => $this->nullableText('accredited_scope_fssc'),
+                'ias_saac_registration_required' => $this->nullableText('ias_saac_registration_required'),
+                'complaints_received' => $this->nullableText('complaints_received'),
+                'client_management_system_review' => $this->nullableText('client_management_system_review'),
+                'outstanding_items' => $this->nullableText('outstanding_items'),
+                'certificate_authorization' => $this->nullableText('certificate_authorization'),
+                'authorization_date' => $this->dateOrNull('authorization_date'),
+                'checklist_rows' => $this->checklistRowsFromPost('technical_checklist'),
                 'created_from' => 'technical_review_form',
             ], JSON_THROW_ON_ERROR),
             'competency_confirmed' => $this->checkbox('competency_confirmed'),
@@ -1255,6 +1267,19 @@ class WorkflowActionController extends BaseController
             'decision' => (string) $this->request->getPost('decision'),
             'reason' => $this->nullableText('reason'),
             'electronic_signature' => $this->nullableText('electronic_signature'),
+            'decision_payload' => json_encode([
+                'application_id' => $this->nullableText('application_id'),
+                'standard_category_nace' => $this->nullableText('standard_category_nace'),
+                'certificate_number' => $this->nullableText('certificate_number'),
+                'certificate_decision_date' => $this->dateOrNull('certificate_decision_date'),
+                'declaration_confirmed' => $this->checkbox('declaration_confirmed'),
+                'declaration_text' => $this->nullableText('declaration_text'),
+                'technical_reviewer_name' => $this->nullableText('technical_reviewer_name'),
+                'technical_reviewer_date' => $this->dateOrNull('technical_reviewer_date'),
+                'certification_decision_maker_name' => $this->nullableText('certification_decision_maker_name'),
+                'certification_decision_maker_date' => $this->dateOrNull('certification_decision_maker_date'),
+                'checklist_rows' => $this->checklistRowsFromPost('decision_checklist'),
+            ], JSON_THROW_ON_ERROR),
             'decided_at' => date('Y-m-d H:i:s'),
             'status' => $status,
             'gm_approved_by_user_id' => $status === 'gm_approved' ? (int) session()->get('user_id') : null,
@@ -3021,6 +3046,33 @@ class WorkflowActionController extends BaseController
     private function checkbox(string $field): int
     {
         return $this->request->getPost($field) === '1' ? 1 : 0;
+    }
+
+    private function checklistRowsFromPost(string $field): array
+    {
+        $rows = $this->request->getPost($field);
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($rows as $key => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $normalized[] = [
+                'key' => (string) $key,
+                'group' => trim((string) ($row['group'] ?? '')),
+                'ref' => trim((string) ($row['ref'] ?? '')),
+                'requirement' => trim((string) ($row['requirement'] ?? '')),
+                'action_by' => trim((string) ($row['action_by'] ?? '')),
+                'result' => trim((string) ($row['result'] ?? '')),
+                'evidence' => trim((string) ($row['evidence'] ?? '')),
+            ];
+        }
+
+        return $normalized;
     }
 
     private function money(string $field, float $default = 0.00): float

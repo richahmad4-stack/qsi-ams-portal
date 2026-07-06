@@ -129,6 +129,7 @@ class DocumentGeneratorService
         $decision = $technicalReview === null ? null : $this->decisionForReview($tenantId, (int) $technicalReview['id']);
 
         return [
+            'client' => $this->client($tenantId, $clientId),
             'proposal' => $this->latest('proposals', ['tenant_id' => $tenantId, 'client_id' => $clientId]),
             'contract' => $this->latest('contracts', ['tenant_id' => $tenantId, 'client_id' => $clientId]),
             'certification_application' => $this->applicationData($tenantId, $clientId),
@@ -2299,7 +2300,7 @@ class DocumentGeneratorService
         $ncrs = $data['ncrs'] ?? [];
         $openNcrs = array_filter($ncrs, static fn (array $ncr): bool => ! in_array((string) ($ncr['status'] ?? ''), ['closed', 'verified_closed'], true));
 
-        return [
+        $sections = [
             [
                 'Technical Review Identification',
                 $this->keyValueTable([
@@ -2309,6 +2310,22 @@ class DocumentGeneratorService
                     'Recommendation' => isset($review['recommendation']) ? str_replace('_', ' ', (string) $review['recommendation']) : '',
                     'Reviewed at' => $review['reviewed_at'] ?? 'Not recorded',
                     'Review notes' => $payload['review_notes'] ?? '',
+                ]),
+            ],
+            [
+                'Audit Information and Certification Review Decision',
+                $this->keyValueTable([
+                    'Audit category / NACE code' => $payload['audit_category_nace'] ?? '',
+                    'Transfer' => $payload['transfer_status'] ?? '',
+                    'Accredited scope held with IAS/SAAC' => $payload['accredited_scope_ias_saac'] ?? '',
+                    'Accredited scope held with FSSC' => $payload['accredited_scope_fssc'] ?? '',
+                    'IAS/SAAC registration required' => $payload['ias_saac_registration_required'] ?? '',
+                    'Audit result' => $payload['audit_result'] ?? '',
+                    'Any complaint received' => $payload['complaints_received'] ?? '',
+                    'Review of client management system' => $payload['client_management_system_review'] ?? '',
+                    'Certificate authorization decision' => $payload['certificate_authorization'] ?? '',
+                    'Authorization date' => $payload['authorization_date'] ?? '',
+                    'Outstanding items' => $payload['outstanding_items'] ?? '',
                 ]),
             ],
             [
@@ -2323,6 +2340,16 @@ class DocumentGeneratorService
                     'Impartiality and conflict check confirmed' => $this->yesNo($review['impartiality_confirmed'] ?? 0),
                 ]),
             ],
+        ];
+
+        foreach ($this->groupChecklistRows($payload['checklist_rows'] ?? []) as $group => $rows) {
+            $sections[] = [
+                $group,
+                $this->recordTable($rows, ['ref', 'action_by', 'requirement', 'result', 'evidence']),
+            ];
+        }
+
+        return array_merge($sections, [
             [
                 'File Evidence Summary',
                 $this->keyValueTable([
@@ -2337,17 +2364,18 @@ class DocumentGeneratorService
             ['Audit Team Reviewed', $this->recordTable($data['appointments'] ?? [], ['full_name', 'appointment_role', 'competence_status', 'conflict_status', 'status'])],
             ['Report Records Reviewed', $this->recordTable($data['reports'] ?? [], ['audit_number', 'report_type', 'version_number', 'status', 'submitted_at'])],
             ['NCR / CAPA Closure Reviewed', $this->recordTable($data['capas'] ?? [], ['capa_number', 'ncr_number', 'status', 'root_cause', 'corrective_action', 'evidence_reference', 'verification', 'closed_at'])],
-        ];
+        ]);
     }
 
     private function decisionSections(array $data): array
     {
         $decision = $data['decision'] ?? [];
         $review = $data['technical_review'] ?? [];
+        $decisionPayload = ! empty($decision['decision_payload']) ? (json_decode((string) $decision['decision_payload'], true) ?: []) : [];
         $ncrs = $data['ncrs'] ?? [];
         $openNcrs = array_filter($ncrs, static fn (array $ncr): bool => ! in_array((string) ($ncr['status'] ?? ''), ['closed', 'verified_closed'], true));
 
-        return [
+        $sections = [
             [
                 'Decision Basis',
                 $this->keyValueTable([
@@ -2357,6 +2385,20 @@ class DocumentGeneratorService
                     'Technical reviewer' => $review['reviewer_name'] ?? '',
                     'Open NCRs at decision' => count($openNcrs),
                     'Standards under decision' => implode(', ', array_filter(array_column($data['standards'] ?? [], 'standard_code'))),
+                ]),
+            ],
+            [
+                'Pre-Issue General Information',
+                $this->keyValueTable([
+                    'Application ID' => $decisionPayload['application_id'] ?? '',
+                    'Client name' => $data['client']['company'] ?? '',
+                    'Site address' => $data['client']['address'] ?? '',
+                    'Standard / scheme' => implode(', ', array_filter(array_column($data['standards'] ?? [], 'standard_code'))),
+                    'Standard category / NACE' => $decisionPayload['standard_category_nace'] ?? '',
+                    'Audit type' => str_replace('_', ' ', (string) ($review['event_type'] ?? '')),
+                    'Audit dates' => trim((string) (($review['planned_start_date'] ?? '') . ' to ' . ($review['planned_end_date'] ?? '')), ' to'),
+                    'Certificate no.' => $decisionPayload['certificate_number'] ?? '',
+                    'Certificate decision date' => $decisionPayload['certificate_decision_date'] ?? '',
                 ]),
             ],
             [
@@ -2370,6 +2412,28 @@ class DocumentGeneratorService
                     'Electronic signature' => $decision['electronic_signature'] ?? '',
                 ]),
             ],
+        ];
+
+        foreach ($this->groupChecklistRows($decisionPayload['checklist_rows'] ?? []) as $group => $rows) {
+            $sections[] = [
+                $group,
+                $this->recordTable($rows, ['ref', 'requirement', 'result', 'evidence']),
+            ];
+        }
+
+        $sections[] = [
+            'Certification Decision Declaration',
+            $this->keyValueTable([
+                'Declaration confirmed' => $this->yesNo($decisionPayload['declaration_confirmed'] ?? 0),
+                'Declaration' => $decisionPayload['declaration_text'] ?? '',
+                'Technical reviewer name' => $decisionPayload['technical_reviewer_name'] ?? '',
+                'Technical reviewer date' => $decisionPayload['technical_reviewer_date'] ?? '',
+                'Certification decision maker name' => $decisionPayload['certification_decision_maker_name'] ?? '',
+                'Certification decision maker date' => $decisionPayload['certification_decision_maker_date'] ?? '',
+            ]),
+        ];
+
+        return array_merge($sections, [
             [
                 'General Manager Final Approval',
                 $this->keyValueTable([
@@ -2380,7 +2444,7 @@ class DocumentGeneratorService
                 ]),
             ],
             ['Certificates Issued', $this->recordTable($data['certificates'] ?? [], ['certificate_number', 'standard_code', 'issue_date', 'expiry_date', 'status'])],
-        ];
+        ]);
     }
 
     private function feedbackSections(array $data): array
@@ -2412,6 +2476,25 @@ class DocumentGeneratorService
                 ]),
             ],
         ];
+    }
+
+    private function groupChecklistRows(array $rows): array
+    {
+        $grouped = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $group = trim((string) ($row['group'] ?? 'Checklist'));
+            if ($group === '') {
+                $group = 'Checklist';
+            }
+
+            $grouped[$group][] = $row;
+        }
+
+        return $grouped;
     }
 
     private function keyValueTable(array $rows): string
@@ -2498,7 +2581,7 @@ class DocumentGeneratorService
         }
 
         return $this->db->table('technical_reviews')
-            ->select('technical_reviews.*, personnel.full_name AS reviewer_name, personnel.personnel_type AS reviewer_type, audit_events.audit_number, audit_events.event_type')
+            ->select('technical_reviews.*, personnel.full_name AS reviewer_name, personnel.personnel_type AS reviewer_type, audit_events.audit_number, audit_events.event_type, audit_events.planned_start_date, audit_events.planned_end_date')
             ->join('personnel', 'personnel.id = technical_reviews.reviewer_personnel_id', 'left')
             ->join('audit_events', 'audit_events.id = technical_reviews.audit_event_id', 'left')
             ->where('technical_reviews.tenant_id', $tenantId)
@@ -2511,7 +2594,7 @@ class DocumentGeneratorService
     private function technicalReviewForEvent(int $tenantId, int $eventId): ?array
     {
         return $this->db->table('technical_reviews')
-            ->select('technical_reviews.*, personnel.full_name AS reviewer_name, personnel.personnel_type AS reviewer_type, audit_events.audit_number, audit_events.event_type')
+            ->select('technical_reviews.*, personnel.full_name AS reviewer_name, personnel.personnel_type AS reviewer_type, audit_events.audit_number, audit_events.event_type, audit_events.planned_start_date, audit_events.planned_end_date')
             ->join('personnel', 'personnel.id = technical_reviews.reviewer_personnel_id', 'left')
             ->join('audit_events', 'audit_events.id = technical_reviews.audit_event_id', 'left')
             ->where('technical_reviews.tenant_id', $tenantId)

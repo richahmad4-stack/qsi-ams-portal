@@ -8,6 +8,8 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Client master, personnel master, standards selection, IAF/NACE/food/medical reference data.
 - Dynamic certification application and application review with audit man-day calculation logic.
 - Proposal, contract, audit program, auditor appointment, audit plan, audit report, NCR/CAPA, technical review, decision, certificate issue, and feedback screens.
+- Technical Review now includes detailed administration/technical review rows from the supplied `F 34` format, with audit information, accreditation scope checks, report completeness, NCR/CAPA review, authorization decision, and PDF output.
+- Decision Making now includes pre-issue accreditation, scope, audit time, mark/statement checks, declaration/sign-off fields, and PDF output based on the supplied decision checklist.
 - Separate workflow areas for Certification Audit, Surveillance Audit #01, Surveillance Audit #02, and Recertification/Expiry.
 - Separate event PDFs for Stage 1, Stage 2, Surveillance 1, Surveillance 2, and recertification plans/reports.
 - Dashboard cards with linked detail sections and PDF actions.
@@ -15,10 +17,10 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 
 ## Current Focus
 
-Refining audit execution evidence so each clause receives aligned objective evidence with internal sample document references such as `NOR-10.1-001`.
+Refining the final certification file controls: Technical Review of Audit Report and Decision Making / pre-issue verification checklists are now being aligned with controlled document formats.
 
 ## Next
 
-- Continue refining controlled PDF templates against the user-provided document formats.
+- Continue refining controlled PDF templates against the user-provided document formats, especially certificate issuance and client feedback.
 - Continue polish across certification, surveillance, and recertification workflow screens where the user finds unclear grouping.
 - Add stronger user-login/personnel-client separation and role-specific access flows.
