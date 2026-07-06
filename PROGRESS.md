@@ -22,11 +22,15 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 
 ## Current Focus
 
-Project-owner compliance hardening: enforce ISO/IEC 17021-style approval gates, competence/impartiality checks, surveillance locks, controlled checklist wording, and clearer auditor responsibility over generated audit notes.
+Project-owner compliance hardening and re-audit: backend gates are in place for ISO/IEC 17021-style approval controls, competence/impartiality checks, surveillance locks, controlled checklist wording, and clearer auditor responsibility over generated audit notes. The latest re-audit found the core prototype is working, but the audit duration engine, multi-standard competence coverage, file-level review/decision package, report-section confirmation, and automated tests still need strengthening before production/accreditation use.
 
 ## Next
 
 - Strengthen the audit duration engine into a more defensible MD 5 / MD 11 / scheme-specific rules module with auditable calculation tables.
+- Strengthen competence matching so a multi-standard file requires team coverage across every selected standard/scope, not only one matching competence record.
+- Convert Technical Review and Certification Decision from event-only checks into a full certification-file approval package covering Stage 1, Stage 2, NCR/CAPA, scope, contract, audit programme, report submission, and impartiality evidence.
+- Add auditor confirmation tracking per report clause/section for generated conformity notes and objective evidence.
+- Add automated tests for surveillance locks, appointment gates, audit completion, Technical Review, Decision, PDF routes, and audit duration calculations.
 - Add richer controlled checklist/question banks per standard without copying licensed standard text.
 - Continue refining controlled PDF templates against the user-provided document formats, especially certificate issuance and client feedback.
 - Continue checking multi-standard client files such as HACCP + ISO 22000 + ISO 9001 for stage-specific workflow, competence matching, and PDF consistency.
