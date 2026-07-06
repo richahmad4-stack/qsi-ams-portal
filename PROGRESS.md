@@ -10,6 +10,9 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Proposal, contract, audit program, auditor appointment, audit plan, audit report, NCR/CAPA, technical review, decision, certificate issue, and feedback screens.
 - Technical Review now includes detailed administration/technical review rows from the supplied `F 34` format, with audit information, accreditation scope checks, report completeness, NCR/CAPA review, authorization decision, and PDF output.
 - Decision Making now includes pre-issue accreditation, scope, audit time, mark/statement checks, declaration/sign-off fields, and PDF output based on the supplied decision checklist.
+- Dashboard has been refocused on certification operations, with finance figures removed from the main dashboard.
+- Finance now has its own sidebar module for proposals, invoices, payments, revenue, outstanding payments, and finance reports.
+- Generic NCR/CAPA PDF output now uses stacked record tables so long root-cause, correction, corrective-action, evidence, verification, and comments wrap inside page margins.
 - Separate workflow areas for Certification Audit, Surveillance Audit #01, Surveillance Audit #02, and Recertification/Expiry.
 - Separate event PDFs for Stage 1, Stage 2, Surveillance 1, Surveillance 2, and recertification plans/reports.
 - Dashboard cards with linked detail sections and PDF actions.
@@ -17,11 +20,12 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 
 ## Current Focus
 
-Refining the final certification file controls and fixing workflow loading issues found during multi-standard client testing.
+Project-owner UI/PDF review: dashboard, sidebar, finance separation, shared portal styling, and long NCR/CAPA PDF layout are being made production-ready.
 
 ## Next
 
 - Continue refining controlled PDF templates against the user-provided document formats, especially certificate issuance and client feedback.
 - Continue checking multi-standard client files such as HACCP + ISO 22000 + ISO 9001 for stage-specific workflow and PDF consistency.
+- Continue generating/reviewing sample PDFs for application review, proposal, contract, audit programme, audit plans, audit reports, technical review, decision, certificate, and feedback.
 - Continue polish across certification, surveillance, and recertification workflow screens where the user finds unclear grouping.
 - Add stronger user-login/personnel-client separation and role-specific access flows.

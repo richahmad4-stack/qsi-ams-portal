@@ -35,17 +35,22 @@ class DashboardDetailController extends BaseController
 
         return match ($section) {
             'total_clients' => $this->clientSection('Total clients', $db->table('clients')->where('tenant_id', $tenantId)->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
-            'legacy_clients' => $this->clientSection('Legacy clients', $db->table('clients')->where('tenant_id', $tenantId)->where('is_legacy', 1)->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
+            'active_clients' => $this->clientSection('Active clients', $db->table('clients')->where('tenant_id', $tenantId)->whereIn('certification_status', ['certified', 'active'])->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
             'active_certificates' => $this->certificateSection('Active certificates', $this->certificates($tenantId, ['certificates.status' => 'active'])),
+            'suspended_certificates' => $this->certificateSection('Suspended certificates', $this->certificates($tenantId, ['certificates.status' => 'suspended'])),
+            'withdrawn_certificates' => $this->certificateSection('Withdrawn certificates', $this->certificates($tenantId, ['certificates.status' => 'withdrawn'])),
             'expired_certificates' => $this->certificateSection('Expired certificates', $this->certificates($tenantId, ['certificates.status' => 'active'], ['certificates.expiry_date <' => $today])),
             'certificates_expiring' => $this->certificateSection('Certificates expiring', $this->certificates($tenantId, ['certificates.status' => 'active'], ['certificates.expiry_date >=' => $today, 'certificates.expiry_date <=' => $next90])),
+            'pending_applications' => $this->applicationSection('Pending applications'),
             'open_ncrs' => $this->ncrSection('Open NCRs', false),
             'open_capas' => $this->capaSection('Open CAPAs'),
+            'closed_capas' => $this->capaSection('Closed CAPAs', true),
+            'completed_audits' => $this->auditStatusSection('Completed audits', ['completed', 'closed']),
             'pending_technical_reviews' => $this->technicalReviewSection('Pending technical reviews', 'pending'),
             'pending_certification_decisions' => $this->decisionSection('Pending certification decisions', 'pending'),
             'upcoming_audits' => $this->auditSection('Upcoming audits', $today, $next30, []),
             'upcoming_surveillance_audits' => $this->auditSection('Upcoming surveillance audits', $today, $next90, ['surveillance1', 'surveillance2']),
-            'monthly_revenue' => $this->proposalSection('Monthly revenue source proposals'),
+            'customer_feedback' => $this->feedbackSection('Customer feedback summary'),
             default => null,
         };
     }
@@ -105,16 +110,47 @@ class DashboardDetailController extends BaseController
         ];
     }
 
-    private function capaSection(string $title): array
+    private function applicationSection(string $title): array
     {
-        $rows = Database::connect()->table('capas')
+        $rows = Database::connect()->table('certification_applications')
+            ->select('certification_applications.*, clients.company, clients.contact_person')
+            ->join('clients', 'clients.id = certification_applications.client_id')
+            ->where('certification_applications.tenant_id', (int) session()->get('tenant_id'))
+            ->whereNotIn('certification_applications.status', ['approved', 'rejected', 'withdrawn'])
+            ->where('clients.deleted_at', null)
+            ->orderBy('certification_applications.id', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        return [
+            'title' => $title,
+            'columns' => ['Client', 'Application', 'Status', 'Submitted', 'Contact'],
+            'rows' => array_map(fn (array $application): array => [
+                'cells' => [$application['company'], $application['application_number'], $application['status'], $application['submitted_at'] ?? '', $application['contact_person']],
+                'view' => site_url('workflow/certification/' . $application['client_id']),
+                'edit' => site_url('workflow/certification/' . $application['client_id'] . '/application'),
+                'pdf' => site_url('workflow/certification/' . $application['client_id'] . '/documents/certification_application'),
+            ], $rows),
+        ];
+    }
+
+    private function capaSection(string $title, bool $closed = false): array
+    {
+        $builder = Database::connect()->table('capas')
             ->select('capas.*, clients.id AS client_id, clients.company, audit_events.id AS audit_event_id')
             ->join('ncrs', 'ncrs.id = capas.ncr_id', 'left')
             ->join('audit_events', 'audit_events.id = ncrs.audit_event_id', 'left')
             ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id', 'left')
             ->join('clients', 'clients.id = audit_programs.client_id', 'left')
-            ->where('capas.tenant_id', (int) session()->get('tenant_id'))
-            ->whereNotIn('capas.status', ['closed', 'cancelled'])
+            ->where('capas.tenant_id', (int) session()->get('tenant_id'));
+
+        if ($closed) {
+            $builder->whereIn('capas.status', ['closed', 'verified_closed']);
+        } else {
+            $builder->whereNotIn('capas.status', ['closed', 'verified_closed', 'cancelled']);
+        }
+
+        $rows = $builder
             ->orderBy('capas.id', 'DESC')
             ->get()
             ->getResultArray();
@@ -127,6 +163,30 @@ class DashboardDetailController extends BaseController
                 'view' => empty($capa['client_id']) ? '' : site_url('workflow/certification/' . $capa['client_id']),
                 'edit' => empty($capa['client_id']) ? '' : site_url('workflow/certification/' . $capa['client_id']),
                 'pdf' => empty($capa['client_id']) ? '' : site_url('workflow/certification/' . $capa['client_id'] . '/documents/audit_report'),
+            ], $rows),
+        ];
+    }
+
+    private function auditStatusSection(string $title, array $statuses): array
+    {
+        $rows = Database::connect()->table('audit_events')
+            ->select('audit_events.*, clients.id AS client_id, clients.company')
+            ->join('audit_programs', 'audit_programs.id = audit_events.audit_program_id')
+            ->join('clients', 'clients.id = audit_programs.client_id')
+            ->where('audit_programs.tenant_id', (int) session()->get('tenant_id'))
+            ->whereIn('audit_events.status', $statuses)
+            ->orderBy('audit_events.planned_start_date', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        return [
+            'title' => $title,
+            'columns' => ['Client', 'Audit', 'Stage', 'Start', 'End', 'Status'],
+            'rows' => array_map(fn (array $event): array => [
+                'cells' => [$event['company'], $event['audit_number'], str_replace('_', ' ', $event['event_type']), $event['planned_start_date'], $event['planned_end_date'], $event['status']],
+                'view' => site_url('workflow/certification/' . $event['client_id'] . '/audit-events/' . $event['id'] . '/file'),
+                'edit' => site_url('workflow/certification/' . $event['client_id'] . '/audit-events/' . $event['id'] . '/execute'),
+                'pdf' => site_url('workflow/certification/' . $event['client_id'] . '/audit-events/' . $event['id'] . '/documents/audit_report'),
             ], $rows),
         ];
     }
@@ -234,6 +294,28 @@ class DashboardDetailController extends BaseController
                 'view' => site_url('workflow/certification/' . $proposal['client_id']),
                 'edit' => site_url('workflow/certification/' . $proposal['client_id'] . '/proposal'),
                 'pdf' => site_url('workflow/certification/' . $proposal['client_id'] . '/documents/proposal'),
+            ], $rows),
+        ];
+    }
+
+    private function feedbackSection(string $title): array
+    {
+        $rows = Database::connect()->table('client_feedback')
+            ->select('client_feedback.*, clients.company')
+            ->join('clients', 'clients.id = client_feedback.client_id')
+            ->where('client_feedback.tenant_id', (int) session()->get('tenant_id'))
+            ->orderBy('client_feedback.id', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        return [
+            'title' => $title,
+            'columns' => ['Client', 'Contact', 'Rating', 'Status', 'Submitted'],
+            'rows' => array_map(fn (array $feedback): array => [
+                'cells' => [$feedback['company'], $feedback['contact_name'], $feedback['overall_rating'], $feedback['status'], $feedback['submitted_at']],
+                'view' => site_url('workflow/certification/' . $feedback['client_id']),
+                'edit' => site_url('workflow/certification/' . $feedback['client_id'] . '/feedback'),
+                'pdf' => site_url('workflow/certification/' . $feedback['client_id'] . '/documents/feedback'),
             ], $rows),
         ];
     }

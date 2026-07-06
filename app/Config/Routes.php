@@ -28,6 +28,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         'as' => 'dashboard',
     ]);
     $routes->get('dashboard/section/(:segment)', 'Dashboard\DashboardDetailController::show/$1', ['filter' => 'permission:dashboard,view']);
+    $routes->get('finance', 'Finance\FinanceController::index', ['filter' => 'permission:proposals,view']);
 
     $routes->get('workflow/certification', 'Workflow\CertificationWorkflowController::index', ['filter' => 'permission:clients,view']);
     $routes->get('workflow/certification/(:num)', 'Workflow\CertificationWorkflowController::show/$1', ['filter' => 'permission:clients,view']);
