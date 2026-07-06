@@ -361,7 +361,6 @@ class ClientController extends BaseController
             'certificate_issue_date' => $this->dateOrNull('certificate_issue_date'),
             'certificate_expiry_date' => $this->dateOrNull('certificate_expiry_date'),
             'notes' => trim((string) $this->request->getPost('notes')) ?: null,
-            'is_legacy' => $this->request->getPost('is_legacy') === '1' ? 1 : 0,
         ];
     }
 
@@ -478,7 +477,6 @@ class ClientController extends BaseController
             'certificate_issue_date' => '',
             'certificate_expiry_date' => '',
             'notes' => '',
-            'is_legacy' => 0,
         ];
     }
 }

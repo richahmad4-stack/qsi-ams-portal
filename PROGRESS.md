@@ -39,6 +39,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - The supplied QSI detailed HACCP/ISO 22000/ISO 9001/ISO 14001/ISO 45001 NC/CAPA workbook has been imported into Clause Pool: 5,076 controlled templates covering conformity answers, NCs, objective evidence, requirement criteria, root causes, correction, corrective action, preventive action, verification, acceptance criteria, CAPA bundles, CAPA options, and industry guidance. Cycle Builder NCR/CAPA creation now uses these pool templates.
 - A shared Smart Audit Content Engine now drives report conformity notes and NCR/CAPA packages across audit execution and Cycle Builder. It combines approved Clause Pool material with clause-specific evidence references so each clause has aligned evidence, document references, CAPA text, and auditor-confirmed status without duplicating existing report or NCR/CAPA rows.
 - Cycle Builder preview wording now shows that application review, audit evidence, Technical Review, and Decision basis will be system-prepared from controlled inputs instead of saying those items are still pending manual completion.
+- Legacy Import has been removed from the active product: routes, sidebar entry, controller, models, views, dashboard card, client-screen legacy flag, role seed permissions, and reference seed permissions are cleaned up. Historical database columns/tables remain only as safe dormant structure.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus

@@ -20,7 +20,6 @@ class InitialAmsSeeder extends Seeder
     private array $modules = [
         'dashboard',
         'clients',
-        'legacy_imports',
         'standards',
         'questionnaires',
         'application_reviews',
@@ -152,7 +151,7 @@ class InitialAmsSeeder extends Seeder
 
         $roleRules = [
             'administrator' => [
-                'dashboard', 'clients', 'legacy_imports', 'standards', 'personnel', 'competency_matrix',
+                'dashboard', 'clients', 'standards', 'personnel', 'competency_matrix',
                 'application_reviews', 'proposals', 'contracts', 'audit_programs', 'auditor_appointments',
                 'audit_plans', 'reports', 'ncrs', 'capas', 'technical_reviews', 'certification_decisions',
                 'certificates', 'document_templates', 'finance', 'global_search',
@@ -169,7 +168,7 @@ class InitialAmsSeeder extends Seeder
                 'reports', 'technical_reviews', 'certification_decisions', 'global_search',
             ],
             'proposal_officer' => [
-                'dashboard', 'clients', 'legacy_imports', 'application_reviews', 'proposals',
+                'dashboard', 'clients', 'application_reviews', 'proposals',
                 'contracts', 'audit_programs', 'finance', 'document_templates', 'global_search',
             ],
             'auditor' => [

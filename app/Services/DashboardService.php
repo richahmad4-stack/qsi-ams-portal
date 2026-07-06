@@ -27,7 +27,6 @@ class DashboardService
         return [
             'cards' => [
                 'total_clients' => $this->count('clients', ['tenant_id' => $tenantId]),
-                'legacy_clients' => $this->count('clients', ['tenant_id' => $tenantId, 'is_legacy' => 1]),
                 'active_clients' => $this->countClientsByStatus($tenantId, ['certified', 'active']),
                 'active_certificates' => $this->count('certificates', ['tenant_id' => $tenantId, 'status' => 'active']),
                 'expired_certificates' => $this->expiredCertificates($tenantId, $today),

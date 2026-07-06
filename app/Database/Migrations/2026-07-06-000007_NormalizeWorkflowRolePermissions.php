@@ -48,7 +48,6 @@ class NormalizeWorkflowRolePermissions extends Migration
             'administrator' => [
                 'dashboard' => ['view'],
                 'clients' => ['view', 'create', 'edit', 'delete'],
-                'legacy_imports' => ['view', 'create', 'edit', 'delete', 'approve', 'reject'],
                 'standards' => ['view'],
                 'personnel' => ['view'],
                 'competency_matrix' => ['view'],

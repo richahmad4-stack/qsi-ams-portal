@@ -51,4 +51,16 @@ class WorkflowGateWiringTest extends TestCase
         self::assertStringContainsString('masters/clause-pool', $routes);
         self::assertStringContainsString('Clause Pool', $layout);
     }
+
+    public function testLegacyImportFeatureIsNotRoutedOrVisible(): void
+    {
+        $routes = file_get_contents(__DIR__ . '/../../app/Config/Routes.php') ?: '';
+        $layout = file_get_contents(__DIR__ . '/../../app/Views/layouts/main.php') ?: '';
+        $dashboard = file_get_contents(__DIR__ . '/../../app/Views/dashboard/index.php') ?: '';
+
+        self::assertStringNotContainsString('masters/imports', $routes);
+        self::assertStringNotContainsString('Legacy Import', $layout);
+        self::assertStringNotContainsString('Legacy clients', $dashboard);
+        self::assertFileDoesNotExist(__DIR__ . '/../../app/Controllers/Masters/LegacyImportController.php');
+    }
 }

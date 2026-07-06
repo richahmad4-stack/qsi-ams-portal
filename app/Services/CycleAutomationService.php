@@ -729,7 +729,6 @@ class CycleAutomationService
             'initial_certification_date' => $cycle['issue'],
             'certificate_expiry_date' => $cycle['expiry'],
             'notes' => trim("Prepared by Cycle Builder.\n" . $input['special_notes']),
-            'is_legacy' => 0,
             'created_by' => $userId,
             'created_at' => date('Y-m-d H:i:s'),
         ]);

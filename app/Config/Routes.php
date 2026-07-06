@@ -95,12 +95,6 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->post('masters/clients/(:num)/attachments', 'Masters\ClientController::addAttachment/$1', ['filter' => 'permission:clients,edit']);
     $routes->post('masters/clients/(:num)/attachments/(:num)/delete', 'Masters\ClientController::deleteAttachment/$1/$2', ['filter' => 'permission:clients,delete']);
 
-    $routes->get('masters/imports', 'Masters\LegacyImportController::index', ['filter' => 'permission:legacy_imports,view']);
-    $routes->post('masters/imports', 'Masters\LegacyImportController::upload', ['filter' => 'permission:legacy_imports,create']);
-    $routes->get('masters/imports/(:num)', 'Masters\LegacyImportController::show/$1', ['filter' => 'permission:legacy_imports,view']);
-    $routes->post('masters/imports/(:num)/commit', 'Masters\LegacyImportController::commit/$1', ['filter' => 'permission:legacy_imports,approve']);
-    $routes->post('masters/imports/(:num)/rollback', 'Masters\LegacyImportController::rollback/$1', ['filter' => 'permission:legacy_imports,reject']);
-
     $routes->get('masters/standards', 'Masters\StandardController::index', ['filter' => 'permission:standards,view']);
     $routes->get('masters/standards/new', 'Masters\StandardController::new', ['filter' => 'permission:standards,create']);
     $routes->post('masters/standards', 'Masters\StandardController::create', ['filter' => 'permission:standards,create']);

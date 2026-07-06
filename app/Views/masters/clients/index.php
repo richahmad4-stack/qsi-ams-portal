@@ -20,7 +20,6 @@
                 <th>Status</th>
                 <th>Certificate</th>
                 <th>Expiry</th>
-                <th>Legacy</th>
                 <th class="text-end">Actions</th>
             </tr>
             </thead>
@@ -45,7 +44,6 @@
                     <td><?= esc(str_replace('_', ' ', $client['certification_status'])) ?></td>
                     <td><?= esc($client['certificate_number'] ?? '') ?></td>
                     <td><?= esc($client['certificate_expiry_date'] ?? '') ?></td>
-                    <td><?= (int) $client['is_legacy'] === 1 ? 'Yes' : 'No' ?></td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-outline-secondary" href="<?= site_url('masters/clients/' . $client['id']) ?>">
                             <i class="fa-solid fa-eye" aria-hidden="true"></i>

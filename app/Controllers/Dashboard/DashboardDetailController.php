@@ -71,7 +71,6 @@ class DashboardDetailController extends BaseController
             'my_decisions' => $personnelId === null ? $this->emptySection('My decisions', ['Client', 'Audit stage', 'Audit', 'Decision', 'Status']) : $this->myDecisionSection($personnelId),
             'my_finance_items' => $this->proposalSection('My finance items'),
             'total_clients' => $this->clientSection('Total clients', $db->table('clients')->where('tenant_id', $tenantId)->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
-            'legacy_clients' => $this->clientSection('Legacy clients', $db->table('clients')->where('tenant_id', $tenantId)->where('is_legacy', 1)->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
             'active_clients' => $this->clientSection('Active clients', $db->table('clients')->where('tenant_id', $tenantId)->whereIn('certification_status', ['certified', 'active'])->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
             'active_certificates' => $this->certificateSection('Active certificates', $this->certificates($tenantId, ['certificates.status' => 'active'])),
             'suspended_certificates' => $this->certificateSection('Suspended certificates', $this->certificates($tenantId, ['certificates.status' => 'suspended'])),

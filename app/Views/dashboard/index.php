@@ -203,7 +203,6 @@ $workloadData = array_map('intval', array_column($workload, 'total'));
     <?php
     $metricCards = [
         ['Total clients', $cards['total_clients'], 'fa-building', 'total_clients'],
-        ['Legacy clients', $cards['legacy_clients'], 'fa-file-import', 'legacy_clients'],
         ['Active certificates', $cards['active_certificates'], 'fa-certificate', 'active_certificates'],
         ['Expired certificates', $cards['expired_certificates'], 'fa-triangle-exclamation', 'expired_certificates'],
         ['Certificates expiring', $cards['certificates_expiring'], 'fa-clock', 'certificates_expiring'],

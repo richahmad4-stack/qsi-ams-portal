@@ -165,7 +165,6 @@ $nav = [
         ['label' => 'My Audits', 'icon' => 'fa-clipboard-check', 'href' => site_url('dashboard/section/my_audits'), 'match' => 'dashboard/section/my_audits', 'show' => $isAuditUser],
         ['label' => 'My Reviews', 'icon' => 'fa-user-check', 'href' => site_url('dashboard/section/my_technical_reviews'), 'match' => 'dashboard/section/my_technical_reviews', 'show' => $isReviewer],
         ['label' => 'My Decisions', 'icon' => 'fa-stamp', 'href' => site_url('dashboard/section/my_decisions'), 'match' => 'dashboard/section/my_decisions', 'show' => $isDecisionMaker],
-        ['label' => 'Legacy Import', 'icon' => 'fa-file-import', 'href' => site_url('masters/imports'), 'match' => 'masters/imports', 'show' => $isOperationsUser && can('legacy_imports', 'view')],
         ['label' => 'Standards', 'icon' => 'fa-certificate', 'href' => site_url('masters/standards'), 'match' => 'masters/standards', 'show' => $isOperationsUser && can('standards', 'view')],
     ]),
     'Finance' => $visibleItems([

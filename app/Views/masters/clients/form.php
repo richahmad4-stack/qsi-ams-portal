@@ -138,12 +138,6 @@ $risks = ['', 'low', 'medium', 'high'];
                 <label class="form-label" for="certificate_expiry_date">Expiry date</label>
                 <input id="certificate_expiry_date" name="certificate_expiry_date" type="date" class="form-control" value="<?= esc($value('certificate_expiry_date')) ?>">
             </div>
-            <div class="col-md-3 d-flex align-items-end">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" value="1" id="is_legacy" name="is_legacy" <?= (int) $value('is_legacy') === 1 ? 'checked' : '' ?>>
-                    <label class="form-check-label" for="is_legacy">Legacy client</label>
-                </div>
-            </div>
             <div class="col-12">
                 <label class="form-label" for="notes">Notes</label>
                 <textarea id="notes" name="notes" class="form-control" rows="3"><?= esc($value('notes')) ?></textarea>

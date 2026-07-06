@@ -12,7 +12,6 @@ class ClientModel extends Model
     protected $useSoftDeletes = true;
     protected $allowedFields = [
         'tenant_id',
-        'legacy_import_batch_id',
         'company',
         'legal_name',
         'address',
@@ -37,7 +36,6 @@ class ClientModel extends Model
         'certificate_issue_date',
         'certificate_expiry_date',
         'notes',
-        'is_legacy',
         'created_by',
     ];
     protected $useTimestamps = true;
