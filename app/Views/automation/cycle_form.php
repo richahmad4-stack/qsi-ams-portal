@@ -92,6 +92,13 @@
         <hr>
 
         <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label" for="generation_mode">Generation mode</label>
+                <select class="form-select" id="generation_mode" name="generation_mode">
+                    <option value="draft">Controlled draft / import preparation</option>
+                    <option value="historical_confirmed">Historical completed file with real evidence</option>
+                </select>
+            </div>
             <div class="col-md-3">
                 <label class="form-label" for="certificate_issue_date">Certificate issue date</label>
                 <input class="form-control" id="certificate_issue_date" name="certificate_issue_date" type="date" required value="<?= old('certificate_issue_date', date('Y-m-d')) ?>">
@@ -116,7 +123,7 @@
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-5">
                 <label class="form-label" for="current_cycle_stage">Current cycle stage</label>
                 <select class="form-select" id="current_cycle_stage" name="current_cycle_stage">
                     <?php foreach (['auto', 'initial certification', 'surveillance 1', 'surveillance 2', 'recertification', 'expired'] as $stage): ?>
@@ -124,7 +131,7 @@
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label" for="ncr_mode">Generated NCR/CAPA</label>
                 <select class="form-select" id="ncr_mode" name="ncr_mode">
                     <option value="sample_minor">Sample minor NCRs</option>
@@ -135,6 +142,31 @@
             <div class="col-md-4">
                 <label class="form-label" for="special_notes">Special notes</label>
                 <textarea class="form-control" id="special_notes" name="special_notes" rows="1"><?= old('special_notes') ?></textarea>
+            </div>
+        </div>
+
+        <hr>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="application_review_notes">Application review basis</label>
+                <textarea class="form-control" id="application_review_notes" name="application_review_notes" rows="3" placeholder="Scope accepted, resources/competence available, exclusions, sites, shifts, legal/regulatory notes"><?= old('application_review_notes') ?></textarea>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="audit_plan_notes">Audit plan / process notes</label>
+                <textarea class="form-control" id="audit_plan_notes" name="audit_plan_notes" rows="3" placeholder="Processes/units, shifts, site constraints, lunch timing, parallel auditor coverage"><?= old('audit_plan_notes') ?></textarea>
+            </div>
+            <div class="col-md-12">
+                <label class="form-label" for="audit_evidence_summary">Actual audit evidence summary</label>
+                <textarea class="form-control" id="audit_evidence_summary" name="audit_evidence_summary" rows="4" placeholder="Only enter real sampled records/interviews/observations from the old file. Leave blank to generate draft checklists only."><?= old('audit_evidence_summary') ?></textarea>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="technical_review_notes">Technical review notes</label>
+                <textarea class="form-control" id="technical_review_notes" name="technical_review_notes" rows="3" placeholder="Actual technical reviewer conclusion, file completeness, NCR/CAPA closure, audit duration/scope confirmation"><?= old('technical_review_notes') ?></textarea>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="decision_basis">Decision basis</label>
+                <textarea class="form-control" id="decision_basis" name="decision_basis" rows="3" placeholder="Actual certification decision basis and GM/final approval basis"><?= old('decision_basis') ?></textarea>
             </div>
         </div>
 

@@ -29,15 +29,17 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Sidebar visibility is now role-aware so task users only see relevant navigation such as My Audits, My Reviews, My Decisions, Finance, or Clause Library as applicable.
 - Auditor appointment saves now create in-app notifications and can send appointment emails when SMTP/email notifications are configured.
 - Super User Cycle Generator automation is now wired: Super User/Admin can preview and generate a complete three-year certification lifecycle from basic client, standard, scope, issue-date, risk, and status inputs. It creates application, review, proposal, contract, invoice/payment records, audit programme, stage/surveillance/recertification audit events, appointments, plans, reports, NCR/CAPA samples, technical reviews, decisions, certificates, feedback, reminders, notifications, audit logs, and an automation run history record.
+- Cycle Generator has been hardened after PDF review: default generation is now a controlled draft/import preparation mode. It no longer auto-confirms audit report clauses, closes NCR/CAPA, approves Technical Review/Decision/GM approval, issues certificates, or submits feedback unless historical completed mode is selected and real evidence, technical review notes, and decision basis are supplied.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus
 
-Project-owner compliance hardening and workflow validation: core gates are now in place for audit duration basis, multi-standard competence coverage, full-file Technical Review/Decision readiness, surveillance locks, auditor confirmation of generated report clauses, role-based workflow authority, first-pass role-specific dashboards, and Super User lifecycle automation.
+Project-owner compliance hardening and workflow validation: core gates are now in place for audit duration basis, multi-standard competence coverage, full-file Technical Review/Decision readiness, surveillance locks, auditor confirmation of generated report clauses, role-based workflow authority, first-pass role-specific dashboards, and controlled Super User lifecycle automation.
 
 ## Next
 
 - Browser-test the new Cycle Generator with one demo file for HACCP, ISO 9001, and a multi-standard case, then review the generated workflow screens and PDFs.
+- Convert the user-supplied official forms into richer controlled HTML/PDF sections for application, review, proposal, contract, audit programme, appointment, plan, report, NCR/CAPA, technical review, decision, certificate and feedback.
 - Expand tests from wiring/smoke tests into database-backed feature tests for surveillance locks, appointment gates, audit completion, Technical Review, Decision, PDF routes, and audit duration edge cases.
 - Build a user/role management screen so Super Users can assign multiple roles from the portal instead of relying on seed/migration data.
 - Review official licensed MD/scheme tables with the Certification Body and tune the controlled audit-duration rule set where needed.

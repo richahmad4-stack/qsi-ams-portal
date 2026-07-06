@@ -74,6 +74,10 @@ $warnings = $preview['warnings'];
         <section class="panel h-100">
             <div class="panel-title">Staff assignment preview</div>
             <table class="table table-sm">
+                <tr>
+                    <th>Generation mode</th>
+                    <td><?= esc($input['generation_mode'] === 'historical_confirmed' ? 'Historical completed file' : 'Controlled draft') ?></td>
+                </tr>
                 <?php foreach ($assignments as $role => $person): ?>
                     <tr>
                         <th><?= esc(ucwords(str_replace('_', ' ', $role))) ?></th>
@@ -102,6 +106,19 @@ $warnings = $preview['warnings'];
     </div>
 </section>
 
+<section class="panel mb-3">
+    <div class="panel-title">Evidence and approval controls</div>
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <tr><th>Application review basis</th><td><?= esc($input['application_review_notes'] ?: 'To be completed during application review') ?></td></tr>
+            <tr><th>Audit plan notes</th><td><?= esc($input['audit_plan_notes'] ?: 'Default process plan will be prepared and must be edited if site/process timing differs') ?></td></tr>
+            <tr><th>Audit evidence summary</th><td><?= esc($input['audit_evidence_summary'] ?: 'No real evidence supplied. Report clauses will remain unconfirmed drafts.') ?></td></tr>
+            <tr><th>Technical review notes</th><td><?= esc($input['technical_review_notes'] ?: 'Technical Review will remain pending') ?></td></tr>
+            <tr><th>Decision basis</th><td><?= esc($input['decision_basis'] ?: 'Decision and certificate issue will remain pending') ?></td></tr>
+        </table>
+    </div>
+</section>
+
 <section class="panel">
     <div class="panel-title">Audit event plan</div>
     <div class="table-responsive">
@@ -112,6 +129,8 @@ $warnings = $preview['warnings'];
                 <th>Start</th>
                 <th>End</th>
                 <th>Days</th>
+                <th>Auditor capacity</th>
+                <th>Calendar days</th>
                 <th>Status based on today</th>
             </tr>
             </thead>
@@ -122,6 +141,8 @@ $warnings = $preview['warnings'];
                     <td><?= esc($event['start']) ?></td>
                     <td><?= esc($event['end']) ?></td>
                     <td><?= esc(number_format((float) $event['days'], 2)) ?></td>
+                    <td><?= esc((string) ($event['auditor_capacity'] ?? 1)) ?></td>
+                    <td><?= esc((string) ($event['calendar_days'] ?? 1)) ?></td>
                     <td><?= esc(str_replace('_', ' ', $event['status'])) ?></td>
                 </tr>
             <?php endforeach; ?>
