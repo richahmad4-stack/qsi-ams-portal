@@ -12,7 +12,7 @@ class AuditReportNarrativeService
         $scope = rtrim(trim((string) ($client['scope'] ?? $client['business_activity'] ?? 'the certified activities')), '.');
         $stage = $this->stageLabel((string) ($event['event_type'] ?? 'audit'));
         $processes = $this->processTrail($planItems, $standard, $clauseTitle, $scope);
-        $evidence = $this->evidenceTrail($standard, $clauseTitle, (string) ($clause['evidence_examples'] ?? ''), $scope);
+        $evidence = $this->evidenceTrail($standard, $clauseNumber, $clauseTitle, (string) ($clause['evidence_examples'] ?? ''), $scope);
         $auditNumber = trim((string) ($event['audit_number'] ?? ''));
         $sampledEvidence = array_slice($evidence, 0, 3);
         $clauseFocus = $this->clauseFocus($clauseNumber, $clauseTitle);
@@ -155,11 +155,11 @@ class AuditReportNarrativeService
         return 'management review, operational controls, support processes, performance evaluation and improvement records';
     }
 
-    private function evidenceTrail(string $standard, string $clauseTitle, string $examples, string $scope): array
+    private function evidenceTrail(string $standard, string $clauseNumber, string $clauseTitle, string $examples, string $scope): array
     {
         $evidence = array_values(array_filter(array_map('trim', preg_split('/[,;\n]+/', $examples) ?: [])));
         $lower = strtolower($standard . ' ' . $clauseTitle . ' ' . $scope);
-        $specific = $this->clauseSpecificEvidence($standard, $clauseTitle, $scope);
+        $specific = $this->clauseSpecificEvidence($standard, $clauseNumber, $clauseTitle, $scope);
 
         if ($specific !== []) {
             $evidence = array_merge($specific, $evidence);
@@ -186,61 +186,160 @@ class AuditReportNarrativeService
         return array_slice(array_values(array_unique($evidence)), 0, 5);
     }
 
-    private function clauseSpecificEvidence(string $standard, string $clauseTitle, string $scope): array
+    private function clauseSpecificEvidence(string $standard, string $clauseNumber, string $clauseTitle, string $scope): array
     {
-        $text = strtolower($standard . ' ' . $clauseTitle . ' ' . $scope);
+        $standardText = strtolower($standard);
+        $clauseText = strtolower(trim($clauseNumber . ' ' . $clauseTitle));
+        $scopeText = strtolower($scope);
+        $isFood = $this->isFood($standardText . ' ' . $scopeText);
+        $isEnvironment = str_contains($standardText, '14001') || str_contains($standardText, 'environment');
+        $isSafety = str_contains($standardText, '45001') || str_contains($standardText, 'safety') || str_contains($standardText, 'ohs');
 
-        if ($this->isFood($text)) {
-            if ($this->containsAny($text, ['hazard', 'haccp', 'ccp', 'oprp', 'critical limit'])) {
-                return [
-                    'hazard analysis worksheet reviewed for product/process step, significant hazards and control measure selection',
-                    'CCP/OPRP monitoring sample checked against defined limit/action criteria and corrective follow-up rule',
-                    'food safety team discussion confirmed validation/verification method for selected controls',
-                ];
-            }
-
-            if ($this->containsAny($text, ['prp', 'clean', 'sanitation', 'pest', 'hygiene', 'temperature', 'storage'])) {
-                return [
-                    'cleaning/sanitation record sample checked for area, chemical, frequency and verification sign-off',
-                    'pest control and hygiene inspection records reviewed for trend and corrective follow-up',
-                    'cold storage or holding temperature log sample checked for limit breach response',
-                ];
-            }
-
-            if ($this->containsAny($text, ['trace', 'recall', 'withdrawal', 'release', 'dispatch'])) {
-                return [
-                    'traceability sample followed from receiving through preparation/processing to dispatch/customer reference',
-                    'product release or dispatch record checked for identification, quantity, date and responsible approval',
-                    'mock recall/withdrawal evidence reviewed for traceability result and corrective actions',
-                ];
-            }
-        }
-
-        if ($this->containsAny($text, ['context', 'interested part', 'scope'])) {
+        if ($this->startsWithClause($clauseNumber, 'FS.1') || ($isFood && $this->containsAny($clauseText, ['food safety hazards', 'hazard analysis']))) {
             return [
-                'scope statement and process interaction reviewed against activities, sites and outsourced processes',
-                'interested-party and internal/external issue review checked for current applicability',
-                'management interview confirmed how scope boundaries and certification requirements are maintained',
+                'hazard analysis worksheet reviewed for product/process step, significant hazards and control measure selection',
+                'food safety team review evidence checked for biological, chemical, physical and allergen hazard consideration',
+                'validation/verification basis sampled for selected control measures linked to the audited food process',
             ];
         }
 
-        if ($this->containsAny($text, ['leadership', 'policy', 'responsibilit', 'authority'])) {
+        if ($this->startsWithClause($clauseNumber, 'FS.2') || ($isFood && $this->containsAny($clauseText, ['prerequisite', 'prp']))) {
             return [
-                'policy communication and responsibility matrix reviewed for current approval and availability',
-                'management interview confirmed accountability for objectives, customer/legal requirements and process performance',
-                'meeting minutes sampled for management follow-up on system performance and resource needs',
+                'PRP programme sample reviewed for cleaning, pest control, personnel hygiene and storage/temperature control responsibilities',
+                'cleaning or hygiene verification record checked for completion, review and follow-up of abnormal results',
+                'site observation confirmed PRP controls were available at the relevant process area during the audit trail',
             ];
         }
 
-        if ($this->containsAny($text, ['risk', 'objective', 'planning', 'change'])) {
+        if ($this->startsWithClause($clauseNumber, 'FS.3') || ($isFood && $this->containsAny($clauseText, ['haccp plan', 'ccp', 'oprp', 'critical limit']))) {
             return [
-                'risk/opportunity register sampled for action owner, due date and review status',
-                'objective/KPI record checked for target, actual performance, trend and action where required',
-                'planned-change sample reviewed for controls, responsibility and implementation evidence',
+                'approved HACCP plan sampled for CCP/OPRP identification, critical limits/action criteria and monitoring frequency',
+                'CCP/OPRP monitoring record checked against defined limit/action criteria and correction/corrective action rules',
+                'food safety team discussion confirmed verification method for selected HACCP controls',
             ];
         }
 
-        if ($this->containsAny($text, ['competence', 'awareness', 'training'])) {
+        if ($this->startsWithClause($clauseNumber, 'FS.4') || ($isFood && $this->containsAny($clauseText, ['traceability', 'withdrawal', 'recall']))) {
+            return [
+                'traceability sample followed from receiving through preparation/processing to dispatch/customer reference',
+                'withdrawal/recall test evidence reviewed for traceability result, response time and follow-up actions',
+                'product identification and release/dispatch record checked for lot/batch linkage and responsible approval',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, 'FS.5') || ($isFood && $this->containsAny($clauseText, ['emergency']))) {
+            return [
+                'food safety emergency scenario record reviewed for response responsibility and communication arrangements',
+                'incident/withdrawal escalation evidence checked for contact list, decision authority and follow-up action',
+                'management review or food safety team minutes sampled for emergency preparedness review',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '4.1')) {
+            return [
+                'internal/external issue register reviewed for relevance to the certified activities and current business conditions',
+                'management review input sampled for changes affecting context, risks and certification scope',
+                'management interview confirmed how context changes are reviewed and translated into system actions',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '4.2')) {
+            return [
+                'interested-party register sampled for customer, regulatory, supplier and employee requirements',
+                'legal/customer requirement review checked for current applicability and assigned responsibility',
+                'sampled communication or contract record confirmed relevant interested-party needs were considered',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '4.3')) {
+            return [
+                'management system scope statement reviewed against activities, sites, products/services and exclusions',
+                'certificate/application scope compared with actual audited processes and client operational boundaries',
+                'outsourced or multi-site activity sample checked for inclusion/exclusion in scope justification',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '4.4')) {
+            return [
+                'process interaction map sampled for inputs, outputs, responsibilities and sequence of key activities',
+                'process criteria/KPI sample checked for monitoring method, owner and evidence of review',
+                'audit trail followed one core process to confirm linkage between procedure, record and performance review',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '5.1')) {
+            return [
+                'top management interview confirmed accountability for policy, objectives, resources and customer/legal obligations',
+                'management review/action record sampled for leadership follow-up on system performance',
+                'communication evidence reviewed for management involvement in certification requirements and process performance',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '5.2')) {
+            return [
+                'policy document checked for approval, suitability to scope and availability to relevant personnel',
+                'sampled personnel interview confirmed awareness of policy intent and relevant obligations',
+                'policy communication evidence reviewed through display, induction or controlled document distribution',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '5.3')) {
+            return [
+                'responsibility matrix or job description sampled for assigned process authority and reporting lines',
+                'interview with process owner confirmed understanding of responsibility for records, controls and escalation',
+                'organization chart or appointment record checked for current approval and role assignment',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '6.1')) {
+            if ($isEnvironment) {
+                return [
+                    'environmental aspects and impacts register sampled for significance criteria and operational control linkage',
+                    'compliance obligation review checked for applicable legal/customer environmental requirements',
+                    'risk/opportunity action sample reviewed for owner, due date and evidence of implementation',
+                ];
+            }
+
+            if ($isSafety) {
+                return [
+                    'hazard identification/risk assessment sample checked for activity, hazard, controls and residual risk',
+                    'legal/other OH&S requirement register reviewed for current applicability and control linkage',
+                    'worker consultation evidence sampled for participation in risk control review',
+                ];
+            }
+
+            return [
+                'risk/opportunity register sampled for source, evaluation, action owner, due date and review status',
+                'planning action evidence checked for implementation and linkage to process objectives/controls',
+                'management review or process review record sampled for risk/action status updates',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '6.2')) {
+            return [
+                'objective/KPI record sampled for target, measurement method, actual result and trend review',
+                'action plan for objective achievement checked for owner, resources, due date and progress update',
+                'management/process review minutes sampled for decisions where objectives were not achieved',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '6.3')) {
+            return [
+                'planned-change sample reviewed for reason, affected process, risk review and implementation control',
+                'approval/communication evidence checked for the selected change before implementation',
+                'post-change review evidence sampled for effectiveness and any follow-up action',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '7.1')) {
+            return [
+                'resource plan or equipment/facility record sampled for adequacy against process needs',
+                'maintenance/calibration/infrastructure record checked where relevant to the audited process',
+                'management interview confirmed resource needs are reviewed when performance or workload changes',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '7.2')) {
             return [
                 'competence matrix sampled against assigned job role and audit scope activities',
                 'training/awareness record checked for completion, evaluation and follow-up where gaps were identified',
@@ -248,7 +347,23 @@ class AuditReportNarrativeService
             ];
         }
 
-        if ($this->containsAny($text, ['document', 'information', 'record'])) {
+        if ($this->startsWithClause($clauseNumber, '7.3')) {
+            return [
+                'awareness evidence sampled through interview on policy, objectives, relevant procedures and consequences of nonconformity',
+                'induction/toolbox/briefing record checked for coverage of applicable process controls',
+                'sampled personnel demonstrated where to access current instructions and how to escalate abnormal conditions',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '7.4')) {
+            return [
+                'internal/external communication matrix sampled for what, when, with whom and responsible person',
+                'customer/regulatory/supplier communication sample checked for response, follow-up and retained evidence',
+                'interview confirmed communication channels for process changes, complaints or abnormal events',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '7.5')) {
             return [
                 'documented information sample checked for approval, revision status and availability at point of use',
                 'retained record sample checked for identification, legibility, retention and protection',
@@ -256,23 +371,97 @@ class AuditReportNarrativeService
             ];
         }
 
-        if ($this->containsAny($text, ['operation', 'production', 'service', 'control', 'supplier', 'external provider'])) {
+        if ($this->startsWithClause($clauseNumber, '8.1')) {
             return [
-                'operational record sampled against planned criteria, acceptance result and responsible sign-off',
-                'supplier/external provider file reviewed for approval, monitoring and re-evaluation evidence',
-                'process walkthrough confirmed controls were available and understood at the point of use',
+                'operational planning record sampled for process criteria, controls, resources and acceptance requirements',
+                'process walkthrough confirmed planned controls were available and applied at the point of use',
+                'retained operational record checked for completion against defined criteria',
             ];
         }
 
-        if ($this->containsAny($text, ['internal audit', 'management review', 'performance', 'monitor', 'measurement'])) {
+        if ($this->startsWithClause($clauseNumber, '8.2')) {
+            return [
+                'customer/contract requirement review sample checked for scope, capability, statutory/regulatory needs and acceptance',
+                'change or enquiry review evidence sampled for communication of revised requirements',
+                'customer communication record checked for response, clarification and retained approval where applicable',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '8.3')) {
+            return [
+                'design/development applicability or exclusion justification reviewed against certified scope',
+                'design input/output/review sample checked where design activity was applicable',
+                'change validation or approval evidence sampled for design-related process changes where relevant',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '8.4')) {
+            return [
+                'approved supplier/external provider record sampled for approval criteria and current status',
+                'purchase/service control sample checked for communicated requirements and acceptance evidence',
+                'supplier monitoring or re-evaluation record reviewed for performance and follow-up action',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '8.5')) {
+            return [
+                $isFood
+                    ? 'production/food handling record sampled for process control, hygiene/temperature condition and responsible sign-off'
+                    : 'production/service provision record sampled against planned criteria, acceptance result and responsible sign-off',
+                'process walkthrough confirmed instructions, equipment/resources and monitoring controls were available at point of use',
+                'identification/status or traceability control sample checked through the audited operational flow',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '8.6')) {
+            return [
+                'release/acceptance record sampled for verification against defined criteria before delivery/use',
+                'responsible approval or release authority checked for the selected output/batch/service record',
+                'non-release or hold control reviewed where acceptance evidence was incomplete or pending',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '8.7')) {
+            return [
+                'nonconforming output/product/service sample reviewed for identification, segregation/control and disposition',
+                'correction/rework/concession record checked for authority and customer/regulatory communication where applicable',
+                'follow-up evidence sampled to confirm affected output was controlled before release or delivery',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '9.1')) {
+            return [
+                'monitoring/measurement record sampled for defined method, frequency, result and acceptance criteria',
+                'KPI/performance trend reviewed for analysis, action where below target and management/process review follow-up',
+                'calibration/verification record checked where measuring equipment was used for acceptance decisions',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '9.2')) {
             return [
                 'internal audit programme/report sampled for criteria, scope, findings and follow-up status',
-                'management review minutes checked for required inputs, decisions, actions and assigned responsibility',
-                'monitoring/KPI record reviewed for trend, analysis and action where performance was outside target',
+                'auditor competence/independence evidence checked for the selected internal audit sample',
+                'internal audit correction/action evidence reviewed for closure and verification of sampled findings',
             ];
         }
 
-        if ($this->containsAny($text, ['nonconformity', 'corrective', 'improvement'])) {
+        if ($this->startsWithClause($clauseNumber, '9.3')) {
+            return [
+                'management review minutes checked for required inputs, outputs, decisions and assigned responsibilities',
+                'status of actions from previous review sampled for completion and effectiveness evidence',
+                'performance, audit, complaint/nonconformity and objective trends reviewed for management decisions',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '10.1')) {
+            return [
+                'improvement opportunity/action log sampled for source, owner, target date and current status',
+                'management/process review evidence checked for decisions on improvement priorities',
+                'completed improvement sample reviewed for implementation evidence and result achieved',
+            ];
+        }
+
+        if ($this->startsWithClause($clauseNumber, '10.2')) {
             return [
                 'corrective action sample checked for correction, cause analysis, action plan and verification result',
                 'complaint or nonconforming output sample reviewed for containment, disposition and follow-up',
@@ -280,23 +469,40 @@ class AuditReportNarrativeService
             ];
         }
 
-        if ($this->containsAny($text, ['environment', 'aspect', 'legal', 'compliance', 'emergency'])) {
+        if ($this->startsWithClause($clauseNumber, '10.3')) {
             return [
-                'environmental aspect/impact register sampled for significance criteria and operational controls',
-                'legal compliance register and evaluation evidence checked for current obligations',
-                'emergency preparedness record sampled for test result, learning points and follow-up action',
+                'continual improvement trend reviewed through objectives, audit results, complaints/nonconformities and management review actions',
+                'sampled improvement project/action checked for implementation evidence and measured benefit where available',
+                'management review output sampled for decisions supporting ongoing system improvement',
             ];
         }
 
-        if ($this->containsAny($text, ['safety', 'hazard', 'incident', 'consultation', 'participation', 'oh&s', 'ohs'])) {
-            return [
-                'hazard identification and risk assessment sample checked for control hierarchy and residual risk',
-                'incident/near-miss record reviewed for investigation, action and effectiveness follow-up',
-                'consultation/participation evidence checked for worker input and communication of OH&S controls',
-            ];
+        if ($this->containsAny($clauseText, ['environment', 'aspect', 'legal', 'compliance', 'emergency'])) {
+            return $isEnvironment
+                ? [
+                    'environmental aspect/impact register sampled for significance criteria and operational controls',
+                    'legal compliance register and evaluation evidence checked for current obligations',
+                    'emergency preparedness record sampled for test result, learning points and follow-up action',
+                ]
+                : [];
+        }
+
+        if ($this->containsAny($clauseText, ['safety', 'hazard', 'incident', 'consultation', 'participation', 'oh&s', 'ohs'])) {
+            return $isSafety
+                ? [
+                    'hazard identification and risk assessment sample checked for control hierarchy and residual risk',
+                    'incident/near-miss record reviewed for investigation, action and effectiveness follow-up',
+                    'consultation/participation evidence checked for worker input and communication of OH&S controls',
+                ]
+                : [];
         }
 
         return [];
+    }
+
+    private function startsWithClause(string $clauseNumber, string $prefix): bool
+    {
+        return str_starts_with(strtoupper(trim($clauseNumber)), strtoupper($prefix));
     }
 
     private function clauseFocus(string $clauseNumber, string $clauseTitle): string
