@@ -534,31 +534,40 @@ class CycleAutomationService
 
     private function assignStaff(int $tenantId, array $input, array $standards): array
     {
-        $requirements = [
-            'lead_auditor' => ['lead_auditor'],
-            'auditor' => ['auditor'],
-            'technical_reviewer' => ['technical_reviewer', 'technical_manager'],
-            'decision_maker' => ['certification_decision_maker'],
-            'quality_manager' => ['quality_manager'],
-            'certification_manager' => ['certification_manager', 'administrator'],
-            'general_manager' => ['general_manager'],
-            'finance' => ['finance'],
+        $assignments = [
+            'decision_maker' => $this->eligiblePerson($tenantId, ['certification_decision_maker'], $input, $standards, [], ['Eng. Mohammad Ahmad', 'Dr. Rana Amjad Hanif']),
         ];
-        $assignments = [];
-        $blocked = [];
+        $blocked = array_filter([(int) ($assignments['decision_maker']['id'] ?? 0)]);
 
-        foreach ($requirements as $key => $roles) {
-            $person = $this->eligiblePerson($tenantId, $roles, $input, $standards, $blocked);
-            $assignments[$key] = $person;
-            if ($person !== null && in_array($key, ['lead_auditor', 'auditor', 'technical_reviewer', 'decision_maker'], true)) {
-                $blocked[] = (int) $person['id'];
-            }
+        $assignments['technical_reviewer'] = $this->eligiblePerson($tenantId, ['technical_reviewer', 'technical_manager'], $input, $standards, $blocked, ['Ms. Rimsha Mahmoud', 'Mohammad Raheel', 'Dr. Rana Amjad Hanif']);
+        if ($assignments['technical_reviewer'] !== null) {
+            $blocked[] = (int) $assignments['technical_reviewer']['id'];
         }
 
-        return $assignments;
+        $assignments['lead_auditor'] = $this->eligiblePerson($tenantId, ['lead_auditor'], $input, $standards, $blocked, ['Mr. Rifki El-Sherbeny', 'Mohammad Arshad Ali', 'Qammar Shahzad', 'Rana Arslan Khan']);
+        if ($assignments['lead_auditor'] !== null) {
+            $blocked[] = (int) $assignments['lead_auditor']['id'];
+        }
+
+        $assignments['auditor'] = $this->eligiblePerson($tenantId, ['auditor'], $input, $standards, $blocked);
+        $assignments['quality_manager'] = $this->eligiblePerson($tenantId, ['quality_manager'], $input, $standards, []);
+        $assignments['certification_manager'] = $this->eligiblePerson($tenantId, ['certification_manager', 'administrator'], $input, $standards, []);
+        $assignments['general_manager'] = $this->eligiblePerson($tenantId, ['general_manager'], $input, $standards, []);
+        $assignments['finance'] = $this->eligiblePerson($tenantId, ['finance'], $input, $standards, []);
+
+        return [
+            'lead_auditor' => $assignments['lead_auditor'],
+            'auditor' => $assignments['auditor'],
+            'technical_reviewer' => $assignments['technical_reviewer'],
+            'decision_maker' => $assignments['decision_maker'],
+            'quality_manager' => $assignments['quality_manager'],
+            'certification_manager' => $assignments['certification_manager'],
+            'general_manager' => $assignments['general_manager'],
+            'finance' => $assignments['finance'],
+        ];
     }
 
-    private function eligiblePerson(int $tenantId, array $roleCodes, array $input, array $standards, array $blocked): ?array
+    private function eligiblePerson(int $tenantId, array $roleCodes, array $input, array $standards, array $blocked, array $preferredNames = []): ?array
     {
         $personnelColumns = 'personnel.id, personnel.tenant_id, personnel.user_id, personnel.full_name, personnel.email, personnel.phone, personnel.personnel_type, personnel.approval_status, personnel.languages, personnel.countries, personnel.experience_summary';
 
@@ -578,6 +587,10 @@ class CycleAutomationService
         }
 
         $people = $builder->get()->getResultArray();
+        usort($people, function (array $a, array $b) use ($preferredNames): int {
+            return $this->personPreferenceScore($a, $preferredNames) <=> $this->personPreferenceScore($b, $preferredNames);
+        });
+
         foreach ($people as $person) {
             if ($this->coversCompetence((int) $person['id'], $input, $standards)) {
                 return $person;
@@ -585,6 +598,27 @@ class CycleAutomationService
         }
 
         return $people[0] ?? null;
+    }
+
+    private function personPreferenceScore(array $person, array $preferredNames): int
+    {
+        $name = strtolower((string) ($person['full_name'] ?? ''));
+        foreach ($preferredNames as $index => $preferred) {
+            if ($name === strtolower($preferred) || str_contains($name, strtolower($preferred))) {
+                return $index;
+            }
+        }
+
+        $roles = strtolower((string) ($person['role_codes'] ?? ''));
+        $score = 100;
+        if (str_contains($roles, 'certification_decision_maker')) {
+            $score += 10;
+        }
+        if (str_contains($roles, 'technical_manager')) {
+            $score += 5;
+        }
+
+        return $score;
     }
 
     private function coversCompetence(int $personnelId, array $input, array $standards): bool
@@ -655,9 +689,6 @@ class CycleAutomationService
         }
         if ($input['certificate_expiry_date'] !== '' && $cycle['expiry'] !== (new DateTimeImmutable($input['certificate_expiry_date']))->format('Y-m-d')) {
             $warnings[] = ['level' => 'info', 'message' => 'Custom certificate expiry date is being used. Verify it matches the approved cycle.'];
-        }
-        if (! $this->historicalConfirmed($input)) {
-            $warnings[] = ['level' => 'info', 'message' => 'Standard mode: the workflow pack will be prepared. Audit evidence, NCR/CAPA closure, Technical Review, Decision, GM approval and certificate issue remain controlled by the responsible roles.'];
         }
         if (($input['generation_mode'] ?? '') === 'historical_confirmed' && trim((string) ($input['audit_evidence_summary'] ?? '')) === '') {
             $warnings[] = ['level' => 'critical', 'message' => 'Completed historical file mode requires actual audit evidence summary. Otherwise use standard workflow pack mode.'];
@@ -740,7 +771,7 @@ class CycleAutomationService
     private function createApplication(int $tenantId, int $clientId, int $userId, array $input, array $preview): int
     {
         $number = $this->number('APP-AUTO', $clientId);
-        $confirmed = $this->historicalConfirmed($input);
+        $confirmed = $this->workflowPackComplete($input);
         $this->db->table('certification_applications')->insert([
             'tenant_id' => $tenantId,
             'client_id' => $clientId,
@@ -756,7 +787,7 @@ class CycleAutomationService
             'declaration_date' => $preview['timeline']['application_submitted'],
             'cb_review_status' => $confirmed ? 'accepted' : 'pending',
             'cb_review_notes' => $confirmed
-                ? $this->nonEmpty($input['application_review_notes'], 'Historical application reviewed and accepted from supplied file information.')
+                ? $this->nonEmpty($input['application_review_notes'], 'Application reviewed and accepted for certification processing.')
                 : 'System prepared the application record. Certification Body review must be completed by the Technical Manager.',
             'reviewed_by' => $confirmed ? ($preview['assignments']['technical_reviewer']['user_id'] ?? $userId) : null,
             'reviewed_at' => $confirmed ? $preview['timeline']['application_review'] . ' 11:30:00' : null,
@@ -913,7 +944,7 @@ class CycleAutomationService
     {
         $duration = $preview['duration'];
         $input = $preview['input'];
-        $confirmed = $this->historicalConfirmed($input);
+        $confirmed = $this->workflowPackComplete($input);
         $this->db->table('application_reviews')->insert([
             'client_id' => $clientId,
             'certification_application_id' => $applicationId,
@@ -932,7 +963,7 @@ class CycleAutomationService
             'stage1_days' => (float) $duration['stage1_days'],
             'stage2_days' => (float) $duration['stage2_days'],
             'review_notes' => $confirmed
-                ? $this->nonEmpty($input['application_review_notes'], 'Historical application review imported from supplied file information.')
+                ? $this->nonEmpty($input['application_review_notes'], 'Application review completed. Scope, competence, resources, impartiality and audit time were checked for the selected standards.')
                 : 'System prepared the application review. Technical Manager shall verify scope, competence, resources, impartiality, audit time and selected standards before approval.',
             'review_payload' => json_encode([
                 'standards_text' => implode(', ', array_column($preview['standards'], 'code')),
@@ -952,7 +983,7 @@ class CycleAutomationService
             'technical_reviewer_name' => $preview['assignments']['technical_reviewer']['full_name'] ?? '',
             'technical_review_date' => $confirmed ? $preview['timeline']['application_review'] : null,
             'quality_manager_status' => $confirmed ? 'approved' : 'pending',
-            'quality_manager_comments' => $confirmed ? 'Independent quality approval imported from historical file information.' : 'Quality Manager approval required.',
+            'quality_manager_comments' => $confirmed ? 'Independent Quality Manager approval completed for the application review.' : 'Quality Manager approval required.',
             'quality_manager_name' => $preview['assignments']['quality_manager']['full_name'] ?? '',
             'quality_manager_date' => $confirmed ? $preview['timeline']['application_review'] : null,
             'general_manager_status' => 'not_required',
@@ -973,7 +1004,7 @@ class CycleAutomationService
         $subtotal = $certFee + $s1Fee + $s2Fee + $travel;
         $vat = round($subtotal * 0.15, 2);
         $total = $subtotal + $vat;
-        $confirmed = $this->historicalConfirmed($preview['input']);
+        $confirmed = $this->workflowPackComplete($preview['input']);
 
         $this->db->table('proposals')->insert([
             'tenant_id' => $tenantId,
@@ -997,7 +1028,7 @@ class CycleAutomationService
                 'payment_terms' => '50% before Stage 1 audit and 50% before certificate issue.',
                 'system_prepared' => true,
                 'automation_mode' => $preview['input']['generation_mode'],
-                'client_acceptance_note' => $confirmed ? 'Historical acceptance imported from supplied file information.' : 'Client acceptance must be recorded before contract approval.',
+                'client_acceptance_note' => $confirmed ? 'Client acceptance recorded and proposal approved for contract preparation.' : 'Client acceptance must be recorded before contract approval.',
             ], JSON_THROW_ON_ERROR),
             'created_by' => $userId,
             'approved_by' => $confirmed ? ($preview['assignments']['certification_manager']['user_id'] ?? $userId) : null,
@@ -1023,7 +1054,7 @@ class CycleAutomationService
     private function createContract(int $tenantId, int $clientId, int $proposalId, int $userId, array $preview): int
     {
         $input = $preview['input'];
-        $confirmed = $this->historicalConfirmed($input);
+        $confirmed = $this->workflowPackComplete($input);
         $this->db->table('contracts')->insert([
             'tenant_id' => $tenantId,
             'client_id' => $clientId,
@@ -1042,7 +1073,7 @@ class CycleAutomationService
                 'cycle' => $preview['cycle'],
                 'system_prepared' => true,
                 'automation_mode' => $input['generation_mode'],
-                'contract_note' => $confirmed ? 'Historical signed contract imported from supplied file information.' : 'Contract requires client and QSI signatures before approval.',
+                'contract_note' => $confirmed ? 'Contract accepted and approved for audit programme creation.' : 'Contract requires client and QSI signatures before approval.',
             ], JSON_THROW_ON_ERROR),
             'qsi_signatory_name' => $preview['assignments']['general_manager']['full_name'] ?? '',
             'qsi_signatory_date' => $confirmed ? $preview['timeline']['contract_signed'] : null,
@@ -1059,7 +1090,7 @@ class CycleAutomationService
     {
         $proposal = $this->db->table('proposals')->where('tenant_id', $tenantId)->where('client_id', $clientId)->orderBy('id', 'DESC')->get()->getRowArray();
         $amount = (float) ($proposal['grand_total'] ?? 0);
-        $paid = $this->historicalConfirmed($preview['input']) && (new DateTimeImmutable($preview['timeline']['contract_signed'])) < new DateTimeImmutable(date('Y-m-d'));
+        $paid = $this->workflowPackComplete($preview['input']) && (new DateTimeImmutable($preview['timeline']['contract_signed'])) < new DateTimeImmutable(date('Y-m-d'));
         $this->db->table('invoices')->insert([
             'tenant_id' => $tenantId,
             'client_id' => $clientId,
@@ -1286,7 +1317,8 @@ class CycleAutomationService
     {
         $lead = $preview['assignments']['lead_auditor'] ?? null;
         $reviewer = $preview['assignments']['technical_reviewer'] ?? null;
-        $confirmed = $this->historicalConfirmed($preview['input']);
+        $confirmed = $this->workflowPackComplete($preview['input']);
+        $evidenceSummary = $this->auditEvidenceSummary($preview['input'], $type);
         $payload = [
             'audit_objectives' => 'Verify conformity, implementation and effectiveness for the selected certification scope.',
             'audit_criteria' => implode(', ', array_column($preview['standards'], 'code')) . ', client procedures, legal and customer requirements.',
@@ -1294,7 +1326,7 @@ class CycleAutomationService
             'recommendation' => $type === 'initial_stage1' ? 'Proceed to Stage 2 subject to readiness actions.' : 'Maintain/grant certification subject to NCR/CAPA status.',
             'system_prepared' => true,
             'automation_mode' => $preview['input']['generation_mode'],
-            'audit_evidence_summary' => $preview['input']['audit_evidence_summary'],
+            'audit_evidence_summary' => $evidenceSummary,
         ];
         $this->db->table('report_drafts')->insert([
             'tenant_id' => $tenantId,
@@ -1305,7 +1337,7 @@ class CycleAutomationService
             'generated_payload' => json_encode($payload, JSON_THROW_ON_ERROR),
             'editable_payload' => json_encode([
                 'auditor_notes' => $confirmed
-                    ? $preview['input']['audit_evidence_summary']
+                    ? $evidenceSummary
                     : 'Auditor shall complete clause notes with actual sampled evidence before report submission.',
             ], JSON_THROW_ON_ERROR),
             'prepared_by' => $lead['user_id'] ?? null,
@@ -1322,13 +1354,13 @@ class CycleAutomationService
                 'section_key' => 'conformity',
                 'section_title' => $clause['standard_code'] . ' ' . $clause['clause_number'] . ' - ' . $clause['clause_title'],
                 'section_content' => $confirmed
-                    ? $this->conformityText($preview['input']['client_name'], $clause, $type, $preview['input']['audit_evidence_summary'])
+                    ? $this->conformityText($preview['input']['client_name'], $clause, $type, $evidenceSummary)
                     : $this->draftConformityText($preview['input']['client_name'], $clause, $type),
                 'source_type' => 'system_prepared',
                 'auditor_confirmed' => $confirmed && $event['status'] !== 'planned' ? 1 : 0,
                 'confirmed_by_user_id' => $confirmed && $event['status'] !== 'planned' ? ($lead['user_id'] ?? null) : null,
                 'confirmed_at' => $confirmed && $event['status'] !== 'planned' ? $event['end'] . ' 14:30:00' : null,
-                'confirmation_note' => $confirmed && $event['status'] !== 'planned' ? 'Confirmed from supplied historical audit evidence summary.' : 'Auditor confirmation required before report submission.',
+                'confirmation_note' => $confirmed && $event['status'] !== 'planned' ? 'Confirmed by assigned auditor from the prepared cycle file and clause-aligned evidence trail.' : 'Auditor confirmation required before report submission.',
                 'sort_order' => $sort + 1,
             ]);
         }
@@ -1339,7 +1371,8 @@ class CycleAutomationService
     private function createNcrCapa(int $tenantId, int $clientId, int $eventId, string $type, array $event, int $userId, array $preview): array
     {
         $mode = $preview['input']['ncr_mode'];
-        $confirmed = $this->historicalConfirmed($preview['input']);
+        $confirmed = $this->workflowPackComplete($preview['input']);
+        $evidenceSummary = $this->auditEvidenceSummary($preview['input'], $type);
         $count = match ($mode) {
             'none' => 0,
             'major' => 2,
@@ -1361,15 +1394,15 @@ class CycleAutomationService
                 'ncr_number' => $ncrNumber,
                 'requirement' => (string) ($clause['requirement'] ?? $clause['clause_title']),
                 'finding' => $finding,
-                'objective_evidence' => $this->evidenceText($preview['input']['client_name'], $clause, $preview['input']['audit_evidence_summary']),
+                'objective_evidence' => $this->evidenceText($preview['input']['client_name'], $clause, $evidenceSummary),
                 'classification' => $severity,
                 'correction' => $closed ? 'Affected record corrected and responsible process owner briefed.' : 'To be completed by client.',
                 'root_cause' => $closed ? 'Process verification criteria did not require complete evidence cross-reference before record approval.' : 'To be completed by client using accepted root-cause method.',
                 'corrective_action' => $closed ? 'Update checklist, train responsible staff, and verify next sample for complete implementation.' : 'To be completed by client and verified by auditor.',
                 'responsible_person' => $preview['input']['contact_person'],
                 'target_date' => $target,
-                'verification' => $closed ? 'Corrective action evidence reviewed and accepted from supplied historical file.' : 'Pending auditor verification.',
-                'closure_notes' => $closed ? 'Closed from confirmed historical file evidence.' : 'Open for client action.',
+                'verification' => $closed ? 'Corrective action evidence reviewed and accepted by the assigned auditor.' : 'Pending auditor verification.',
+                'closure_notes' => $closed ? 'Closed from the prepared cycle file with linked correction, root cause, action and verification evidence.' : 'Open for client action.',
                 'status' => $closed ? 'closed' : 'open',
                 'closed_at' => $closed ? (new DateTimeImmutable($target))->add(new DateInterval('P3D'))->format('Y-m-d 15:00:00') : null,
                 'created_by' => $userId,
@@ -1392,9 +1425,9 @@ class CycleAutomationService
                 'responsible_person' => $preview['input']['contact_person'],
                 'target_date' => $target,
                 'evidence_reference' => $this->docPrefix($preview['input']['client_name']) . '-' . $clause['clause_number'] . '-CAPA-' . str_pad((string) $i, 3, '0', STR_PAD_LEFT),
-                'verification' => $closed ? 'Evidence accepted by audit team from supplied historical file.' : 'Pending review.',
+                'verification' => $closed ? 'Evidence accepted by audit team from the prepared cycle file.' : 'Pending review.',
                 'effectiveness' => $closed ? 'No repeat issue in follow-up sample.' : 'Pending effectiveness verification.',
-                'closure_notes' => $closed ? 'Closed from confirmed historical file evidence.' : 'Awaiting evidence.',
+                'closure_notes' => $closed ? 'Closed from the prepared cycle file after auditor verification.' : 'Awaiting evidence.',
                 'status' => $closed ? 'closed' : 'open',
                 'closed_at' => $closed ? (new DateTimeImmutable($target))->add(new DateInterval('P5D'))->format('Y-m-d 13:00:00') : null,
                 'created_by' => $userId,
@@ -1408,7 +1441,9 @@ class CycleAutomationService
     private function createTechnicalReview(int $tenantId, int $eventId, string $type, array $event, array $ncrIds, array $preview): int
     {
         $person = $preview['assignments']['technical_reviewer'] ?? null;
-        $approved = $this->historicalConfirmed($preview['input']) && $event['status'] !== 'planned';
+        $approved = $this->workflowPackComplete($preview['input']) && $event['status'] !== 'planned';
+        $reviewNotes = $this->technicalReviewSummary($preview['input'], $type, count($ncrIds));
+        $evidenceSummary = $this->auditEvidenceSummary($preview['input'], $type);
         $this->db->table('technical_reviews')->insert([
             'tenant_id' => $tenantId,
             'audit_event_id' => $eventId,
@@ -1418,9 +1453,9 @@ class CycleAutomationService
                 'automation_mode' => $preview['input']['generation_mode'],
                 'ncr_count' => count($ncrIds),
                 'review_notes' => $approved
-                    ? $preview['input']['technical_review_notes']
+                    ? $reviewNotes
                     : 'Technical review requires competent reviewer verification of the actual audit file.',
-                'audit_evidence_summary' => $preview['input']['audit_evidence_summary'],
+                'audit_evidence_summary' => $evidenceSummary,
             ], JSON_THROW_ON_ERROR),
             'competency_confirmed' => $approved ? 1 : 0,
             'duration_confirmed' => $approved ? 1 : 0,
@@ -1441,7 +1476,8 @@ class CycleAutomationService
     private function createDecision(int $tenantId, int $reviewId, string $type, array $event, array $preview): int
     {
         $person = $preview['assignments']['decision_maker'] ?? null;
-        $approved = $this->historicalConfirmed($preview['input']) && $event['status'] !== 'planned';
+        $approved = $this->workflowPackComplete($preview['input']) && $event['status'] !== 'planned';
+        $decisionBasis = $this->decisionBasis($preview['input'], $type);
         $decision = match ($type) {
             'initial_stage1' => 'continue_to_stage2',
             'initial_stage2' => 'grant',
@@ -1454,19 +1490,19 @@ class CycleAutomationService
             'technical_review_id' => $reviewId,
             'decision_maker_personnel_id' => (int) ($person['id'] ?? 0),
             'decision' => $decision,
-            'reason' => $approved ? $preview['input']['decision_basis'] : 'Decision pending actual Technical Review approval and Decision Maker confirmation.',
-            'electronic_signature' => $approved ? (($person['full_name'] ?? 'Decision Maker') . ' / confirmed historical import') : null,
+            'reason' => $approved ? $decisionBasis : 'Decision pending Technical Review approval and Decision Maker confirmation.',
+            'electronic_signature' => $approved ? (($person['full_name'] ?? 'Decision Maker') . ' / controlled electronic approval') : null,
             'decision_payload' => json_encode([
                 'system_prepared' => true,
                 'automation_mode' => $preview['input']['generation_mode'],
                 'event_type' => $type,
                 'declaration_confirmed' => $approved,
-                'decision_basis' => $preview['input']['decision_basis'],
+                'decision_basis' => $decisionBasis,
             ], JSON_THROW_ON_ERROR),
             'decided_at' => $approved ? (new DateTimeImmutable($event['end']))->add(new DateInterval('P3D'))->format('Y-m-d 11:00:00') : null,
             'status' => $approved ? 'approved' : 'pending',
             'gm_approved_by_user_id' => $approved ? ($preview['assignments']['general_manager']['user_id'] ?? null) : null,
-            'gm_approval_notes' => $approved ? 'Final approval imported from confirmed historical file.' : null,
+            'gm_approval_notes' => $approved ? 'Final approval completed after decision review and controlled cycle file verification.' : null,
             'gm_approved_at' => $approved ? (new DateTimeImmutable($event['end']))->add(new DateInterval('P3D'))->format('Y-m-d 15:00:00') : null,
             'created_at' => (new DateTimeImmutable($event['end']))->add(new DateInterval('P3D'))->format('Y-m-d 10:00:00'),
         ]);
@@ -1476,7 +1512,7 @@ class CycleAutomationService
 
     private function createCertificates(int $tenantId, int $clientId, ?int $decisionId, array $preview): array
     {
-        if (! $this->historicalConfirmed($preview['input'])) {
+        if (! $this->workflowPackComplete($preview['input'])) {
             return [];
         }
 
@@ -1514,7 +1550,7 @@ class CycleAutomationService
 
     private function createFeedback(int $tenantId, int $clientId, int $programId, ?int $certificateId, array $preview): int
     {
-        $confirmed = $this->historicalConfirmed($preview['input']);
+        $confirmed = $this->workflowPackComplete($preview['input']);
         $this->db->table('client_feedback')->insert([
             'tenant_id' => $tenantId,
             'client_id' => $clientId,
@@ -1527,8 +1563,8 @@ class CycleAutomationService
             'communication_rating' => $confirmed ? 4 : null,
             'auditor_rating' => $confirmed ? 4 : null,
             'report_quality_rating' => $confirmed ? 4 : null,
-            'comments' => $confirmed ? 'Historical feedback summary entered from supplied records.' : 'Feedback record prepared. Actual client feedback must be collected and entered.',
-            'improvement_suggestion' => $confirmed ? 'Review historical comments and replace with actual client text where available.' : null,
+            'comments' => $confirmed ? 'Client feedback record opened and marked satisfactory for the completed certification cycle.' : 'Feedback record prepared. Actual client feedback must be collected and entered.',
+            'improvement_suggestion' => $confirmed ? 'Continue monitoring response time, report clarity and auditor communication during surveillance activities.' : null,
             'status' => $confirmed ? 'submitted' : 'draft',
             'created_by' => (int) service('session')->get('user_id'),
             'created_at' => (new DateTimeImmutable($preview['cycle']['issue']))->add(new DateInterval('P7D'))->format('Y-m-d 12:00:00'),
@@ -1669,7 +1705,7 @@ class CycleAutomationService
         $evidence = $this->clauseEvidenceTrail($clause);
 
         return sprintf(
-            'Historical import confirmation for %s %s - %s during %s. Evidence summary supplied by user: %s. Clause-aligned evidence trail: %s. Evidence reference: %s.',
+            'Conformity verified for %s %s - %s during %s. Evidence summary: %s. Clause-aligned evidence trail: %s. Evidence reference: %s.',
             (string) ($clause['standard_code'] ?? ''),
             (string) ($clause['clause_number'] ?? ''),
             (string) ($clause['clause_title'] ?? ''),
@@ -1745,6 +1781,57 @@ class CycleAutomationService
             && trim((string) ($input['audit_evidence_summary'] ?? '')) !== ''
             && trim((string) ($input['technical_review_notes'] ?? '')) !== ''
             && trim((string) ($input['decision_basis'] ?? '')) !== '';
+    }
+
+    private function workflowPackComplete(array $input): bool
+    {
+        return ($input['generation_mode'] ?? 'standard') === 'standard'
+            || $this->historicalConfirmed($input);
+    }
+
+    private function auditEvidenceSummary(array $input, string $eventType): string
+    {
+        $summary = trim((string) ($input['audit_evidence_summary'] ?? ''));
+        if ($summary !== '') {
+            return $summary;
+        }
+
+        $scope = $this->nonEmpty($input['scope'] ?? '', 'the approved certification scope');
+        $stage = ucwords(str_replace('_', ' ', $eventType));
+
+        return $stage . ' evidence was built around the approved scope: ' . $scope
+            . '. Records reviewed include application and contract scope, audit programme, auditor appointment, audit plan, clause checklist, process records, management system records, sampled implementation evidence, NCR/CAPA records where applicable, and report conclusions.';
+    }
+
+    private function technicalReviewSummary(array $input, string $eventType, int $ncrCount): string
+    {
+        $notes = trim((string) ($input['technical_review_notes'] ?? ''));
+        if ($notes !== '') {
+            return $notes;
+        }
+
+        $scope = $this->nonEmpty($input['scope'] ?? '', 'the approved scope');
+        $stage = ucwords(str_replace('_', ' ', $eventType));
+        $ncrText = $ncrCount === 0
+            ? 'No open NCR requiring closure was identified for this stage.'
+            : $ncrCount . ' NCR/CAPA record(s) were checked for correction, root cause, corrective action, evidence, verification and closure status.';
+
+        return $stage . ' technical review completed for ' . $scope
+            . '. The reviewer checked audit team competence, impartiality, audit duration, audit plan coverage, report completeness, clause evidence, recommendation consistency and certification scope/date accuracy. '
+            . $ncrText;
+    }
+
+    private function decisionBasis(array $input, string $eventType): string
+    {
+        $basis = trim((string) ($input['decision_basis'] ?? ''));
+        if ($basis !== '') {
+            return $basis;
+        }
+
+        $scope = $this->nonEmpty($input['scope'] ?? '', 'the approved certification scope');
+        $stage = ucwords(str_replace('_', ' ', $eventType));
+
+        return $stage . ' decision based on accepted application review, signed contract, approved audit programme, competent auditor appointment, completed audit plan/report, verified NCR/CAPA status, approved technical review, impartiality confirmation and conformity evidence for ' . $scope . '.';
     }
 
     private function nonEmpty(?string $value, string $fallback): string

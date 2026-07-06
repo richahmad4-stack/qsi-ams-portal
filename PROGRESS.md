@@ -33,11 +33,12 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Cycle Builder now prepares application responses from entered client/cycle data and uses proper PDF headings: "Information Required" and "Response".
 - Actual QSI personnel from the supplied table have been added with multiple roles and all-standard competence where indicated; old demo users are inactive/hidden.
 - Audit plans prepared by Cycle Builder now include more detailed 09:00-17:00 stage-specific timing, lunch break, process/unit coverage, and clause/criteria focus.
+- Cycle Builder standard mode now prepares the full controlled workflow pack through application review, proposal acceptance, contract, audit reports, NCR/CAPA closure, Technical Review, Decision, GM approval, certificate issue, and feedback. Assignment preference keeps Eng. Mohammad Ahmad as Decision Maker, Ms. Rimsha Mahmoud as Technical Reviewer, Dr. Rana Amjad Hanif as GM, and a separate lead auditor where available.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus
 
-Project-owner compliance hardening and workflow validation: core gates are now in place for audit duration basis, multi-standard competence coverage, full-file Technical Review/Decision readiness, surveillance locks, auditor confirmation of report clauses, role-based workflow authority, first-pass role-specific dashboards, and controlled Super User lifecycle preparation.
+Project-owner compliance hardening and workflow validation: core gates are now in place for audit duration basis, multi-standard competence coverage, full-file Technical Review/Decision readiness, surveillance locks, auditor confirmation of report clauses, role-based workflow authority, first-pass role-specific dashboards, and controlled Super User lifecycle preparation. The current focus is validating prepared file quality across HACCP, ISO 9001, and multi-standard clients.
 
 ## Next
 

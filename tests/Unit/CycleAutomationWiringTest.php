@@ -25,6 +25,9 @@ class CycleAutomationWiringTest extends TestCase
         self::assertStringContainsString('createTechnicalReview', $service);
         self::assertStringContainsString('createDecision', $service);
         self::assertStringContainsString('createCertificates', $service);
+        self::assertStringContainsString('workflowPackComplete', $service);
+        self::assertStringContainsString('Eng. Mohammad Ahmad', $service);
+        self::assertStringContainsString('Ms. Rimsha Mahmoud', $service);
         self::assertStringContainsString('AUDITOR TO COMPLETE', $service);
         self::assertStringContainsString('historical_confirmed', $service);
         self::assertStringContainsString('Technical review requires competent reviewer verification', $service);
