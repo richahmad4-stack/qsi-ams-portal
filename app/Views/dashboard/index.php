@@ -17,29 +17,15 @@
 <?= $this->section('content') ?>
 <?php
 $cards = $dashboard['cards'];
+$pipeline = $dashboard['proposal_pipeline'];
 $workload = $dashboard['auditor_workload'];
 $calendar = $dashboard['audit_calendar'];
 $auditStatus = $dashboard['audit_status'];
 $activities = $dashboard['recent_activities'];
 $notifications = $notifications ?? [];
-$clientsByStatus = $dashboard['clients_by_status'];
-$certificatesByStandard = $dashboard['certificates_by_standard'];
-$auditsByMonth = $dashboard['audits_by_month'];
-$openNcrsBySeverity = $dashboard['open_ncrs_by_severity'];
-$capaStatus = $dashboard['capa_status'];
-$upcomingSurveillance = $dashboard['upcoming_surveillance_table'];
-$expiringCertificates = $dashboard['expiring_certificates'];
 
-$clientsByStatusLabels = array_column($clientsByStatus, 'status');
-$clientsByStatusData = array_map('intval', array_column($clientsByStatus, 'total'));
-$certificatesByStandardLabels = array_column($certificatesByStandard, 'standard_code');
-$certificatesByStandardData = array_map('intval', array_column($certificatesByStandard, 'total'));
-$auditsByMonthLabels = array_column($auditsByMonth, 'month');
-$auditsByMonthData = array_map('intval', array_column($auditsByMonth, 'total'));
-$openNcrsBySeverityLabels = array_column($openNcrsBySeverity, 'severity');
-$openNcrsBySeverityData = array_map('intval', array_column($openNcrsBySeverity, 'total'));
-$capaStatusLabels = array_column($capaStatus, 'status');
-$capaStatusData = array_map('intval', array_column($capaStatus, 'total'));
+$pipelineLabels = array_column($pipeline, 'status');
+$pipelineData = array_map('intval', array_column($pipeline, 'total'));
 $statusLabels = array_column($auditStatus, 'status');
 $statusData = array_map('intval', array_column($auditStatus, 'total'));
 $workloadLabels = array_column($workload, 'full_name');
@@ -50,22 +36,16 @@ $workloadData = array_map('intval', array_column($workload, 'total'));
     <?php
     $metricCards = [
         ['Total clients', $cards['total_clients'], 'fa-building', 'total_clients'],
-        ['Active clients', $cards['active_clients'], 'fa-building-circle-check', 'active_clients'],
+        ['Legacy clients', $cards['legacy_clients'], 'fa-file-import', 'legacy_clients'],
         ['Active certificates', $cards['active_certificates'], 'fa-certificate', 'active_certificates'],
         ['Expired certificates', $cards['expired_certificates'], 'fa-triangle-exclamation', 'expired_certificates'],
-        ['Suspended certificates', $cards['suspended_certificates'], 'fa-ban', 'suspended_certificates'],
-        ['Withdrawn certificates', $cards['withdrawn_certificates'], 'fa-circle-xmark', 'withdrawn_certificates'],
-        ['Pending applications', $cards['pending_applications'], 'fa-file-signature', 'pending_applications'],
         ['Certificates expiring', $cards['certificates_expiring'], 'fa-clock', 'certificates_expiring'],
         ['Open NCRs', $cards['open_ncrs'], 'fa-clipboard-list', 'open_ncrs'],
         ['Open CAPAs', $cards['open_capas'], 'fa-screwdriver-wrench', 'open_capas'],
-        ['Closed CAPAs', $cards['closed_capas'], 'fa-circle-check', 'closed_capas'],
-        ['Completed audits', $cards['completed_audits'], 'fa-clipboard-check', 'completed_audits'],
         ['Pending reviews', $cards['pending_technical_reviews'], 'fa-user-check', 'pending_technical_reviews'],
         ['Pending decisions', $cards['pending_certification_decisions'], 'fa-stamp', 'pending_certification_decisions'],
         ['Upcoming audits', $cards['upcoming_audits'], 'fa-calendar-days', 'upcoming_audits'],
         ['Upcoming surveillance', $cards['upcoming_surveillance_audits'], 'fa-calendar-check', 'upcoming_surveillance_audits'],
-        ['Customer feedback', $cards['customer_feedback'], 'fa-comments', 'customer_feedback'],
     ];
     ?>
 
@@ -85,42 +65,14 @@ $workloadData = array_map('intval', array_column($workload, 'total'));
 </div>
 
 <div class="row g-3 mb-3">
-    <div class="col-xl-4">
+    <div class="col-xl-6">
         <section class="panel h-100">
-            <div class="panel-title">Clients by status</div>
-            <div class="chart-box"><canvas id="clientsByStatus"></canvas></div>
+            <div class="panel-title">Proposal pipeline</div>
+            <div class="chart-box"><canvas id="proposalPipeline"></canvas></div>
         </section>
     </div>
 
-    <div class="col-xl-4">
-        <section class="panel h-100">
-            <div class="panel-title">Certificates by standard</div>
-            <div class="chart-box"><canvas id="certificatesByStandard"></canvas></div>
-        </section>
-    </div>
-
-    <div class="col-xl-4">
-        <section class="panel h-100">
-            <div class="panel-title">Audits by month</div>
-            <div class="chart-box"><canvas id="auditsByMonth"></canvas></div>
-        </section>
-    </div>
-</div>
-
-<div class="row g-3 mb-3">
-    <div class="col-xl-4">
-        <section class="panel h-100">
-            <div class="panel-title">Open NCRs by severity</div>
-            <div class="chart-box"><canvas id="openNcrsBySeverity"></canvas></div>
-        </section>
-    </div>
-    <div class="col-xl-4">
-        <section class="panel h-100">
-            <div class="panel-title">CAPA status</div>
-            <div class="chart-box"><canvas id="capaStatus"></canvas></div>
-        </section>
-    </div>
-    <div class="col-xl-4">
+    <div class="col-xl-6">
         <section class="panel h-100">
             <div class="panel-title">Audit status</div>
             <div class="chart-box"><canvas id="auditStatus"></canvas></div>
@@ -200,72 +152,6 @@ $workloadData = array_map('intval', array_column($workload, 'total'));
         </section>
     </div>
 
-    <div class="col-xl-6">
-        <section class="panel h-100">
-            <div class="panel-title">Upcoming surveillance audits</div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle">
-                    <thead>
-                    <tr>
-                        <th>Client</th>
-                        <th>Audit</th>
-                        <th>Type</th>
-                        <th>Start</th>
-                        <th>Status</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <?php if ($upcomingSurveillance === []): ?>
-                        <tr><td colspan="5" class="text-secondary">No upcoming surveillance audits</td></tr>
-                    <?php endif; ?>
-                    <?php foreach ($upcomingSurveillance as $event): ?>
-                        <tr>
-                            <td><?= esc($event['company']) ?></td>
-                            <td><?= esc($event['audit_number']) ?></td>
-                            <td><?= esc(str_replace('_', ' ', $event['event_type'])) ?></td>
-                            <td><?= esc($event['planned_start_date']) ?></td>
-                            <td><?= esc($event['status']) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    </div>
-
-    <div class="col-xl-6">
-        <section class="panel h-100">
-            <div class="panel-title">Expiring certificates</div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle">
-                    <thead>
-                    <tr>
-                        <th>Client</th>
-                        <th>Certificate</th>
-                        <th>Standard</th>
-                        <th>Expiry</th>
-                        <th>Status</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <?php if ($expiringCertificates === []): ?>
-                        <tr><td colspan="5" class="text-secondary">No certificates expiring in the next 90 days</td></tr>
-                    <?php endif; ?>
-                    <?php foreach ($expiringCertificates as $certificate): ?>
-                        <tr>
-                            <td><?= esc($certificate['company']) ?></td>
-                            <td><?= esc($certificate['certificate_number']) ?></td>
-                            <td><?= esc($certificate['standard_code']) ?></td>
-                            <td><?= esc($certificate['expiry_date']) ?></td>
-                            <td><?= esc($certificate['status']) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    </div>
-
     <div class="col-12">
         <section class="panel">
             <div class="panel-title">Recent activities</div>
@@ -303,7 +189,7 @@ $workloadData = array_map('intval', array_column($workload, 'total'));
 
 <?= $this->section('scripts') ?>
 <script>
-const palette = ['#0a3765', '#3f8f5f', '#d98b2b', '#64748b', '#b84a62', '#4a7f8f', '#94a3b8'];
+const palette = ['#0f5ea8', '#3f8f5f', '#d98b2b', '#6f5fb8', '#b84a62', '#4a7f8f', '#7b8794'];
 
 function chartOrEmpty(id, type, labels, data) {
     const canvas = document.getElementById(id);
@@ -335,11 +221,7 @@ function chartOrEmpty(id, type, labels, data) {
     });
 }
 
-chartOrEmpty('clientsByStatus', 'doughnut', <?= json_encode($clientsByStatusLabels, JSON_THROW_ON_ERROR) ?>, <?= json_encode($clientsByStatusData, JSON_THROW_ON_ERROR) ?>);
-chartOrEmpty('certificatesByStandard', 'doughnut', <?= json_encode($certificatesByStandardLabels, JSON_THROW_ON_ERROR) ?>, <?= json_encode($certificatesByStandardData, JSON_THROW_ON_ERROR) ?>);
-chartOrEmpty('auditsByMonth', 'bar', <?= json_encode($auditsByMonthLabels, JSON_THROW_ON_ERROR) ?>, <?= json_encode($auditsByMonthData, JSON_THROW_ON_ERROR) ?>);
-chartOrEmpty('openNcrsBySeverity', 'doughnut', <?= json_encode($openNcrsBySeverityLabels, JSON_THROW_ON_ERROR) ?>, <?= json_encode($openNcrsBySeverityData, JSON_THROW_ON_ERROR) ?>);
-chartOrEmpty('capaStatus', 'doughnut', <?= json_encode($capaStatusLabels, JSON_THROW_ON_ERROR) ?>, <?= json_encode($capaStatusData, JSON_THROW_ON_ERROR) ?>);
+chartOrEmpty('proposalPipeline', 'doughnut', <?= json_encode($pipelineLabels, JSON_THROW_ON_ERROR) ?>, <?= json_encode($pipelineData, JSON_THROW_ON_ERROR) ?>);
 chartOrEmpty('auditStatus', 'doughnut', <?= json_encode($statusLabels, JSON_THROW_ON_ERROR) ?>, <?= json_encode($statusData, JSON_THROW_ON_ERROR) ?>);
 chartOrEmpty('auditorWorkload', 'bar', <?= json_encode($workloadLabels, JSON_THROW_ON_ERROR) ?>, <?= json_encode($workloadData, JSON_THROW_ON_ERROR) ?>);
 </script>

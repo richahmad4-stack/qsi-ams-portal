@@ -17,6 +17,7 @@ class DashboardService
         return [
             'cards' => [
                 'total_clients' => $this->count('clients', ['tenant_id' => $tenantId]),
+                'legacy_clients' => $this->count('clients', ['tenant_id' => $tenantId, 'is_legacy' => 1]),
                 'active_clients' => $this->countClientsByStatus($tenantId, ['certified', 'active']),
                 'active_certificates' => $this->count('certificates', ['tenant_id' => $tenantId, 'status' => 'active']),
                 'expired_certificates' => $this->expiredCertificates($tenantId, $today),
@@ -34,6 +35,8 @@ class DashboardService
                 'upcoming_surveillance_audits' => $this->upcomingSurveillanceAudits($tenantId, $today, $next90),
                 'customer_feedback' => $this->feedbackCount($tenantId),
             ],
+            'proposal_pipeline' => $this->proposalPipeline($tenantId),
+            'fee_summary' => $this->feeSummary($tenantId),
             'clients_by_status' => $this->clientsByStatus($tenantId),
             'certificates_by_standard' => $this->certificatesByStandard($tenantId),
             'audits_by_month' => $this->auditsByMonth($tenantId, date('Y-m-01', strtotime('-5 months')), $monthEnd),

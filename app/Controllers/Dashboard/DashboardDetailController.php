@@ -35,6 +35,7 @@ class DashboardDetailController extends BaseController
 
         return match ($section) {
             'total_clients' => $this->clientSection('Total clients', $db->table('clients')->where('tenant_id', $tenantId)->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
+            'legacy_clients' => $this->clientSection('Legacy clients', $db->table('clients')->where('tenant_id', $tenantId)->where('is_legacy', 1)->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
             'active_clients' => $this->clientSection('Active clients', $db->table('clients')->where('tenant_id', $tenantId)->whereIn('certification_status', ['certified', 'active'])->where('deleted_at', null)->orderBy('company', 'ASC')->get()->getResultArray()),
             'active_certificates' => $this->certificateSection('Active certificates', $this->certificates($tenantId, ['certificates.status' => 'active'])),
             'suspended_certificates' => $this->certificateSection('Suspended certificates', $this->certificates($tenantId, ['certificates.status' => 'suspended'])),
@@ -51,6 +52,7 @@ class DashboardDetailController extends BaseController
             'upcoming_audits' => $this->auditSection('Upcoming audits', $today, $next30, []),
             'upcoming_surveillance_audits' => $this->auditSection('Upcoming surveillance audits', $today, $next90, ['surveillance1', 'surveillance2']),
             'customer_feedback' => $this->feedbackSection('Customer feedback summary'),
+            'monthly_revenue' => $this->proposalSection('Monthly revenue source proposals'),
             default => null,
         };
     }
