@@ -29,6 +29,9 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     ]);
     $routes->get('dashboard/section/(:segment)', 'Dashboard\DashboardDetailController::show/$1', ['filter' => 'permission:dashboard,view']);
     $routes->get('finance', 'Finance\FinanceController::index', ['filter' => 'permission:finance,view']);
+    $routes->get('automation/cycle-generator', 'Automation\CycleGeneratorController::index', ['filter' => 'permission:automation,view']);
+    $routes->post('automation/cycle-generator/preview', 'Automation\CycleGeneratorController::preview', ['filter' => 'permission:automation,create']);
+    $routes->post('automation/cycle-generator/generate', 'Automation\CycleGeneratorController::generate', ['filter' => 'permission:automation,create']);
 
     $routes->get('workflow/certification', 'Workflow\CertificationWorkflowController::index', ['filter' => 'permission:clients,view']);
     $routes->get('workflow/certification/(:num)', 'Workflow\CertificationWorkflowController::show/$1', ['filter' => 'permission:clients,view']);
