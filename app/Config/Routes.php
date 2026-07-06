@@ -32,6 +32,8 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('automation/cycle-generator', 'Automation\CycleGeneratorController::index', ['filter' => 'permission:automation,view']);
     $routes->post('automation/cycle-generator/preview', 'Automation\CycleGeneratorController::preview', ['filter' => 'permission:automation,create']);
     $routes->post('automation/cycle-generator/generate', 'Automation\CycleGeneratorController::generate', ['filter' => 'permission:automation,create']);
+    $routes->post('automation/cycle-generator/upload', 'Automation\CycleGeneratorController::upload', ['filter' => 'permission:automation,create']);
+    $routes->get('automation/cycle-generator/template', 'Automation\CycleGeneratorController::template', ['filter' => 'permission:automation,view']);
 
     $routes->get('workflow/certification', 'Workflow\CertificationWorkflowController::index', ['filter' => 'permission:clients,view']);
     $routes->get('workflow/certification/(:num)', 'Workflow\CertificationWorkflowController::show/$1', ['filter' => 'permission:clients,view']);

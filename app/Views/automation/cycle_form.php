@@ -1,6 +1,29 @@
 <?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
+<section class="panel mb-3">
+    <div class="panel-title">Batch upload</div>
+    <form method="post" action="<?= site_url('automation/cycle-generator/upload') ?>" enctype="multipart/form-data">
+        <?= csrf_field() ?>
+        <div class="row g-3 align-items-end">
+            <div class="col-md-7">
+                <label class="form-label" for="cycle_file">CSV or Excel file</label>
+                <input class="form-control" id="cycle_file" name="cycle_file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            </div>
+            <div class="col-md-5 d-flex gap-2">
+                <button class="btn btn-outline-primary" type="submit">
+                    <i class="fa-solid fa-file-arrow-up me-1" aria-hidden="true"></i>
+                    Upload batch
+                </button>
+                <a class="btn btn-outline-secondary" href="<?= site_url('automation/cycle-generator/template') ?>">
+                    <i class="fa-solid fa-table me-1" aria-hidden="true"></i>
+                    Download template
+                </a>
+            </div>
+        </div>
+    </form>
+</section>
+
 <section class="panel">
     <div class="panel-title">Basic client and cycle information</div>
     <form method="post" action="<?= site_url('automation/cycle-generator/preview') ?>">
@@ -93,10 +116,10 @@
 
         <div class="row g-3">
             <div class="col-md-4">
-                <label class="form-label" for="generation_mode">Generation mode</label>
+                <label class="form-label" for="generation_mode">File preparation mode</label>
                 <select class="form-select" id="generation_mode" name="generation_mode">
-                    <option value="draft">Controlled draft / import preparation</option>
-                    <option value="historical_confirmed">Historical completed file with real evidence</option>
+                    <option value="standard">Prepare complete workflow pack</option>
+                    <option value="historical_confirmed">Prepare completed historical file from supplied records</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -132,9 +155,9 @@
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label" for="ncr_mode">Generated NCR/CAPA</label>
+                <label class="form-label" for="ncr_mode">NCR/CAPA setup</label>
                 <select class="form-select" id="ncr_mode" name="ncr_mode">
-                    <option value="sample_minor">Sample minor NCRs</option>
+                    <option value="sample_minor">Prepare sample minor NCRs</option>
                     <option value="none">No NCRs</option>
                     <option value="major">Include major NCR sample</option>
                 </select>
@@ -158,7 +181,7 @@
             </div>
             <div class="col-md-12">
                 <label class="form-label" for="audit_evidence_summary">Actual audit evidence summary</label>
-                <textarea class="form-control" id="audit_evidence_summary" name="audit_evidence_summary" rows="4" placeholder="Only enter real sampled records/interviews/observations from the old file. Leave blank to generate draft checklists only."><?= old('audit_evidence_summary') ?></textarea>
+                <textarea class="form-control" id="audit_evidence_summary" name="audit_evidence_summary" rows="4" placeholder="Enter sampled records/interviews/observations when importing an already completed file. Leave blank when the auditor will complete evidence during execution."><?= old('audit_evidence_summary') ?></textarea>
             </div>
             <div class="col-md-6">
                 <label class="form-label" for="technical_review_notes">Technical review notes</label>

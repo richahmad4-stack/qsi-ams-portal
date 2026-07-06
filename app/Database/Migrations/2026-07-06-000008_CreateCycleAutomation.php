@@ -38,7 +38,7 @@ SQL);
         foreach (['view', 'create', 'edit'] as $action) {
             $this->db->query(
                 'INSERT IGNORE INTO permissions (module, action, description) VALUES (?, ?, ?)',
-                ['automation', $action, 'Automation / Cycle Generator ' . $action]
+                ['automation', $action, 'Cycle Builder ' . $action]
             );
         }
 

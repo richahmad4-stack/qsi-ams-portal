@@ -159,7 +159,7 @@ $visibleItems = static fn (array $items): array => array_values(array_filter($it
 $nav = [
     'Core' => $visibleItems([
         ['label' => 'Dashboard', 'icon' => 'fa-chart-line', 'href' => site_url('dashboard'), 'match' => 'dashboard'],
-        ['label' => 'Automation', 'icon' => 'fa-wand-magic-sparkles', 'href' => site_url('automation/cycle-generator'), 'match' => 'automation/cycle-generator', 'show' => $hasAnyRole(['super_admin', 'administrator']) && can('automation', 'view')],
+        ['label' => 'Cycle Builder', 'icon' => 'fa-wand-magic-sparkles', 'href' => site_url('automation/cycle-generator'), 'match' => 'automation/cycle-generator', 'show' => $hasAnyRole(['super_admin', 'administrator']) && can('automation', 'view')],
         ['label' => 'Workflow', 'icon' => 'fa-diagram-project', 'href' => site_url('workflow/certification'), 'match' => 'workflow/certification', 'show' => $isOperationsUser && can('clients', 'view')],
         ['label' => 'Clients', 'icon' => 'fa-building', 'href' => site_url('masters/clients'), 'match' => 'masters/clients', 'show' => $isOperationsUser && can('clients', 'view')],
         ['label' => 'My Audits', 'icon' => 'fa-clipboard-check', 'href' => site_url('dashboard/section/my_audits'), 'match' => 'dashboard/section/my_audits', 'show' => $isAuditUser],

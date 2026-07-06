@@ -3,10 +3,13 @@
 namespace App\Services;
 
 use CodeIgniter\Database\BaseConnection;
+use CodeIgniter\HTTP\Files\UploadedFile;
 use Config\Database;
 use DateInterval;
 use DateTimeImmutable;
 use RuntimeException;
+use SimpleXMLElement;
+use ZipArchive;
 
 class CycleAutomationService
 {
@@ -55,7 +58,7 @@ class CycleAutomationService
     public function generate(array $preview, int $tenantId, int $userId): array
     {
         if (! ($preview['can_generate'] ?? false)) {
-            throw new RuntimeException('Automation cannot generate while critical preview warnings exist.');
+            throw new RuntimeException('Cycle Builder cannot prepare the file while critical preview controls are open.');
         }
 
         $this->db->transStart();
@@ -88,7 +91,7 @@ class CycleAutomationService
         $this->db->transComplete();
 
         if ($this->db->transStatus() === false) {
-            throw new RuntimeException('Cycle automation failed during database generation.');
+            throw new RuntimeException('Cycle Builder could not complete the certification file preparation.');
         }
 
         return [
@@ -118,6 +121,279 @@ class CycleAutomationService
     public function medicalCategories(): array
     {
         return $this->db->table('medical_device_categories')->where('active', 1)->orderBy('code')->get()->getResultArray();
+    }
+
+    public function importBatch(UploadedFile $file, int $tenantId, int $userId): array
+    {
+        $extension = strtolower($file->getExtension());
+        if (! in_array($extension, ['csv', 'xlsx'], true)) {
+            throw new RuntimeException('Please upload CSV or XLSX only.');
+        }
+
+        $rows = $extension === 'csv'
+            ? $this->readCsvRows($file->getTempName())
+            : $this->readXlsxRows($file->getTempName());
+
+        if ($rows === []) {
+            throw new RuntimeException('The uploaded file does not contain client rows.');
+        }
+
+        $prepared = [];
+        $failed = [];
+        foreach ($rows as $index => $row) {
+            try {
+                $input = $this->inputFromBatchRow($row);
+                $preview = $this->preview($input, $tenantId, $userId);
+                if (! ($preview['can_generate'] ?? false)) {
+                    $messages = array_map(static fn (array $warning): string => (string) ($warning['message'] ?? ''), $preview['warnings'] ?? []);
+                    throw new RuntimeException(implode('; ', array_filter($messages)) ?: 'Preview controls were not satisfied.');
+                }
+                $result = $this->generate($preview, $tenantId, $userId);
+                $prepared[] = [
+                    'row' => $index + 2,
+                    'client_name' => $input['client_name'],
+                    'client_id' => $result['client_id'],
+                    'message' => 'Certification file prepared.',
+                ];
+            } catch (\Throwable $exception) {
+                $failed[] = [
+                    'row' => $index + 2,
+                    'client_name' => (string) ($row['client_name'] ?? ''),
+                    'message' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        return [
+            'prepared' => $prepared,
+            'failed' => $failed,
+            'total' => count($rows),
+        ];
+    }
+
+    private function readCsvRows(string $path): array
+    {
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            throw new RuntimeException('Unable to read uploaded CSV file.');
+        }
+
+        $headers = fgetcsv($handle);
+        if ($headers === false) {
+            fclose($handle);
+            return [];
+        }
+        $headers = array_map([$this, 'batchHeader'], $headers);
+        $rows = [];
+        while (($line = fgetcsv($handle)) !== false) {
+            if (implode('', array_map('trim', $line)) === '') {
+                continue;
+            }
+            $rows[] = $this->combineBatchRow($headers, $line);
+        }
+        fclose($handle);
+
+        return $rows;
+    }
+
+    private function readXlsxRows(string $path): array
+    {
+        if (! class_exists(ZipArchive::class)) {
+            throw new RuntimeException('XLSX support requires PHP ZipArchive. Please upload CSV on this machine.');
+        }
+
+        $zip = new ZipArchive();
+        if ($zip->open($path) !== true) {
+            throw new RuntimeException('Unable to read uploaded XLSX file.');
+        }
+
+        $sharedStrings = [];
+        $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
+        if ($sharedXml !== false) {
+            $shared = new SimpleXMLElement($sharedXml);
+            foreach ($shared->si as $item) {
+                $text = '';
+                if (isset($item->t)) {
+                    $text = (string) $item->t;
+                } elseif (isset($item->r)) {
+                    foreach ($item->r as $run) {
+                        $text .= (string) $run->t;
+                    }
+                }
+                $sharedStrings[] = $text;
+            }
+        }
+
+        $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        if ($sheetXml === false) {
+            throw new RuntimeException('The XLSX file must contain data on the first worksheet.');
+        }
+
+        $sheet = new SimpleXMLElement($sheetXml);
+        $matrix = [];
+        foreach ($sheet->sheetData->row as $row) {
+            $line = [];
+            foreach ($row->c as $cell) {
+                $ref = (string) $cell['r'];
+                $index = $this->excelColumnIndex(preg_replace('/\d+/', '', $ref));
+                $type = (string) $cell['t'];
+                $value = isset($cell->v) ? (string) $cell->v : '';
+                if ($type === 's') {
+                    $value = $sharedStrings[(int) $value] ?? '';
+                }
+                $line[$index] = $value;
+            }
+            if ($line !== []) {
+                ksort($line);
+                $max = max(array_keys($line));
+                $matrix[] = array_map(static fn (int $idx): string => (string) ($line[$idx] ?? ''), range(0, $max));
+            }
+        }
+
+        if ($matrix === []) {
+            return [];
+        }
+
+        $headers = array_map([$this, 'batchHeader'], array_shift($matrix));
+        $rows = [];
+        foreach ($matrix as $line) {
+            if (implode('', array_map('trim', $line)) === '') {
+                continue;
+            }
+            $rows[] = $this->combineBatchRow($headers, $line);
+        }
+
+        return $rows;
+    }
+
+    private function excelColumnIndex(string $letters): int
+    {
+        $letters = strtoupper($letters);
+        $number = 0;
+        for ($i = 0, $length = strlen($letters); $i < $length; $i++) {
+            $number = $number * 26 + (ord($letters[$i]) - 64);
+        }
+
+        return max(0, $number - 1);
+    }
+
+    private function combineBatchRow(array $headers, array $line): array
+    {
+        $row = [];
+        foreach ($headers as $index => $header) {
+            if ($header === '') {
+                continue;
+            }
+            $row[$header] = trim((string) ($line[$index] ?? ''));
+        }
+
+        return $row;
+    }
+
+    private function batchHeader(string $header): string
+    {
+        return strtolower(trim(preg_replace('/[^a-zA-Z0-9]+/', '_', $header), '_'));
+    }
+
+    private function inputFromBatchRow(array $row): array
+    {
+        $standardsText = (string) ($row['standards'] ?? $row['standard'] ?? '');
+
+        return [
+            'client_name' => $row['client_name'] ?? $row['company'] ?? '',
+            'client_address' => $row['client_address'] ?? $row['address'] ?? '',
+            'contact_person' => $row['contact_person'] ?? $row['management_representative'] ?? '',
+            'designation' => $row['designation'] ?? 'Management Representative',
+            'email' => $row['email'] ?? '',
+            'phone' => $row['phone'] ?? '',
+            'standard_ids' => $this->standardIdsFromText($standardsText),
+            'scope' => $row['scope'] ?? $row['certification_scope'] ?? '',
+            'iaf_code_id' => $this->referenceIdFromText('iaf_codes', (string) ($row['iaf_code'] ?? '')),
+            'food_category_id' => $this->referenceIdFromText('food_chain_categories', (string) ($row['food_category'] ?? '')),
+            'medical_category_id' => $this->referenceIdFromText('medical_device_categories', (string) ($row['medical_category'] ?? '')),
+            'employee_count' => $row['employee_count'] ?? $row['employees'] ?? 1,
+            'number_of_sites' => $row['number_of_sites'] ?? $row['sites'] ?? 1,
+            'certificate_issue_date' => $this->batchDate((string) ($row['certificate_issue_date'] ?? $row['issue_date'] ?? '')),
+            'certificate_expiry_date' => $this->batchDate((string) ($row['certificate_expiry_date'] ?? $row['expiry_date'] ?? ''), false),
+            'certification_status' => $row['certification_status'] ?? 'certified',
+            'current_cycle_stage' => $row['current_cycle_stage'] ?? 'auto',
+            'risk_category' => $row['risk_category'] ?? 'medium',
+            'special_notes' => $row['special_notes'] ?? '',
+            'ncr_mode' => $row['ncr_mode'] ?? 'none',
+            'generation_mode' => $row['generation_mode'] ?? 'standard',
+            'application_review_notes' => $row['application_review_notes'] ?? '',
+            'audit_evidence_summary' => $row['audit_evidence_summary'] ?? '',
+            'audit_plan_notes' => $row['audit_plan_notes'] ?? '',
+            'technical_review_notes' => $row['technical_review_notes'] ?? '',
+            'decision_basis' => $row['decision_basis'] ?? '',
+        ];
+    }
+
+    private function standardIdsFromText(string $text): array
+    {
+        $parts = array_filter(array_map('trim', preg_split('/[;,|]+/', $text) ?: []));
+        if ($parts === []) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($parts as $part) {
+            $standard = $this->db->table('standards')
+                ->select('id')
+                ->where('active', 1)
+                ->groupStart()
+                    ->where('code', $part)
+                    ->orLike('code', $part)
+                    ->orLike('name', $part)
+                ->groupEnd()
+                ->orderBy('id', 'ASC')
+                ->get(1)
+                ->getRowArray();
+            if ($standard !== null) {
+                $ids[] = (int) $standard['id'];
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    private function referenceIdFromText(string $table, string $text): ?int
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return null;
+        }
+
+        $row = $this->db->table($table)
+            ->select('id')
+            ->groupStart()
+                ->where('code', $text)
+                ->orLike('code', $text)
+                ->orLike('title', $text)
+            ->groupEnd()
+            ->orderBy('id', 'ASC')
+            ->get(1)
+            ->getRowArray();
+
+        return $row === null ? null : (int) $row['id'];
+    }
+
+    private function batchDate(string $value, bool $required = true): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            if ($required) {
+                throw new RuntimeException('Certificate issue date is required.');
+            }
+
+            return '';
+        }
+        if (is_numeric($value)) {
+            return (new DateTimeImmutable('1899-12-30'))->add(new DateInterval('P' . (int) $value . 'D'))->format('Y-m-d');
+        }
+
+        return (new DateTimeImmutable($value))->format('Y-m-d');
     }
 
     private function normalizeInput(array $input): array
@@ -150,7 +426,7 @@ class CycleAutomationService
             'risk_category' => trim((string) ($input['risk_category'] ?? 'medium')) ?: 'medium',
             'special_notes' => trim((string) ($input['special_notes'] ?? '')),
             'ncr_mode' => trim((string) ($input['ncr_mode'] ?? 'sample_minor')) ?: 'sample_minor',
-            'generation_mode' => trim((string) ($input['generation_mode'] ?? 'draft')) ?: 'draft',
+            'generation_mode' => trim((string) ($input['generation_mode'] ?? 'standard')) ?: 'standard',
             'application_review_notes' => trim((string) ($input['application_review_notes'] ?? '')),
             'audit_evidence_summary' => trim((string) ($input['audit_evidence_summary'] ?? '')),
             'audit_plan_notes' => trim((string) ($input['audit_plan_notes'] ?? '')),
@@ -381,10 +657,10 @@ class CycleAutomationService
             $warnings[] = ['level' => 'info', 'message' => 'Custom certificate expiry date is being used. Verify it matches the approved cycle.'];
         }
         if (! $this->historicalConfirmed($input)) {
-            $warnings[] = ['level' => 'info', 'message' => 'Controlled draft mode: audit reports, NCR/CAPA closure, Technical Review, Decision, GM approval and certificate issue will remain pending until real evidence is entered and approved.'];
+            $warnings[] = ['level' => 'info', 'message' => 'Standard mode: the workflow pack will be prepared. Audit evidence, NCR/CAPA closure, Technical Review, Decision, GM approval and certificate issue remain controlled by the responsible roles.'];
         }
         if (($input['generation_mode'] ?? '') === 'historical_confirmed' && trim((string) ($input['audit_evidence_summary'] ?? '')) === '') {
-            $warnings[] = ['level' => 'critical', 'message' => 'Historical completed mode requires real audit evidence summary. Otherwise use controlled draft mode.'];
+            $warnings[] = ['level' => 'critical', 'message' => 'Completed historical file mode requires actual audit evidence summary. Otherwise use standard workflow pack mode.'];
         }
         if (($input['generation_mode'] ?? '') === 'historical_confirmed' && trim((string) ($input['technical_review_notes'] ?? '')) === '') {
             $warnings[] = ['level' => 'critical', 'message' => 'Historical completed mode requires Technical Review notes from the actual file.'];
@@ -419,7 +695,7 @@ class CycleAutomationService
             'certificate_issue_date' => $cycle['issue'],
             'initial_certification_date' => $cycle['issue'],
             'certificate_expiry_date' => $cycle['expiry'],
-            'notes' => trim("Generated by Automation / Cycle Generator.\n" . $input['special_notes']),
+            'notes' => trim("Prepared by Cycle Builder.\n" . $input['special_notes']),
             'is_legacy' => 0,
             'created_by' => $userId,
             'created_at' => date('Y-m-d H:i:s'),
@@ -456,7 +732,7 @@ class CycleAutomationService
             $this->db->table('client_processes')->insert([
                 'client_id' => $clientId,
                 'process_name' => $process,
-                'description' => 'Generated cycle process coverage for ' . $process . '.',
+                'description' => 'Cycle process coverage for ' . $process . '.',
             ]);
         }
     }
@@ -481,7 +757,7 @@ class CycleAutomationService
             'cb_review_status' => $confirmed ? 'accepted' : 'pending',
             'cb_review_notes' => $confirmed
                 ? $this->nonEmpty($input['application_review_notes'], 'Historical application reviewed and accepted from supplied file information.')
-                : 'Automation prepared the application record. Certification Body review must be completed by the Technical Manager.',
+                : 'System prepared the application record. Certification Body review must be completed by the Technical Manager.',
             'reviewed_by' => $confirmed ? ($preview['assignments']['technical_reviewer']['user_id'] ?? $userId) : null,
             'reviewed_at' => $confirmed ? $preview['timeline']['application_review'] . ' 11:30:00' : null,
             'created_by' => $userId,
@@ -495,8 +771,142 @@ class CycleAutomationService
                 'standard_code' => (string) $standard['code'],
             ]);
         }
+        $this->createApplicationResponses($applicationId, $userId, $input, $preview);
 
         return $applicationId;
+    }
+
+    private function createApplicationResponses(int $applicationId, int $userId, array $input, array $preview): void
+    {
+        $lead = $preview['assignments']['lead_auditor']['full_name'] ?? '';
+        $standards = implode(', ', array_column($preview['standards'], 'code'));
+        $preferredDates = 'Stage 1: ' . ($preview['events']['initial_stage1']['start'] ?? '')
+            . '; Stage 2: ' . ($preview['events']['initial_stage2']['start'] ?? '');
+        $rows = [
+            'Audit Preferences' => [
+                'Language of Audit' => 'English',
+                'Preferred Audit Dates' => $preferredDates,
+                'Preferred Auditor' => $lead,
+            ],
+            'Background Information' => [
+                'Has previous contact been made with QSI personnel?' => 'No',
+                'If yes, state the person name and meeting/visit details' => 'Not applicable',
+                'Where did you hear about QSI?' => 'Client enquiry',
+                'Do you currently use any other QSI services?' => 'No',
+            ],
+            'Certification Required' => [
+                'Integrated Management System' => count($preview['standards']) > 1 ? 'Yes - ' . $standards : 'No',
+                'Legal and Statutory Requirements' => 'Applicable legal, statutory, regulatory and customer requirements related to the certification scope will be verified during the audit.',
+                'Any incident / accident in the past?' => 'No incident reported at application stage',
+            ],
+            'Company / Organisation Details' => [
+                'Company Name' => $input['client_name'],
+                'Legal Name' => $input['client_name'],
+                'Commercial Registration Number' => 'To be provided by client',
+                'VAT Number' => 'To be provided by client',
+                'License Number' => 'To be provided by client',
+                'Address' => $input['client_address'],
+                'Country' => 'To be confirmed',
+                'City' => 'To be confirmed',
+                'Website' => 'To be provided by client',
+                'Contact Person' => $input['contact_person'],
+                'Designation' => $input['designation'],
+                'Email' => $input['email'],
+                'Phone' => $input['phone'],
+                'Mobile' => $input['phone'],
+            ],
+            'Consultant Information' => [
+                'Consultant Used' => 'No',
+            ],
+            'Employees and Working Patterns' => [
+                'Number of Employees' => (string) $input['employee_count'],
+                'Number of employees in the activities to be certified' => (string) $input['employee_count'],
+                'Permanent Employees' => (string) $input['employee_count'],
+                'Temporary Employees' => '0',
+                'Contract Workers' => '0',
+                'Number of Shifts' => '1',
+                'Working Hours' => '08:00 to 17:00',
+                'Seasonal Operations' => 'No',
+            ],
+            'Existing Registrations / Transfer' => [
+                'Previous Certification' => 'No',
+                'Certification Body' => 'Not applicable',
+                'Certificate Number' => 'Not applicable',
+                'Transfer Certification' => 'No',
+                'Certification Status' => ucwords(str_replace('_', ' ', $input['certification_status'])),
+                'Expiry Date' => $preview['cycle']['expiry'],
+                'Audit Reports Available' => 'Not applicable',
+                'NC Status' => 'Not applicable',
+                'Customer Complaints' => 'No complaint reported at application stage',
+            ],
+            'Locations' => [
+                'Number of Sites' => (string) $input['number_of_sites'],
+                'Head Office' => $input['client_address'],
+                'Branches' => $input['number_of_sites'] > 1 ? 'Additional sites to be listed by client' : 'Not applicable',
+                'Remote Locations' => 'Not applicable',
+            ],
+            'Management System Readiness' => [
+                'Management system implemented' => 'To be verified during Stage 1',
+                'Internal audit completed' => 'To be verified during Stage 1',
+                'Management review completed' => 'To be verified during Stage 1',
+                'Certification scope requested' => $input['scope'],
+            ],
+        ];
+
+        $order = 1;
+        foreach ($rows as $section => $questions) {
+            foreach ($questions as $question => $answer) {
+                $key = 'cycle_' . strtolower(preg_replace('/[^a-z0-9]+/i', '_', $section . '_' . $question));
+                $questionLibraryId = $this->ensureQuestionLibrary($key, $section, $question, $order);
+                $this->db->table('application_questions')->insert([
+                    'application_id' => $applicationId,
+                    'question_library_id' => $questionLibraryId,
+                    'question_key' => $key,
+                    'question_text' => $question,
+                    'question_type' => 'text',
+                    'section' => $section,
+                    'display_order' => $order,
+                    'mandatory' => 0,
+                    'validation_rules' => json_encode([], JSON_THROW_ON_ERROR),
+                    'help_text' => null,
+                    'standard_codes' => json_encode(array_values(array_column($preview['standards'], 'code')), JSON_THROW_ON_ERROR),
+                ]);
+                $applicationQuestionId = (int) $this->db->insertID();
+                $this->db->table('application_answers')->insert([
+                    'application_id' => $applicationId,
+                    'application_question_id' => $applicationQuestionId,
+                    'question_library_id' => $questionLibraryId,
+                    'answer_text' => $answer,
+                    'answered_by' => $userId,
+                    'answered_at' => $preview['timeline']['application_submitted'] . ' 10:15:00',
+                ]);
+                $order++;
+            }
+        }
+    }
+
+    private function ensureQuestionLibrary(string $key, string $section, string $question, int $order): int
+    {
+        $existing = $this->db->table('question_library')->select('id')->where('question_key', $key)->get(1)->getRowArray();
+        if ($existing !== null) {
+            return (int) $existing['id'];
+        }
+
+        $this->db->table('question_library')->insert([
+            'question_key' => $key,
+            'question_text' => $question,
+            'question_type' => 'text',
+            'applicable_standards' => json_encode([], JSON_THROW_ON_ERROR),
+            'mandatory' => 0,
+            'section' => $section,
+            'display_order' => $order,
+            'validation_rules' => json_encode([], JSON_THROW_ON_ERROR),
+            'help_text' => null,
+            'default_answer' => null,
+            'active' => 1,
+        ]);
+
+        return (int) $this->db->insertID();
     }
 
     private function createApplicationReview(int $clientId, int $applicationId, array $preview): int
@@ -523,7 +933,7 @@ class CycleAutomationService
             'stage2_days' => (float) $duration['stage2_days'],
             'review_notes' => $confirmed
                 ? $this->nonEmpty($input['application_review_notes'], 'Historical application review imported from supplied file information.')
-                : 'Automation prepared a draft application review. Technical Manager shall verify scope, competence, resources, impartiality, audit time and selected standards before approval.',
+                : 'System prepared the application review. Technical Manager shall verify scope, competence, resources, impartiality, audit time and selected standards before approval.',
             'review_payload' => json_encode([
                 'standards_text' => implode(', ', array_column($preview['standards'], 'code')),
                 'effective_employees' => $input['employee_count'],
@@ -585,7 +995,7 @@ class CycleAutomationService
             'currency' => 'SAR',
             'proposal_payload' => json_encode([
                 'payment_terms' => '50% before Stage 1 audit and 50% before certificate issue.',
-                'automation' => true,
+                'system_prepared' => true,
                 'automation_mode' => $preview['input']['generation_mode'],
                 'client_acceptance_note' => $confirmed ? 'Historical acceptance imported from supplied file information.' : 'Client acceptance must be recorded before contract approval.',
             ], JSON_THROW_ON_ERROR),
@@ -630,7 +1040,7 @@ class CycleAutomationService
             'contract_payload' => json_encode([
                 'scope' => $input['scope'],
                 'cycle' => $preview['cycle'],
-                'automation' => true,
+                'system_prepared' => true,
                 'automation_mode' => $input['generation_mode'],
                 'contract_note' => $confirmed ? 'Historical signed contract imported from supplied file information.' : 'Contract requires client and QSI signatures before approval.',
             ], JSON_THROW_ON_ERROR),
@@ -669,10 +1079,10 @@ class CycleAutomationService
                 'invoice_id' => $invoiceId,
                 'payment_date' => $preview['timeline']['contract_signed'],
                 'amount' => $amount,
-                'method' => 'Automation entry',
+                'method' => 'System entry',
                 'reference_number' => $this->number('PAY-AUTO', $clientId),
                 'received_by' => $preview['assignments']['finance']['user_id'] ?? null,
-                'notes' => 'Payment status generated by cycle automation.',
+                'notes' => 'Payment status prepared from the certification cycle file.',
             ]);
         }
     }
@@ -708,7 +1118,7 @@ class CycleAutomationService
                 'surveillance1_days' => number_format((float) $duration['surveillance1_days'], 2),
                 'surveillance2_days' => number_format((float) $duration['surveillance2_days'], 2),
                 'recertification_days' => number_format((float) $duration['recertification_days'], 2),
-                'legend_notes' => 'Generated by Automation / Cycle Generator.',
+                'legend_notes' => 'Prepared by Cycle Builder.',
             ], JSON_THROW_ON_ERROR),
             'prepared_by_name' => $preview['assignments']['certification_manager']['full_name'] ?? '',
             'prepared_date' => $preview['timeline']['audit_program'],
@@ -783,7 +1193,7 @@ class CycleAutomationService
                     'competence_confirmed' => true,
                     'impartiality_confirmed' => true,
                     'conflict_of_interest' => false,
-                    'notes' => 'Generated by cycle automation after conflict preview.',
+                    'notes' => 'Prepared after competence and impartiality checks.',
                 ], JSON_THROW_ON_ERROR),
             ]);
         }
@@ -812,30 +1222,64 @@ class CycleAutomationService
     private function createPlanItems(int $planId, string $type, array $event, array $preview): void
     {
         $processes = explode(',', $this->defaultProcesses($preview['standards']));
-        $slots = [
-            ['09:00:00', '09:30:00', 'Opening meeting', 'Top Management', 'Audit objectives, scope and criteria'],
-            ['09:30:00', '11:30:00', 'Process audit', 'Operations', trim($processes[0] ?? 'Core process')],
-            ['11:30:00', '12:30:00', 'Support process audit', 'Support', trim($processes[1] ?? 'Support process')],
-            ['13:30:00', '15:00:00', 'Performance review', 'Quality / Food Safety / HSE', 'Monitoring, internal audit and management review'],
-            ['15:00:00', '16:00:00', 'Closing meeting', 'Top Management', 'Findings, conclusions and next steps'],
-        ];
         $auditors = array_values(array_filter([$preview['assignments']['lead_auditor'] ?? null, $preview['assignments']['auditor'] ?? null]));
-        foreach ($slots as $index => [$start, $end, $activity, $department, $process]) {
-            $auditor = $auditors[$index % max(1, count($auditors))] ?? null;
-            $this->db->table('audit_plan_items')->insert([
-                'audit_plan_id' => $planId,
-                'audit_date' => $event['start'],
-                'start_time' => $start,
-                'end_time' => $end,
-                'activity_type' => $activity,
-                'department' => $department,
-                'process_name' => $process,
-                'clauses' => $this->stageClauseFocus($type),
-                'auditor_personnel_id' => $auditor['id'] ?? null,
-                'notes' => $this->nonEmpty($preview['input']['audit_plan_notes'], 'Generated by cycle automation; edit timings and process coverage where needed.'),
-                'sort_order' => $index + 1,
-            ]);
+        $calendarDays = max(1, (int) ($event['calendar_days'] ?? 1));
+        $sort = 1;
+
+        for ($day = 0; $day < $calendarDays; $day++) {
+            $date = (new DateTimeImmutable($event['start']))->add(new DateInterval('P' . $day . 'D'))->format('Y-m-d');
+            $slots = $this->auditPlanSlots($type, $day, $processes);
+            foreach ($slots as $index => [$start, $end, $activity, $department, $process, $clauses]) {
+                $auditor = $auditors[$index % max(1, count($auditors))] ?? null;
+                if (stripos($activity, 'lunch') !== false) {
+                    $auditor = null;
+                }
+                $this->db->table('audit_plan_items')->insert([
+                    'audit_plan_id' => $planId,
+                    'audit_date' => $date,
+                    'start_time' => $start,
+                    'end_time' => $end,
+                    'activity_type' => $activity,
+                    'department' => $department,
+                    'process_name' => $process,
+                    'clauses' => $clauses,
+                    'auditor_personnel_id' => $auditor['id'] ?? null,
+                    'notes' => $this->nonEmpty($preview['input']['audit_plan_notes'], 'Prepared by Cycle Builder; edit timings and process coverage where needed.'),
+                    'sort_order' => $sort++,
+                ]);
+            }
         }
+    }
+
+    private function auditPlanSlots(string $type, int $day, array $processes): array
+    {
+        $core1 = trim($processes[$day % max(1, count($processes))] ?? 'Core process');
+        $core2 = trim($processes[($day + 1) % max(1, count($processes))] ?? 'Support process');
+
+        if ($type === 'initial_stage1') {
+            return [
+                ['09:00:00', '09:30:00', 'Opening meeting', 'Top Management', 'Audit objectives, scope, criteria, confidentiality and communication', 'ISO/IEC 17021-1 planning requirements'],
+                ['09:30:00', '10:45:00', 'Document and scope review', 'Management system', 'Scope, boundaries, sites, processes and exclusions', '4.1, 4.2, 4.3, 4.4'],
+                ['10:45:00', '12:30:00', 'Readiness review', 'Management / process owners', 'Policy, objectives, responsibilities, legal and customer requirements', '5.1, 5.2, 5.3, 6.1, 6.2'],
+                ['12:30:00', '13:30:00', 'Lunch break', '', '', ''],
+                ['13:30:00', '14:45:00', 'Internal audit and management review review', 'Quality / food safety / HSE', 'Internal audit, management review and corrective action readiness', '9.2, 9.3, 10.2'],
+                ['14:45:00', '15:45:00', 'Site tour and Stage 2 readiness confirmation', 'Operational areas', $core1, '7.1, 7.2, 7.5, 8.1'],
+                ['15:45:00', '16:30:00', 'Stage 1 conclusions and Stage 2 planning inputs', 'Audit team', 'Readiness issues, Stage 2 focus, audit programme confirmation', 'Stage 1 conclusion'],
+                ['16:30:00', '17:00:00', 'Closing meeting', 'Top Management', 'Stage 1 result and actions before Stage 2', 'Audit conclusion'],
+            ];
+        }
+
+        return [
+            ['09:00:00', '09:30:00', 'Opening meeting', 'Top Management', 'Audit objectives, scope, criteria, audit team and plan confirmation', 'ISO/IEC 17021-1 planning requirements'],
+            ['09:30:00', '10:45:00', 'Process audit', 'Operations', $core1, '8.1 and applicable operational controls'],
+            ['10:45:00', '12:30:00', 'Process audit and record sampling', 'Operations / support', $core2, '7.1, 7.2, 7.5, 8.x'],
+            ['12:30:00', '13:30:00', 'Lunch break', '', '', ''],
+            ['13:30:00', '14:30:00', 'Performance evaluation', 'Quality / food safety / HSE', 'Monitoring, measurement, analysis and evaluation', '9.1'],
+            ['14:30:00', '15:30:00', 'Internal audit and management review', 'Management system', 'Audit programme, audit results, management review outputs and actions', '9.2, 9.3'],
+            ['15:30:00', '16:15:00', 'Improvement and NCR/CAPA review', 'Process owners', 'Nonconformity, correction, root cause, corrective action and effectiveness', '10.1, 10.2, 10.3'],
+            ['16:15:00', '16:40:00', 'Audit team meeting', 'Audit team', 'Review evidence, agree findings and conclusions', 'Audit conclusion'],
+            ['16:40:00', '17:00:00', 'Closing meeting', 'Top Management', 'Audit findings, conclusion, NCR/CAPA timeline and next steps', 'Audit conclusion'],
+        ];
     }
 
     private function createReport(int $tenantId, int $eventId, string $type, array $event, array $preview): int
@@ -848,7 +1292,7 @@ class CycleAutomationService
             'audit_criteria' => implode(', ', array_column($preview['standards'], 'code')) . ', client procedures, legal and customer requirements.',
             'audit_scope' => $preview['input']['scope'],
             'recommendation' => $type === 'initial_stage1' ? 'Proceed to Stage 2 subject to readiness actions.' : 'Maintain/grant certification subject to NCR/CAPA status.',
-            'automation' => true,
+            'system_prepared' => true,
             'automation_mode' => $preview['input']['generation_mode'],
             'audit_evidence_summary' => $preview['input']['audit_evidence_summary'],
         ];
@@ -862,7 +1306,7 @@ class CycleAutomationService
             'editable_payload' => json_encode([
                 'auditor_notes' => $confirmed
                     ? $preview['input']['audit_evidence_summary']
-                    : 'Controlled draft only. Auditor must replace clause notes with actual sampled evidence before report submission.',
+                    : 'Auditor shall complete clause notes with actual sampled evidence before report submission.',
             ], JSON_THROW_ON_ERROR),
             'prepared_by' => $lead['user_id'] ?? null,
             'approved_by' => $confirmed && $event['status'] !== 'planned' ? ($reviewer['user_id'] ?? null) : null,
@@ -880,11 +1324,11 @@ class CycleAutomationService
                 'section_content' => $confirmed
                     ? $this->conformityText($preview['input']['client_name'], $clause, $type, $preview['input']['audit_evidence_summary'])
                     : $this->draftConformityText($preview['input']['client_name'], $clause, $type),
-                'source_type' => 'automation_draft',
+                'source_type' => 'system_prepared',
                 'auditor_confirmed' => $confirmed && $event['status'] !== 'planned' ? 1 : 0,
                 'confirmed_by_user_id' => $confirmed && $event['status'] !== 'planned' ? ($lead['user_id'] ?? null) : null,
                 'confirmed_at' => $confirmed && $event['status'] !== 'planned' ? $event['end'] . ' 14:30:00' : null,
-                'confirmation_note' => $confirmed && $event['status'] !== 'planned' ? 'Confirmed from supplied historical audit evidence summary.' : 'Auditor confirmation required. Do not treat automation draft as audit evidence.',
+                'confirmation_note' => $confirmed && $event['status'] !== 'planned' ? 'Confirmed from supplied historical audit evidence summary.' : 'Auditor confirmation required before report submission.',
                 'sort_order' => $sort + 1,
             ]);
         }
@@ -925,7 +1369,7 @@ class CycleAutomationService
                 'responsible_person' => $preview['input']['contact_person'],
                 'target_date' => $target,
                 'verification' => $closed ? 'Corrective action evidence reviewed and accepted from supplied historical file.' : 'Pending auditor verification.',
-                'closure_notes' => $closed ? 'Closed from confirmed historical file evidence.' : 'Open for client action. Automation did not close this NCR.',
+                'closure_notes' => $closed ? 'Closed from confirmed historical file evidence.' : 'Open for client action.',
                 'status' => $closed ? 'closed' : 'open',
                 'closed_at' => $closed ? (new DateTimeImmutable($target))->add(new DateInterval('P3D'))->format('Y-m-d 15:00:00') : null,
                 'created_by' => $userId,
@@ -950,7 +1394,7 @@ class CycleAutomationService
                 'evidence_reference' => $this->docPrefix($preview['input']['client_name']) . '-' . $clause['clause_number'] . '-CAPA-' . str_pad((string) $i, 3, '0', STR_PAD_LEFT),
                 'verification' => $closed ? 'Evidence accepted by audit team from supplied historical file.' : 'Pending review.',
                 'effectiveness' => $closed ? 'No repeat issue in follow-up sample.' : 'Pending effectiveness verification.',
-                'closure_notes' => $closed ? 'Closed from confirmed historical file evidence.' : 'Awaiting evidence. Automation did not close this CAPA.',
+                'closure_notes' => $closed ? 'Closed from confirmed historical file evidence.' : 'Awaiting evidence.',
                 'status' => $closed ? 'closed' : 'open',
                 'closed_at' => $closed ? (new DateTimeImmutable($target))->add(new DateInterval('P5D'))->format('Y-m-d 13:00:00') : null,
                 'created_by' => $userId,
@@ -970,12 +1414,12 @@ class CycleAutomationService
             'audit_event_id' => $eventId,
             'reviewer_personnel_id' => (int) ($person['id'] ?? 0),
             'checklist_payload' => json_encode([
-                'automation' => true,
+                'system_prepared' => true,
                 'automation_mode' => $preview['input']['generation_mode'],
                 'ncr_count' => count($ncrIds),
                 'review_notes' => $approved
                     ? $preview['input']['technical_review_notes']
-                    : 'Technical review requires competent reviewer verification of the actual audit file. Automation prepared the checklist only.',
+                    : 'Technical review requires competent reviewer verification of the actual audit file.',
                 'audit_evidence_summary' => $preview['input']['audit_evidence_summary'],
             ], JSON_THROW_ON_ERROR),
             'competency_confirmed' => $approved ? 1 : 0,
@@ -1013,7 +1457,7 @@ class CycleAutomationService
             'reason' => $approved ? $preview['input']['decision_basis'] : 'Decision pending actual Technical Review approval and Decision Maker confirmation.',
             'electronic_signature' => $approved ? (($person['full_name'] ?? 'Decision Maker') . ' / confirmed historical import') : null,
             'decision_payload' => json_encode([
-                'automation' => true,
+                'system_prepared' => true,
                 'automation_mode' => $preview['input']['generation_mode'],
                 'event_type' => $type,
                 'declaration_confirmed' => $approved,
@@ -1083,7 +1527,7 @@ class CycleAutomationService
             'communication_rating' => $confirmed ? 4 : null,
             'auditor_rating' => $confirmed ? 4 : null,
             'report_quality_rating' => $confirmed ? 4 : null,
-            'comments' => $confirmed ? 'Historical feedback summary imported by automation.' : 'Feedback record prepared. Actual client feedback must be collected and entered.',
+            'comments' => $confirmed ? 'Historical feedback summary entered from supplied records.' : 'Feedback record prepared. Actual client feedback must be collected and entered.',
             'improvement_suggestion' => $confirmed ? 'Review historical comments and replace with actual client text where available.' : null,
             'status' => $confirmed ? 'submitted' : 'draft',
             'created_by' => (int) service('session')->get('user_id'),
@@ -1212,7 +1656,7 @@ class CycleAutomationService
         $ref = $this->docPrefix($clientName) . '-' . ($clause['clause_number'] ?? 'GEN') . '-001';
         $evidence = $this->clauseEvidenceTrail($clause);
 
-        return 'AUDITOR INPUT REQUIRED - automation prepared this checklist row only. '
+        return 'AUDITOR TO COMPLETE - system prepared this checklist row. '
             . 'Before submitting the ' . str_replace('_', ' ', $type) . ' report, replace this note with actual sampled conformity evidence for '
             . (string) ($clause['standard_code'] ?? '') . ' ' . (string) ($clause['clause_number'] ?? '') . ' - ' . (string) ($clause['clause_title'] ?? '')
             . '. Suggested evidence trails for this clause: ' . $evidence

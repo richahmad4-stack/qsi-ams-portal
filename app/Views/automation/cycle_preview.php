@@ -27,7 +27,7 @@ $warnings = $preview['warnings'];
                 <input type="hidden" name="preview_payload" value="<?= esc($encodedPreview) ?>">
                 <button class="btn btn-primary" type="submit" <?= $preview['can_generate'] ? '' : 'disabled' ?>>
                     <i class="fa-solid fa-wand-magic-sparkles me-1" aria-hidden="true"></i>
-                    Generate full cycle
+                    Prepare full cycle
                 </button>
             </form>
         </div>
@@ -76,7 +76,7 @@ $warnings = $preview['warnings'];
             <table class="table table-sm">
                 <tr>
                     <th>Generation mode</th>
-                    <td><?= esc($input['generation_mode'] === 'historical_confirmed' ? 'Historical completed file' : 'Controlled draft') ?></td>
+                    <td><?= esc($input['generation_mode'] === 'historical_confirmed' ? 'Completed historical file from supplied records' : 'Complete workflow pack') ?></td>
                 </tr>
                 <?php foreach ($assignments as $role => $person): ?>
                     <tr>
@@ -111,8 +111,8 @@ $warnings = $preview['warnings'];
     <div class="table-responsive">
         <table class="table table-sm">
             <tr><th>Application review basis</th><td><?= esc($input['application_review_notes'] ?: 'To be completed during application review') ?></td></tr>
-            <tr><th>Audit plan notes</th><td><?= esc($input['audit_plan_notes'] ?: 'Default process plan will be prepared and must be edited if site/process timing differs') ?></td></tr>
-            <tr><th>Audit evidence summary</th><td><?= esc($input['audit_evidence_summary'] ?: 'No real evidence supplied. Report clauses will remain unconfirmed drafts.') ?></td></tr>
+            <tr><th>Audit plan notes</th><td><?= esc($input['audit_plan_notes'] ?: 'Process timing will be prepared from selected scope, standards and audit duration') ?></td></tr>
+            <tr><th>Audit evidence summary</th><td><?= esc($input['audit_evidence_summary'] ?: 'Auditor will complete clause evidence during audit execution') ?></td></tr>
             <tr><th>Technical review notes</th><td><?= esc($input['technical_review_notes'] ?: 'Technical Review will remain pending') ?></td></tr>
             <tr><th>Decision basis</th><td><?= esc($input['decision_basis'] ?: 'Decision and certificate issue will remain pending') ?></td></tr>
         </table>
