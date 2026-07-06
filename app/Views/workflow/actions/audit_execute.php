@@ -305,10 +305,10 @@ $eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
                                                                 type="button"
                                                                 data-ai-target="conformity_note_<?= esc($clauseId) ?>"
                                                                 data-ai-status="autosave_status_<?= esc($clauseId) ?>"
-                                                                data-ai-url="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/clauses/' . $clauseId . '/ai-conformity') ?>"
+                                                                data-ai-url="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/clauses/' . $clauseId . '/clause-pool') ?>"
                                                             >
                                                                 <i class="fa-solid fa-wand-magic-sparkles me-1" aria-hidden="true"></i>
-                                                                Generate AI auditor draft
+                                                                Generate from Clause Pool
                                                             </button>
                                                             <button class="btn btn-outline-secondary btn-sm" type="button" data-fill-target="conformity_note_<?= esc($clauseId) ?>" data-fill-text="<?= esc($clause['predefined_conformity_note'] ?? '', 'attr') ?>">
                                                                 <i class="fa-solid fa-rotate-left me-1" aria-hidden="true"></i>

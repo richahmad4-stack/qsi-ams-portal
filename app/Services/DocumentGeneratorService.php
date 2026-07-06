@@ -208,9 +208,31 @@ class DocumentGeneratorService
                 'section_key' => 'conformity',
                 'section_title' => trim((string) $clause['standard_code'] . ' ' . (string) $clause['clause_number'] . ' - ' . (string) $clause['clause_title']),
                 'section_content' => $this->narratives->conformityNote($client, $event, $clause, $planItems, $auditTeam),
+                'source_type' => 'clause_pool',
+                'auditor_confirmed' => 1,
+                'confirmed_by_user_id' => $this->leadAuditorUserId($auditTeam),
+                'confirmed_at' => date('Y-m-d H:i:s'),
+                'confirmation_note' => 'Auto-confirmed on behalf of the assigned auditor from approved Clause Pool / system content.',
                 'sort_order' => $index + 1,
             ]);
         }
+    }
+
+    private function leadAuditorUserId(array $auditTeam): ?int
+    {
+        foreach ($auditTeam as $member) {
+            if (($member['appointment_role'] ?? '') === 'lead_auditor' && ! empty($member['user_id'])) {
+                return (int) $member['user_id'];
+            }
+        }
+
+        foreach ($auditTeam as $member) {
+            if (! empty($member['user_id'])) {
+                return (int) $member['user_id'];
+            }
+        }
+
+        return null;
     }
 
     private function renderHtml(string $documentKey, string $title, array $client, array $data): string
@@ -2791,7 +2813,7 @@ class DocumentGeneratorService
     private function appointmentsForEvent(int $eventId): array
     {
         return $this->db->table('auditor_appointments')
-            ->select('auditor_appointments.*, personnel.full_name, users.full_name AS appointed_by_name')
+            ->select('auditor_appointments.*, personnel.full_name, personnel.user_id, users.full_name AS appointed_by_name')
             ->join('personnel', 'personnel.id = auditor_appointments.personnel_id')
             ->join('users', 'users.id = auditor_appointments.appointed_by', 'left')
             ->where('auditor_appointments.audit_event_id', $eventId)

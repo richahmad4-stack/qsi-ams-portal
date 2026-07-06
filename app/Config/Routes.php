@@ -57,6 +57,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('workflow/certification/(:num)/audit-events/(:num)/execute', 'Workflow\WorkflowActionController::executeAudit/$1/$2', ['filter' => 'permission:reports,edit']);
     $routes->get('workflow/certification/(:num)/audit-events/(:num)/file', 'Workflow\WorkflowActionController::auditEventFile/$1/$2', ['filter' => 'permission:reports,view']);
     $routes->post('workflow/certification/(:num)/audit-events/(:num)/findings', 'Workflow\WorkflowActionController::saveFinding/$1/$2', ['filter' => 'permission:reports,edit']);
+    $routes->post('workflow/certification/(:num)/audit-events/(:num)/clauses/(:num)/clause-pool', 'Workflow\WorkflowActionController::generateConformityDraft/$1/$2/$3', ['filter' => 'permission:reports,edit']);
     $routes->post('workflow/certification/(:num)/audit-events/(:num)/clauses/(:num)/ai-conformity', 'Workflow\WorkflowActionController::generateConformityDraft/$1/$2/$3', ['filter' => 'permission:reports,edit']);
     $routes->post('workflow/certification/(:num)/audit-events/(:num)/findings/(:num)/autosave', 'Workflow\WorkflowActionController::autosaveConformityNote/$1/$2/$3', ['filter' => 'permission:reports,edit']);
     $routes->post('workflow/certification/(:num)/audit-events/(:num)/findings/(:num)/confirm', 'Workflow\WorkflowActionController::confirmReportSection/$1/$2/$3', ['filter' => 'permission:reports,edit']);
@@ -130,6 +131,15 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('masters/clauses/(:num)/edit', 'Masters\ClauseLibraryController::edit/$1', ['filter' => 'permission:clause_library,edit']);
     $routes->post('masters/clauses/(:num)', 'Masters\ClauseLibraryController::update/$1', ['filter' => 'permission:clause_library,edit']);
     $routes->post('masters/clauses/(:num)/deactivate', 'Masters\ClauseLibraryController::deactivate/$1', ['filter' => 'permission:clause_library,delete']);
+
+    $routes->get('masters/clause-pool', 'Masters\ClauseContentPoolController::index', ['filter' => 'permission:clause_library,view']);
+    $routes->get('masters/clause-pool/new', 'Masters\ClauseContentPoolController::new', ['filter' => 'permission:clause_library,create']);
+    $routes->post('masters/clause-pool', 'Masters\ClauseContentPoolController::create', ['filter' => 'permission:clause_library,create']);
+    $routes->get('masters/clause-pool/export', 'Masters\ClauseContentPoolController::export', ['filter' => 'permission:clause_library,view']);
+    $routes->post('masters/clause-pool/import', 'Masters\ClauseContentPoolController::import', ['filter' => 'permission:clause_library,edit']);
+    $routes->get('masters/clause-pool/(:num)/edit', 'Masters\ClauseContentPoolController::edit/$1', ['filter' => 'permission:clause_library,edit']);
+    $routes->post('masters/clause-pool/(:num)', 'Masters\ClauseContentPoolController::update/$1', ['filter' => 'permission:clause_library,edit']);
+    $routes->post('masters/clause-pool/(:num)/deactivate', 'Masters\ClauseContentPoolController::deactivate/$1', ['filter' => 'permission:clause_library,delete']);
 
     $routes->get('masters/templates', 'Masters\DocumentTemplateController::index', ['filter' => 'permission:document_templates,view']);
     $routes->get('masters/templates/(:num)/edit', 'Masters\DocumentTemplateController::edit/$1', ['filter' => 'permission:document_templates,edit']);

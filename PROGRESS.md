@@ -35,6 +35,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Audit plans prepared by Cycle Builder now include more detailed 09:00-17:00 stage-specific timing, lunch break, process/unit coverage, and clause/criteria focus.
 - Cycle Builder standard mode now prepares the full controlled workflow pack through application review, proposal acceptance, contract, audit reports, NCR/CAPA closure, Technical Review, Decision, GM approval, certificate issue, and feedback. Assignment preference keeps Eng. Mohammad Ahmad as Decision Maker, Ms. Rimsha Mahmoud as Technical Reviewer, Dr. Rana Amjad Hanif as GM, and a separate lead auditor where available.
 - Prepared cycle files now auto-confirm system-prepared conformity notes under the assigned auditor, accept approved all-standard/all-scope competence for Food/IAF/Medical categories, and prepare 4 NCR/CAPA records by default for applicable audit stages.
+- Content Library / Clause Pool has been added as a master-data module with approved reusable templates, CSV import/export, scope/standard/stage/content filters, and report-screen matching. Auto-filled conformity notes now use the Clause Pool first, remain editable, and are auto-confirmed under the assigned auditor when prepared by the system.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus
@@ -44,6 +45,7 @@ Project-owner compliance hardening and workflow validation: core gates are now i
 ## Next
 
 - Browser-test the Cycle Builder with one HACCP file, one ISO 9001 file, and one multi-standard file, then review the prepared workflow screens and PDFs.
+- Expand Clause Pool seeds into full clause-wise pools for HACCP, ISO 22000, ISO 9001, ISO 14001, and ISO 45001, including NC/CAPA/objective-evidence variants by scope and audit stage.
 - Convert the user-supplied official forms into richer controlled HTML/PDF sections for application, review, proposal, contract, audit programme, appointment, plan, report, NCR/CAPA, technical review, decision, certificate and feedback.
 - Expand tests from wiring/smoke tests into database-backed feature tests for surveillance locks, appointment gates, audit completion, Technical Review, Decision, PDF routes, and audit duration edge cases.
 - Build a user/role management screen so Super Users can assign multiple roles from the portal instead of relying on seed/migration data.

@@ -18,6 +18,8 @@ class WorkflowGateWiringTest extends TestCase
         self::assertStringContainsString('unconfirmedConformitySectionCount', $this->controller);
         self::assertStringContainsString('competencyCoversAllScopeCategories', $this->controller);
         self::assertStringContainsString('Confirmed by assigned auditor', file_get_contents(__DIR__ . '/../../app/Database/Migrations/2026-07-06-000012_ConfirmPreparedCycleReportSections.php') ?: '');
+        self::assertStringContainsString('clausePoolConformityNote', $this->controller);
+        self::assertStringContainsString('Auto-confirmed on behalf of the assigned auditor', $this->controller);
         self::assertStringContainsString('reportForEvent($eventId)', $this->controller);
         self::assertStringNotContainsString("reportSectionRows((int) \$this->ensureReport(\$eventId)['id'])", $this->controller);
     }
@@ -38,11 +40,15 @@ class WorkflowGateWiringTest extends TestCase
     public function testWorkflowActionsUseRolePolicy(): void
     {
         $roleService = file_get_contents(__DIR__ . '/../../app/Services/WorkflowRoleService.php') ?: '';
+        $routes = file_get_contents(__DIR__ . '/../../app/Config/Routes.php') ?: '';
+        $layout = file_get_contents(__DIR__ . '/../../app/Views/layouts/main.php') ?: '';
 
         self::assertStringContainsString("'audit_execute' => ['auditor', 'lead_auditor']", $roleService);
         self::assertStringContainsString("'technical_review' => ['technical_reviewer', 'technical_manager']", $roleService);
         self::assertStringContainsString("'decision' => ['certification_decision_maker']", $roleService);
         self::assertStringContainsString("'gm_approval' => ['general_manager']", $roleService);
         self::assertStringContainsString('denialReason(', $this->controller);
+        self::assertStringContainsString('masters/clause-pool', $routes);
+        self::assertStringContainsString('Clause Pool', $layout);
     }
 }

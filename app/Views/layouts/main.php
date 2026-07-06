@@ -180,6 +180,7 @@ $nav = [
     'Resources' => $visibleItems([
         ['label' => 'Personnel', 'icon' => 'fa-users', 'href' => site_url('masters/personnel'), 'match' => 'masters/personnel', 'show' => $isOperationsUser && can('personnel', 'view')],
         ['label' => 'Clause Library', 'icon' => 'fa-book-open', 'href' => site_url('masters/clauses'), 'match' => 'masters/clauses', 'show' => ($isOperationsUser || $isAuditUser) && can('clause_library', 'view')],
+        ['label' => 'Clause Pool', 'icon' => 'fa-layer-group', 'href' => site_url('masters/clause-pool'), 'match' => 'masters/clause-pool', 'show' => $isOperationsUser && can('clause_library', 'view')],
         ['label' => 'Templates', 'icon' => 'fa-file-lines', 'href' => site_url('masters/templates'), 'match' => 'masters/templates', 'show' => $isOperationsUser && can('document_templates', 'view')],
     ]),
 ];

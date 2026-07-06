@@ -26,6 +26,7 @@ use App\Services\AuditLogger;
 use App\Services\AuditAiDraftService;
 use App\Services\AuditDurationService;
 use App\Services\AuditReportNarrativeService;
+use App\Services\ClauseContentPoolService;
 use App\Services\NotificationService;
 use App\Services\WorkflowRoleService;
 use CodeIgniter\Database\BaseConnection;
@@ -59,6 +60,7 @@ class WorkflowActionController extends BaseController
     private AuditAiDraftService $aiDrafts;
     private AuditDurationService $durationService;
     private AuditReportNarrativeService $narratives;
+    private ClauseContentPoolService $contentPool;
     private WorkflowRoleService $workflowRoles;
     private NotificationService $notifications;
     private BaseConnection $db;
@@ -88,6 +90,7 @@ class WorkflowActionController extends BaseController
         $this->aiDrafts = new AuditAiDraftService();
         $this->durationService = new AuditDurationService();
         $this->narratives = new AuditReportNarrativeService();
+        $this->contentPool = new ClauseContentPoolService();
         $this->notifications = new NotificationService();
         $this->db = Database::connect();
         $this->workflowRoles = new WorkflowRoleService($this->db);
@@ -1062,13 +1065,16 @@ class WorkflowActionController extends BaseController
             ]);
         }
 
-        $draft = $this->aiDrafts->conformityNote(
-            $client,
-            $event,
-            $clause,
-            $this->eventPlanItemRows($eventId),
-            $this->eventTeamRows($eventId)
-        );
+        $poolText = $this->contentPool->conformityNote($client, $event, $clause);
+        $draft = $poolText === null
+            ? $this->aiDrafts->conformityNote(
+                $client,
+                $event,
+                $clause,
+                $this->eventPlanItemRows($eventId),
+                $this->eventTeamRows($eventId)
+            )
+            : ['source' => 'clause_pool', 'text' => $poolText];
 
         return $this->response->setJSON([
             'ok' => true,
@@ -3692,7 +3698,7 @@ class WorkflowActionController extends BaseController
     private function eventTeamRows(int $eventId): array
     {
         return $this->db->table('auditor_appointments')
-            ->select('auditor_appointments.*, personnel.full_name, personnel.email')
+            ->select('auditor_appointments.*, personnel.full_name, personnel.email, personnel.user_id')
             ->join('personnel', 'personnel.id = auditor_appointments.personnel_id')
             ->where('auditor_appointments.audit_event_id', $eventId)
             ->orderBy('auditor_appointments.appointment_role', 'ASC')
@@ -3788,11 +3794,12 @@ class WorkflowActionController extends BaseController
                 'clause_library_id' => $clauseId,
                 'section_key' => 'conformity',
                 'section_title' => trim((string) $clause['standard_code'] . ' ' . (string) $clause['clause_number'] . ' - ' . (string) $clause['clause_title']),
-                'section_content' => $client === []
-                    ? (string) ($clause['predefined_conformity_note'] ?: 'Conformity verified for this clause.')
-                    : $this->narratives->conformityNote($client, $event, $clause, $planItems, $auditTeam),
-                'source_type' => 'system_draft',
-                'auditor_confirmed' => 0,
+                'section_content' => $this->clausePoolConformityNote($client, $event, $clause, $planItems, $auditTeam),
+                'source_type' => 'clause_pool',
+                'auditor_confirmed' => 1,
+                'confirmed_by_user_id' => $this->leadAuditorUserId($auditTeam) ?? (int) session()->get('user_id'),
+                'confirmed_at' => date('Y-m-d H:i:s'),
+                'confirmation_note' => 'Auto-confirmed on behalf of the assigned auditor from approved Clause Pool / system content.',
                 'sort_order' => $index + 1,
             ];
 
@@ -3805,10 +3812,41 @@ class WorkflowActionController extends BaseController
     {
         $notes = [];
         foreach ($clauses as $clause) {
-            $notes[(int) $clause['id']] = $this->narratives->conformityNote($client, $event, $clause, $planItems, $auditTeam);
+            $notes[(int) $clause['id']] = $this->clausePoolConformityNote($client, $event, $clause, $planItems, $auditTeam);
         }
 
         return $notes;
+    }
+
+    private function clausePoolConformityNote(array $client, ?array $event, array $clause, array $planItems = [], array $auditTeam = []): string
+    {
+        if ($client !== []) {
+            $content = $this->contentPool->conformityNote($client, $event, $clause);
+            if ($content !== null) {
+                return $content;
+            }
+        }
+
+        return $client === []
+            ? (string) ($clause['predefined_conformity_note'] ?: 'Conformity verified for this clause.')
+            : $this->narratives->conformityNote($client, $event, $clause, $planItems, $auditTeam);
+    }
+
+    private function leadAuditorUserId(array $auditTeam): ?int
+    {
+        foreach ($auditTeam as $member) {
+            if (($member['appointment_role'] ?? '') === 'lead_auditor' && ! empty($member['user_id'])) {
+                return (int) $member['user_id'];
+            }
+        }
+
+        foreach ($auditTeam as $member) {
+            if (! empty($member['user_id'])) {
+                return (int) $member['user_id'];
+            }
+        }
+
+        return null;
     }
 
     private function reportSectionRows(int $reportId): array
