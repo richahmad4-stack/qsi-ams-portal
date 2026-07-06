@@ -17,10 +17,11 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 
 ## Current Focus
 
-Refining the final certification file controls: Technical Review of Audit Report and Decision Making / pre-issue verification checklists are now being aligned with controlled document formats.
+Refining the final certification file controls and fixing workflow loading issues found during multi-standard client testing.
 
 ## Next
 
 - Continue refining controlled PDF templates against the user-provided document formats, especially certificate issuance and client feedback.
+- Continue checking multi-standard client files such as HACCP + ISO 22000 + ISO 9001 for stage-specific workflow and PDF consistency.
 - Continue polish across certification, surveillance, and recertification workflow screens where the user finds unclear grouping.
 - Add stronger user-login/personnel-client separation and role-specific access flows.

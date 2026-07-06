@@ -42,7 +42,7 @@ class CertificationWorkflowController extends BaseController
             return redirect()->to('/workflow/certification')->with('error', 'Client not found.');
         }
 
-        $this->ensureClientAuditChecklists($tenantId, $clientId);
+        $this->ensureClientAuditChecklists($tenantId, $clientId, $client);
 
         return view('workflow/show', [
             'title' => 'Client Workflow',
@@ -53,7 +53,7 @@ class CertificationWorkflowController extends BaseController
         ]);
     }
 
-    private function ensureClientAuditChecklists(int $tenantId, int $clientId): void
+    private function ensureClientAuditChecklists(int $tenantId, int $clientId, array $client): void
     {
         $db = Database::connect();
         $program = $db->table('audit_programs')
