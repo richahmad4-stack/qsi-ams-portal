@@ -1683,14 +1683,16 @@ class DemoWorkflowSeeder extends Seeder
     {
         $standard = strtoupper((string) ($clause['standard_code'] ?? ''));
         $title = (string) ($clause['clause_title'] ?? 'applicable requirement');
-        $context = strtolower($standard . ' ' . $title . ' ' . $scenario['scope']);
+        $clauseContext = strtolower($standard . ' ' . $title . ' ' . (string) ($clause['requirement'] ?? ''));
+        $context = $clauseContext . ' ' . strtolower((string) $scenario['scope']);
         $process = $scenario['processes'][($index - 1) % count($scenario['processes'])];
         $severityText = $classification === 'major'
             ? 'The absence of effective control could affect confidence in the system if not corrected before certification/maintenance decision.'
             : 'The issue was isolated in the sampled record and no direct product/service release impact was confirmed from the audit sample.';
 
-        if ($scenario['food'] !== null || str_contains($context, 'haccp') || str_contains($context, 'food') || str_contains($context, '22000')) {
-            if (str_contains($context, 'trace') || str_contains($context, 'recall') || str_contains($context, 'withdrawal') || str_contains($context, 'release')) {
+        if ($scenario['food'] !== null || str_contains($context, 'haccp') || str_contains($context, 'food') || str_contains($context, '22000') || str_contains($context, 'fssc')) {
+            $foodTheme = $this->foodNcrTheme($clauseContext, $index);
+            if ($foodTheme === 'traceability') {
                 return $this->ncrPayload(
                     $classification,
                     "Traceability sample for {$process} was not fully completed from receiving lot to dispatch reference; one intermediate preparation/packing record was not linked.",
@@ -1704,7 +1706,7 @@ class DemoWorkflowSeeder extends Seeder
                 );
             }
 
-            if (str_contains($context, 'clean') || str_contains($context, 'sanitation') || str_contains($context, 'prp') || str_contains($context, 'hygiene')) {
+            if ($foodTheme === 'prp') {
                 return $this->ncrPayload(
                     $classification,
                     "Cleaning verification for {$process} was not recorded for one sampled shift although the cleaning activity was marked as completed.",
@@ -1714,6 +1716,34 @@ class DemoWorkflowSeeder extends Seeder
                     'Update sanitation record review responsibility, brief supervisors, and include cleaning verification in weekly PRP verification checks.',
                     'Revised sanitation checklist, supervisor briefing record and weekly PRP verification log.',
                     'Auditor sampled subsequent cleaning records and confirmed verification was completed before area release.',
+                    $severityText
+                );
+            }
+
+            if ($foodTheme === 'supplier') {
+                return $this->ncrPayload(
+                    $classification,
+                    "Supplier/material approval file for {$process} did not include complete food-safety approval evidence for one sampled input.",
+                    'Supplier file sample was missing current specification/approval evidence although the material remained on the approved supplier list.',
+                    'QA obtained the missing supplier approval evidence and confirmed the affected material remained acceptable for use.',
+                    'Supplier review criteria did not require evidence-completeness verification before continued approval.',
+                    'Revise supplier approval review criteria, review active food-safety critical suppliers and brief purchasing/QA personnel.',
+                    'Updated supplier approval form, supplier document sample, approved supplier list review and staff briefing.',
+                    'Auditor checked the revised supplier file and sampled another food-safety critical supplier for complete approval evidence.',
+                    $severityText
+                );
+            }
+
+            if ($foodTheme === 'release') {
+                return $this->ncrPayload(
+                    $classification,
+                    "Product release verification for {$process} did not fully evidence allergen/label or final QA release checks for one sampled lot.",
+                    'Release record sample showed product dispatch approval, but the allergen/label verification field was incomplete for the selected lot.',
+                    'QA reviewed the affected lot, confirmed label/release status and completed the missing verification evidence.',
+                    'The release checklist did not clearly require independent allergen/label verification before final release.',
+                    'Revise release checklist, brief QA/release personnel and sample released lots for allergen/label verification completion.',
+                    'Corrected release record, revised release checklist, briefing record and subsequent release sample.',
+                    'Auditor reviewed corrected release evidence and sampled a subsequent product/lot for completed allergen/label verification.',
                     $severityText
                 );
             }
@@ -1770,6 +1800,29 @@ class DemoWorkflowSeeder extends Seeder
             'Auditor verified the corrected record and sampled one additional case for complete review evidence.',
             $severityText
         );
+    }
+
+    private function foodNcrTheme(string $context, int $index): string
+    {
+        if (str_contains($context, 'trace') || str_contains($context, 'recall') || str_contains($context, 'withdrawal')) {
+            return 'traceability';
+        }
+
+        if (str_contains($context, 'clean') || str_contains($context, 'sanitation') || str_contains($context, 'prp') || str_contains($context, 'hygiene') || str_contains($context, 'storage')) {
+            return 'prp';
+        }
+
+        if (str_contains($context, 'supplier') || str_contains($context, 'purchase') || str_contains($context, 'external')) {
+            return 'supplier';
+        }
+
+        if (str_contains($context, 'release') || str_contains($context, 'allergen') || str_contains($context, 'label')) {
+            return 'release';
+        }
+
+        $themes = ['traceability', 'prp', 'monitoring', 'supplier', 'release'];
+
+        return $themes[($index - 1) % count($themes)];
     }
 
     private function ncrPayload(

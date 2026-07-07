@@ -51,13 +51,41 @@ class SmartAuditContentEngineTest extends TestCase
             'requirement' => 'Traceability and recall controls shall be maintained.',
         ], 'minor', 2);
 
-        self::assertStringContainsString('Traceability', $package['finding']);
+        self::assertStringContainsString('traceability', strtolower($package['finding']));
         self::assertStringContainsString('Objective evidence sampled', $package['objective_evidence']);
         self::assertStringContainsString('FS.4', $package['objective_evidence']);
         self::assertStringContainsString('CAPA-002', $package['evidence_reference']);
         self::assertNotSame('', $package['root_cause']);
         self::assertNotSame('', $package['corrective_action']);
         self::assertNotSame('', $package['verification']);
+    }
+
+    public function testFoodNcrPackagesRotateThemesForGenericClauses(): void
+    {
+        $engine = new SmartAuditContentEngine($this->emptyPool());
+        $client = [
+            'company' => 'Demo Fresh Valley Dairy Factory',
+            'scope' => 'Receiving, pasteurization, filling, cold storage and dispatch of dairy products.',
+        ];
+        $event = ['event_type' => 'initial_stage2'];
+        $clauses = [
+            ['standard_code' => 'ISO 22000:2018', 'clause_number' => '10.1', 'clause_title' => 'Improvement', 'requirement' => 'Improvement controls.'],
+            ['standard_code' => 'ISO 22000:2018', 'clause_number' => '10.2', 'clause_title' => 'Nonconformity and corrective action', 'requirement' => 'Corrective action controls.'],
+            ['standard_code' => 'ISO 22000:2018', 'clause_number' => '10.3', 'clause_title' => 'Continual improvement', 'requirement' => 'Continual improvement controls.'],
+            ['standard_code' => 'ISO 22000:2018', 'clause_number' => '4.1', 'clause_title' => 'Context review', 'requirement' => 'Context review controls.'],
+        ];
+
+        $packages = [];
+        foreach ($clauses as $index => $clause) {
+            $packages[] = $engine->ncrCapaPackage($client, $event, $clause, 'minor', $index + 1);
+        }
+
+        self::assertCount(4, array_unique(array_column($packages, 'finding')));
+        self::assertCount(4, array_unique(array_column($packages, 'root_cause')));
+        self::assertStringContainsString('traceability', strtolower($packages[0]['finding']));
+        self::assertStringContainsString('prp', strtolower($packages[1]['finding']));
+        self::assertStringContainsString('ccp/oprp', strtolower($packages[2]['finding']));
+        self::assertStringContainsString('supplier', strtolower($packages[3]['finding']));
     }
 
     private function emptyPool(): ClauseContentPoolService
