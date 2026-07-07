@@ -41,6 +41,17 @@
             font-size: 17px;
             font-weight: 700;
             margin: 0 8px 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sidebar-brand img {
+            width: 54px;
+            height: auto;
+            background: #ffffff;
+            border-radius: 3px;
+            padding: 3px;
         }
 
         .sidebar-section {
@@ -190,7 +201,10 @@ $nav = [
 ?>
 <div class="app-shell">
     <aside class="sidebar">
-        <div class="sidebar-brand">QSI AMS</div>
+        <div class="sidebar-brand">
+            <img src="<?= base_url('assets/img/qsi-logo.png') ?>" alt="QSI Canada Cert">
+            <span>AMS</span>
+        </div>
         <nav class="nav flex-column">
             <?php foreach ($nav as $section => $items): ?>
                 <?php if ($items === []): ?>

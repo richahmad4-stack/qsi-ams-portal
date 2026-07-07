@@ -38,15 +38,12 @@
         }
 
         .brand-mark {
-            width: 46px;
-            height: 46px;
-            display: grid;
-            place-items: center;
-            border-radius: 8px;
-            background: var(--qsi-blue);
-            color: #ffffff;
-            font-weight: 700;
-            letter-spacing: 0;
+            width: 76px;
+            height: auto;
+            border-radius: 4px;
+            background: #ffffff;
+            border: 1px solid var(--qsi-border);
+            padding: 4px;
         }
 
         .btn-primary {
@@ -66,7 +63,7 @@
 <main class="auth-shell">
     <section class="auth-panel" aria-label="Sign in">
         <div class="d-flex align-items-center gap-3 mb-4">
-            <div class="brand-mark">QSI</div>
+            <img class="brand-mark" src="<?= base_url('assets/img/qsi-logo.png') ?>" alt="QSI Canada Cert">
             <div>
                 <h1 class="h4 mb-1">QSI AMS</h1>
                 <p class="text-secondary mb-0">Secure access</p>

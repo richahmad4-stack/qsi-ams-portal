@@ -22,7 +22,7 @@ class SmartAuditContentEngine
 
         $content = $local;
         if ($pool !== null) {
-            $content .= "\n\nClause Pool basis:\n" . $this->compactPoolText($pool);
+            $content .= "\n\n" . $this->compactPoolText($pool);
         }
 
         return [

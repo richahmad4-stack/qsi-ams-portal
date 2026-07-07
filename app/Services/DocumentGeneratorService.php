@@ -286,7 +286,7 @@ class DocumentGeneratorService
 
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . '</style></head><body>'
             . '<header class="document-header"><table><tr>'
-            . '<td class="brand-cell"><div class="brand-mark">QSI</div><div class="brand-subtitle">Audit Management System</div></td>'
+            . '<td class="brand-cell">' . $this->logoHtml('brand-logo') . '<div class="brand-subtitle">Audit Management System</div></td>'
             . '<td class="title-cell"><div class="doc-title">' . esc($title) . '</div><div class="doc-subtitle">Controlled certification body record</div></td>'
             . '<td class="meta-cell">Prepared<br><strong>' . esc(date('Y-m-d')) . '</strong></td>'
             . '</tr></table></header>'
@@ -578,7 +578,7 @@ class DocumentGeneratorService
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->certificationApplicationCss() . '</style></head><body>'
             . '<header class="f25-header">'
             . '<table>'
-            . '<tr><td class="f25-logo" rowspan="3"><div class="f25-logo-text">QSI</div><div>AMS</div></td><td class="f25-title" rowspan="3">' . esc($title) . '</td><td>Document Number</td><td>' . esc($application['document_number'] ?? 'F 25') . '</td></tr>'
+            . '<tr><td class="f25-logo" rowspan="3">' . $this->logoHtml('pdf-logo') . '</td><td class="f25-title" rowspan="3">' . esc($title) . '</td><td>Document Number</td><td>' . esc($application['document_number'] ?? 'F 25') . '</td></tr>'
             . '<tr><td>Revision</td><td>' . esc($application['revision_number'] ?? '1') . '</td></tr>'
             . '<tr><td>Issue / Issue Date</td><td>' . esc(($application['issue_number'] ?? '2') . ' / ' . ($application['issue_date'] ?? '')) . '</td></tr>'
             . '</table>'
@@ -746,7 +746,7 @@ class DocumentGeneratorService
         $stage2 = $v('stage2_days', (string) ($review['stage2_days'] ?? '2.00'));
 
         $body = '<div class="f28-header"><table><tr>'
-            . '<td class="f28-logo" rowspan="4"><div class="f28-logo-text">QSI</div><div>AMS</div></td>'
+            . '<td class="f28-logo" rowspan="4">' . $this->logoHtml('pdf-logo') . '</td>'
             . '<td class="f28-title" rowspan="4">APPLICATION REVIEW CHECKLIST<br>REPORT</td>'
             . '<td>Document No.</td><td>' . esc($review['document_number'] ?? 'F 28') . '</td></tr>'
             . '<tr><td>Revision No.</td><td>' . esc($review['revision_number'] ?? '4') . '</td></tr>'
@@ -927,7 +927,7 @@ class DocumentGeneratorService
 
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->auditorAppointmentCss() . '</style></head><body>'
             . '<header class="f30-header"><table><tr>'
-            . '<td class="f30-logo"><div class="f30-logo-text">QSI</div><div>CERT</div></td>'
+            . '<td class="f30-logo">' . $this->logoHtml('pdf-logo') . '</td>'
             . '<td class="f30-title"><div>AUDITOR APPOINTMENT</div><div class="f30-cert">QSI - CERT</div></td>'
             . '<td><table class="f30-control">'
             . '<tr><th>Document No.</th><td>F 30_app</td></tr>'
@@ -1145,7 +1145,7 @@ class DocumentGeneratorService
         }
 
         $header = '<header class="f27-header"><table><tr>'
-            . '<td class="f27-logo"><div class="f27-logo-text">QSI</div><div>AMS</div></td>'
+            . '<td class="f27-logo">' . $this->logoHtml('pdf-logo') . '</td>'
             . '<td class="f27-title">' . esc($title) . '</td>'
             . '<td><table class="f27-control">'
             . '<tr><th>Document No.</th><td>' . esc((string) $documentNumber) . '</td></tr>'
@@ -1361,7 +1361,7 @@ class DocumentGeneratorService
             ]);
 
         $header = '<header class="f31-header"><table><tr>'
-            . '<td class="f31-logo"><div class="f31-logo-text">QSI</div><div>AMS</div></td>'
+            . '<td class="f31-logo">' . $this->logoHtml('pdf-logo') . '</td>'
             . '<td class="f31-title">AUDIT PLAN<br><span>' . esc($stageLabel) . '</span></td>'
             . '<td><table class="f31-control">'
             . '<tr><th>Document No.</th><td>' . esc((string) $documentNumber) . '</td></tr>'
@@ -1872,7 +1872,7 @@ class DocumentGeneratorService
         }
 
         $header = '<header class="f42-header"><table><tr>'
-            . '<td class="f42-logo"><div class="f42-logo-text">QSI</div><div>AMS</div></td>'
+            . '<td class="f42-logo">' . $this->logoHtml('pdf-logo') . '</td>'
             . '<td class="f42-title">' . esc($title) . '</td>'
             . '<td><table class="f42-control">'
             . '<tr><th>Document No.</th><td>' . esc((string) $documentNumber) . '</td></tr>'
@@ -2343,12 +2343,23 @@ class DocumentGeneratorService
             $html .= '<th>Record Type</th><td>' . esc(ucwords(str_replace('_', ' ', $sectionKey))) . '</td>';
             $html .= '</tr></tbody></table>';
             $html .= '<div class="report-note-body">';
-            $html .= '<div class="report-note-label">Conformity / Audit Evidence Note</div>';
+            $html .= '<div class="report-note-label">Audit evidence and conclusion</div>';
+            $content = $this->cleanReportNoteContent($content);
             $html .= $content !== '' ? nl2br(esc($content)) : '<span class="muted">No note recorded.</span>';
             $html .= '</div></div>';
         }
 
         return $html;
+    }
+
+    private function cleanReportNoteContent(string $content): string
+    {
+        $content = str_replace(["\r\n", "\r"], "\n", trim($content));
+        $content = preg_replace('/^Conformity note:\s*/i', '', $content) ?? $content;
+        $content = preg_replace('/\n+Clause Pool basis:\s*\n+/i', "\n\n", $content) ?? $content;
+        $content = preg_replace('/\n*Template reference:\s*CP-\d+\.\s*Prepared from approved Clause Pool; editable by auditor\.?/i', '', $content) ?? $content;
+
+        return trim($content);
     }
 
     private function ncrCapaSections(array $data): array
@@ -3064,6 +3075,33 @@ class DocumentGeneratorService
         return (int) $value === 1 ? 'Yes' : 'No';
     }
 
+    private function logoHtml(string $class = 'pdf-logo'): string
+    {
+        $logo = $this->logoDataUri();
+
+        if ($logo === '') {
+            return '<div class="brand-mark">QSI</div>';
+        }
+
+        return '<img class="' . esc($class, 'attr') . '" src="' . esc($logo, 'attr') . '" alt="QSI Canada Cert">';
+    }
+
+    private function logoDataUri(): string
+    {
+        $path = FCPATH . 'assets/img/qsi-logo.png';
+
+        if (! is_file($path)) {
+            return '';
+        }
+
+        $contents = file_get_contents($path);
+        if ($contents === false) {
+            return '';
+        }
+
+        return 'data:image/png;base64,' . base64_encode($contents);
+    }
+
     private function css(): string
     {
         return '
@@ -3075,6 +3113,8 @@ class DocumentGeneratorService
             .document-header td { border: 0; padding: 10px 12px; vertical-align: middle; }
             .brand-cell { width: 25%; background: #0b3558; color: #fff; }
             .brand-mark { font-size: 20px; line-height: 1; font-weight: 700; letter-spacing: .4px; }
+            .brand-logo { display: block; width: 94px; max-height: 48px; object-fit: contain; background: #fff; padding: 4px; border-radius: 2px; }
+            .pdf-logo { display: block; max-width: 108px; max-height: 54px; margin: 0 auto; object-fit: contain; }
             .brand-subtitle { margin-top: 5px; font-size: 8.5px; color: #dce8f2; }
             .title-cell { width: 56%; background: #f4f8fb; border-top: 1px solid #c8d7e3; border-bottom: 1px solid #c8d7e3; }
             .doc-title { font-size: 15px; font-weight: 700; color: #0b3558; line-height: 1.28; }
