@@ -46,14 +46,22 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - NCR/CAPA content generation now avoids repeated food-safety findings by rotating clause/stage-aware themes such as traceability, PRP verification, CCP/OPRP monitoring, supplier approval, release/allergen checks, and competence evidence. Fresh Valley Stage 2 demo NCRs now have unique findings, root causes and corrective actions.
 - Added `START-AMS-LOCAL.ps1` to launch local XAMPP MySQL and the AMS development server in separate windows for easier local testing.
 - Audit report PDFs now show checklist/conformity notes as full-width controlled audit note blocks instead of squeezing long notes into a narrow table column.
+- Operations readiness has been added as a Super Admin dashboard for go-live status covering production environment, public URL/SSL, SMTP/email, reminder processor, schema exports, backup restore proof, website lead intake, and user administration readiness.
+- User Administration is now available in the portal: Super Admin/Admin can create users, edit profile/status, assign multiple roles, reset passwords, and require password change without database/seed edits.
+- Reminder processing foundation is now active through `php spark ams:process-reminders`, creating upcoming/overdue audit reminders and certificate-expiry reminders with dashboard notifications for responsible admin roles.
+- Website lead intake now has a local `website_leads` table and permissions, ready for the next step of connecting the website/Supabase leads feed to AMS screens.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus
 
-Project-owner compliance hardening and workflow validation: core gates are now in place for audit duration basis, multi-standard competence coverage, full-file Technical Review/Decision readiness, surveillance locks, auditor confirmation of report clauses, role-based workflow authority, role-specific dashboards, controlled Super User lifecycle preparation, and shared Clause Pool based report/NCR/CAPA content. The current focus is validating prepared file quality across HACCP, ISO 9001, and multi-standard clients.
+Project-owner compliance hardening and operational readiness: core workflow gates are in place, and the current focus has moved to production readiness, user administration, reminder/email operations, website lead intake, controlled data migration, and management reporting.
 
 ## Next
 
+- Build the Website Leads screen and conversion flow so new leads can be qualified, assigned, and converted into clients/applications.
+- Add a controlled data migration/import screen for historic certificates and clients using staging/validation before anything becomes live.
+- Configure real SMTP settings and test appointment/reminder email delivery outside the local demo environment.
+- Add hosting/deployment documentation for domain, TLS, environment secrets, scheduler, queue/process manager, and backup/restore.
 - Browser-test the Cycle Builder with one HACCP file, one ISO 9001 file, and one multi-standard file, then review the prepared workflow screens and PDFs.
 - Review the new 14-client demo set in the browser and confirm the workflow list, client standards badges, certificates, surveillance states, PDFs, and role dashboards read correctly.
 - Browser-test the new Smart Audit Content Engine on HACCP, ISO 9001, and multi-standard client files to confirm report clauses and NCR/CAPA records are varied, clause-aligned, and not duplicated.
@@ -67,4 +75,3 @@ Project-owner compliance hardening and workflow validation: core gates are now i
 - Continue checking multi-standard client files such as HACCP + ISO 22000 + ISO 9001 for stage-specific workflow, competence matching, and PDF consistency.
 - Continue generating/reviewing sample PDFs for application review, proposal, contract, audit programme, audit plans, audit reports, technical review, decision, certificate, and feedback.
 - Continue polish across certification, surveillance, and recertification workflow screens where the user finds unclear grouping.
-- Configure real SMTP settings for live email delivery, then test appointment emails outside the local demo environment.

@@ -29,6 +29,13 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     ]);
     $routes->get('dashboard/section/(:segment)', 'Dashboard\DashboardDetailController::show/$1', ['filter' => 'permission:dashboard,view']);
     $routes->get('finance', 'Finance\FinanceController::index', ['filter' => 'permission:finance,view']);
+    $routes->get('operations/readiness', 'Operations\ReadinessController::index', ['filter' => 'permission:operations,view']);
+    $routes->get('admin/users', 'Admin\UserController::index', ['filter' => 'permission:users,view']);
+    $routes->get('admin/users/new', 'Admin\UserController::new', ['filter' => 'permission:users,create']);
+    $routes->post('admin/users', 'Admin\UserController::create', ['filter' => 'permission:users,create']);
+    $routes->get('admin/users/(:num)/edit', 'Admin\UserController::edit/$1', ['filter' => 'permission:users,edit']);
+    $routes->post('admin/users/(:num)', 'Admin\UserController::update/$1', ['filter' => 'permission:users,edit']);
+    $routes->post('admin/users/(:num)/deactivate', 'Admin\UserController::deactivate/$1', ['filter' => 'permission:users,delete']);
     $routes->get('automation/cycle-generator', 'Automation\CycleGeneratorController::index', ['filter' => 'permission:automation,view']);
     $routes->post('automation/cycle-generator/preview', 'Automation\CycleGeneratorController::preview', ['filter' => 'permission:automation,create']);
     $routes->post('automation/cycle-generator/generate', 'Automation\CycleGeneratorController::generate', ['filter' => 'permission:automation,create']);

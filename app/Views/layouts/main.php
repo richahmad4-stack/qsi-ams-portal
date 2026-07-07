@@ -170,6 +170,10 @@ $nav = [
     'Finance' => $visibleItems([
         ['label' => 'Finance Dashboard', 'icon' => 'fa-coins', 'href' => site_url('finance'), 'match' => 'finance', 'show' => $isFinanceUser],
     ]),
+    'System Admin' => $visibleItems([
+        ['label' => 'Readiness', 'icon' => 'fa-shield-halved', 'href' => site_url('operations/readiness'), 'match' => 'operations/readiness', 'show' => can('operations', 'view')],
+        ['label' => 'Users & Roles', 'icon' => 'fa-user-gear', 'href' => site_url('admin/users'), 'match' => 'admin/users', 'show' => can('users', 'view')],
+    ]),
     'References' => $visibleItems([
         ['label' => 'IAF Codes', 'icon' => 'fa-tags', 'href' => site_url('masters/references/iaf'), 'match' => 'masters/references/iaf', 'show' => $isOperationsUser && can('standards', 'view')],
         ['label' => 'NACE Codes', 'icon' => 'fa-industry', 'href' => site_url('masters/references/nace'), 'match' => 'masters/references/nace', 'show' => $isOperationsUser && can('standards', 'view')],
