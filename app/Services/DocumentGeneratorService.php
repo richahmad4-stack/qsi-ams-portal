@@ -326,6 +326,8 @@ class DocumentGeneratorService
         $surveillance1 = $this->certificateCycleDate((string) ($certificate['issue_date'] ?? ''), '+1 year');
         $surveillance2 = $this->certificateCycleDate((string) ($certificate['issue_date'] ?? ''), '+2 years');
         $expiryDate = $this->certificateDate((string) ($certificate['expiry_date'] ?? ''));
+        $scope = (string) ($certificate['scope'] ?? '');
+        $scopeClass = strlen($scope) > 150 ? ' scope-long' : (strlen($scope) > 95 ? ' scope-medium' : '');
         $address = trim(implode(', ', array_filter([
             (string) ($certificate['address'] ?? ''),
             (string) ($certificate['city'] ?? ''),
@@ -342,19 +344,19 @@ class DocumentGeneratorService
             . '<div class="certificate-standard">' . esc($standardCode) . '</div>'
             . '<div class="certificate-description">' . nl2br(esc($this->certificateStandardDescription($standardCode))) . '</div>'
             . '<div class="certificate-applicable">applicable to</div>'
-            . '<div class="certificate-scope">' . nl2br(esc((string) ($certificate['scope'] ?? ''))) . '</div>'
+            . '<div class="certificate-scope' . esc($scopeClass, 'attr') . '">' . nl2br(esc($scope)) . '</div>'
             . '<table class="certificate-dates"><tbody>'
             . '<tr><th>Initial Certification Date:</th><td>' . esc($initialDate) . '</td><th>Certification Date:</th><td>' . esc($issueDate) . '</td></tr>'
             . '<tr><th>Surveillance 1 Date:</th><td>' . esc($surveillance1) . '</td><th>Surveillance 2 Date:</th><td>' . esc($surveillance2) . '</td></tr>'
             . '<tr><th>Valid Till:</th><td>' . esc($expiryDate) . '</td><th>Certificate Number:</th><td>' . esc($certificateNumber) . '</td></tr>'
             . '</tbody></table>'
             . '<div class="certificate-validity-note">This Certificate is valid upon the successful completion of periodic surveillance audits to maintain compliance with the relevant standards.</div>'
-            . '<div class="certificate-signature certificate-approved"><div class="signature-line"></div><div>Approved by</div></div>'
-            . '<div class="certificate-signature certificate-printed"><div class="signature-line"></div><div>Printed by</div></div>'
-            . '<div class="certificate-qr"><img src="' . esc($qr, 'attr') . '" alt="Certificate QR"></div>'
-            . '<div class="certificate-seal"><span>QSI</span></div>'
-            . '<div class="certificate-validity">Validity code: <strong>' . esc($certificateNumber) . '</strong></div>'
-            . '<div class="certificate-verify">Check validity of the certificate using this code on <strong>certificate.qsicert.ca</strong><br>Or email us at <strong>info@qsi-cert.com</strong><br>QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia</div>'
+            . '<table class="certificate-bottom"><tbody><tr>'
+            . '<td class="certificate-signature-cell"><div class="certificate-signature"><div class="signature-line"></div><div>Approved by</div></div><div class="certificate-signature"><div class="signature-line"></div><div>Printed by</div></div></td>'
+            . '<td class="certificate-qr-cell"><img src="' . esc($qr, 'attr') . '" alt="Certificate QR"></td>'
+            . '<td class="certificate-verification-text"><div class="certificate-validity">Validity code: <strong>' . esc($certificateNumber) . '</strong></div>'
+            . '<div class="certificate-verify">Check validity of the certificate using this code on <strong>certificate.qsicert.ca</strong><br>Or email us at <strong>info@qsi-cert.com</strong><br>QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia</div></td>'
+            . '</tr></tbody></table>'
             . '</div></div></body></html>';
     }
 
@@ -3475,31 +3477,33 @@ class DocumentGeneratorService
             body { margin: 0; padding: 0; font-family: DejaVu Sans, Arial, sans-serif; color: #111827; background: #fff; }
             .certificate-page { position: relative; width: 210mm; height: 297mm; background-repeat: no-repeat; background-position: 0 0; background-size: 210mm 297mm; overflow: hidden; }
             .certificate-content { position: absolute; left: 56mm; right: 17mm; top: 27mm; bottom: 0; text-align: left; }
-            .certificate-intro { font-size: 11.4pt; margin-bottom: 11mm; }
+            .certificate-intro { font-size: 11.2pt; margin-bottom: 10mm; }
             .certificate-company { font-size: 23pt; line-height: 1.16; font-weight: 700; max-width: 125mm; margin-bottom: 3mm; }
-            .certificate-address { font-size: 9.3pt; line-height: 1.22; max-width: 112mm; margin-bottom: 11mm; }
-            .certificate-compliance { font-size: 11.4pt; margin-bottom: 9mm; }
-            .certificate-standard { font-size: 30pt; line-height: 1; margin-bottom: 6mm; font-weight: 400; }
-            .certificate-description { font-size: 9.7pt; line-height: 1.28; font-weight: 700; font-style: italic; max-width: 130mm; margin-bottom: 9mm; }
-            .certificate-applicable { font-size: 14pt; margin-bottom: 6mm; }
-            .certificate-scope { font-size: 15.5pt; line-height: 1.18; font-weight: 700; max-width: 134mm; margin-bottom: 6mm; }
-            .certificate-dates { width: 137mm; table-layout: fixed; margin: 0 0 3mm; border-collapse: collapse; border-top: 0.4mm solid #1f2933; border-bottom: 0.4mm solid #1f2933; }
-            .certificate-dates th, .certificate-dates td { border: 0; padding: 0.75mm 1mm; font-size: 8.7pt; color: #111827; background: transparent !important; line-height: 1.1; }
+            .certificate-address { font-size: 9.3pt; line-height: 1.22; max-width: 112mm; margin-bottom: 10mm; }
+            .certificate-compliance { font-size: 11.2pt; margin-bottom: 8mm; }
+            .certificate-standard { font-size: 29pt; line-height: 1; margin-bottom: 5mm; font-weight: 400; }
+            .certificate-description { font-size: 9.3pt; line-height: 1.25; font-weight: 700; font-style: italic; max-width: 130mm; margin-bottom: 7mm; }
+            .certificate-applicable { font-size: 13pt; margin-bottom: 4mm; }
+            .certificate-scope { font-size: 14.5pt; line-height: 1.14; font-weight: 700; max-width: 134mm; margin-bottom: 5mm; }
+            .certificate-scope.scope-medium { font-size: 12.6pt; line-height: 1.12; }
+            .certificate-scope.scope-long { font-size: 11.2pt; line-height: 1.1; }
+            .certificate-dates { width: 137mm; table-layout: fixed; margin: 0 0 4mm; border-collapse: collapse; border-top: 0.35mm solid #1f2933; border-bottom: 0.35mm solid #1f2933; }
+            .certificate-dates th, .certificate-dates td { border: 0; padding: 0.9mm 1mm; font-size: 8.1pt; color: #111827; background: transparent !important; line-height: 1.14; vertical-align: middle; }
             .certificate-dates tbody tr:nth-child(even) td { background: transparent !important; }
             .certificate-dates th { width: 35mm; font-weight: 700; text-align: left; }
             .certificate-dates td { width: 31mm; text-align: right; }
-            .certificate-validity-note { font-size: 8.8pt; line-height: 1.3; font-style: italic; max-width: 134mm; margin-bottom: 10mm; }
-            .certificate-signature { position: absolute; top: 183mm; width: 37mm; text-align: center; font-size: 9.5pt; }
-            .certificate-approved { left: 0; }
-            .certificate-printed { left: 43mm; }
-            .signature-line { height: 12mm; border-bottom: 0.25mm solid #1f2933; margin-bottom: 3mm; }
-            .certificate-qr { position: absolute; left: 0; top: 209mm; width: 28mm; height: 28mm; }
-            .certificate-qr img { width: 28mm; height: 28mm; }
-            .certificate-seal { position: absolute; right: 14mm; top: 184mm; width: 45mm; height: 45mm; border-radius: 50%; background: #050505; border: 1.4mm solid #050505; color: #d4af37; text-align: center; font-weight: 700; font-size: 22pt; line-height: 42mm; box-shadow: 0 0 0 1mm #2f260b inset; }
-            .certificate-seal span { display: inline-block; transform: scaleX(1.15); }
-            .certificate-validity { position: absolute; left: 0; top: 237mm; font-size: 12pt; }
-            .certificate-validity strong { color: #1c6d8a; font-size: 13pt; }
-            .certificate-verify { position: absolute; left: 0; top: 244mm; font-size: 8.2pt; line-height: 1.25; color: #1f2933; }
+            .certificate-validity-note { font-size: 8.6pt; line-height: 1.28; font-style: italic; max-width: 134mm; margin-bottom: 5mm; }
+            .certificate-bottom { width: 137mm; table-layout: fixed; border-collapse: collapse; margin-top: 2mm; }
+            .certificate-bottom td { border: 0 !important; background: transparent !important; padding: 0; vertical-align: top; }
+            .certificate-signature-cell { width: 47mm; }
+            .certificate-signature { display: block; width: 37mm; margin: 0 0 3mm; text-align: center; font-size: 8.8pt; }
+            .signature-line { height: 5mm; border-bottom: 0.25mm solid #1f2933; margin-bottom: 1.5mm; }
+            .certificate-qr-cell { width: 25mm; }
+            .certificate-qr-cell img { width: 22mm; height: 22mm; }
+            .certificate-verification-text { width: 65mm; padding-left: 3mm !important; padding-top: 1mm !important; }
+            .certificate-validity { font-size: 9.2pt; margin-bottom: 1.5mm; white-space: nowrap; }
+            .certificate-validity strong { color: #1c6d8a; font-size: 9.8pt; }
+            .certificate-verify { font-size: 7.4pt; line-height: 1.18; color: #1f2933; }
         ';
     }
 
