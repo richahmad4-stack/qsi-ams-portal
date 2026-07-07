@@ -2714,9 +2714,17 @@ class DocumentGeneratorService
             return [];
         }
 
+        $selectedStandards = $this->db->table('application_selected_standards')
+            ->where('application_id', (int) $application['id'])
+            ->orderBy('standard_code', 'ASC')
+            ->get()
+            ->getResultArray();
+        $selectedStandardCodes = $this->normaliseStandardCodes(array_column($selectedStandards, 'standard_code'));
+
         $rows = $this->db->table('application_questions')
-            ->select('application_questions.section, application_questions.question_text, application_questions.display_order, application_answers.answer_text')
+            ->select('application_questions.section, application_questions.question_text, application_questions.display_order, application_questions.standard_codes, application_answers.answer_text, question_library.applicable_standards')
             ->join('application_answers', 'application_answers.application_question_id = application_questions.id', 'left')
+            ->join('question_library', 'question_library.id = application_questions.question_library_id', 'left')
             ->where('application_questions.application_id', (int) $application['id'])
             ->whereNotIn('application_questions.section', $this->excludedCertificationApplicationSections())
             ->where('application_questions.question_type !=', 'file')
@@ -2727,17 +2735,17 @@ class DocumentGeneratorService
 
         $answers = [];
         foreach ($rows as $row) {
+            if (! $this->applicationQuestionAppliesToStandards($row, $selectedStandardCodes)) {
+                continue;
+            }
+
             $answers[$row['section']][] = $row;
         }
 
         return [
             'application' => $application,
             'reviewer' => $this->applicationReviewer($application['reviewed_by'] ?? null),
-            'selected_standards' => $this->db->table('application_selected_standards')
-                ->where('application_id', (int) $application['id'])
-                ->orderBy('standard_code', 'ASC')
-                ->get()
-                ->getResultArray(),
+            'selected_standards' => $selectedStandards,
             'answers_by_section' => $answers,
             'attachments' => $this->db->table('application_attachments')
                 ->where('application_id', (int) $application['id'])
@@ -2745,6 +2753,29 @@ class DocumentGeneratorService
                 ->get()
                 ->getResultArray(),
         ];
+    }
+
+    private function applicationQuestionAppliesToStandards(array $question, array $selectedStandards): bool
+    {
+        $libraryStandards = $this->normaliseStandardCodes(json_decode((string) ($question['applicable_standards'] ?? '[]'), true) ?: []);
+
+        if ($libraryStandards !== []) {
+            return in_array('COMMON', $libraryStandards, true) || array_intersect($libraryStandards, $selectedStandards) !== [];
+        }
+
+        $questionStandards = $this->normaliseStandardCodes(json_decode((string) ($question['standard_codes'] ?? '[]'), true) ?: []);
+
+        return $questionStandards === []
+            || in_array('COMMON', $questionStandards, true)
+            || array_intersect($questionStandards, $selectedStandards) !== [];
+    }
+
+    private function normaliseStandardCodes(array $codes): array
+    {
+        return array_values(array_unique(array_map(
+            static fn (string $code): string => strtoupper(trim($code)),
+            array_filter(array_map('strval', $codes), static fn (string $code): bool => trim($code) !== '')
+        )));
     }
 
     private function applicationReviewer(mixed $userId): array

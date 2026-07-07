@@ -773,14 +773,10 @@ class DemoWorkflowSeeder extends Seeder
             ]);
         }
 
-        $questions = $this->db->table('question_library')
-            ->where('active', 1)
-            ->orderBy('section', 'ASC')
-            ->orderBy('display_order', 'ASC')
-            ->get()
-            ->getResultArray();
+        $questions = $this->applicationQuestionsForStandards(array_keys($standardIds));
 
         foreach ($questions as $question) {
+            $applicableStandards = $this->normaliseStandardCodes(json_decode((string) $question['applicable_standards'], true) ?: []);
             $this->db->table('application_questions')->insert([
                 'application_id' => $applicationId,
                 'question_library_id' => (int) $question['id'],
@@ -792,7 +788,7 @@ class DemoWorkflowSeeder extends Seeder
                 'mandatory' => (int) $question['mandatory'],
                 'validation_rules' => $question['validation_rules'],
                 'help_text' => $question['help_text'],
-                'standard_codes' => json_encode(array_keys($standardIds), JSON_THROW_ON_ERROR),
+                'standard_codes' => json_encode($applicableStandards, JSON_THROW_ON_ERROR),
                 'created_at' => $this->dateTime($base->format('Y-m-d'), '09:10:00'),
             ]);
             $applicationQuestionId = (int) $this->db->insertID();
@@ -821,6 +817,53 @@ class DemoWorkflowSeeder extends Seeder
         }
 
         return $applicationId;
+    }
+
+    private function applicationQuestionsForStandards(array $standardCodes): array
+    {
+        $selected = $this->normaliseStandardCodes($standardCodes);
+        $questions = $this->db->table('question_library')
+            ->where('active', 1)
+            ->orderBy('section', 'ASC')
+            ->orderBy('display_order', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        return array_values(array_filter(
+            $questions,
+            fn (array $question): bool => ! $this->applicationQuestionExcluded($question)
+                && $this->questionAppliesToStandards($question, $selected)
+        ));
+    }
+
+    private function applicationQuestionExcluded(array $question): bool
+    {
+        return in_array((string) ($question['section'] ?? ''), $this->excludedApplicationSections(), true)
+            || (string) ($question['question_type'] ?? '') === 'file';
+    }
+
+    private function excludedApplicationSections(): array
+    {
+        return [
+            'Supporting Documents',
+            'Declaration',
+            'HACCP Specific Questions',
+        ];
+    }
+
+    private function questionAppliesToStandards(array $question, array $selectedStandards): bool
+    {
+        $applicable = $this->normaliseStandardCodes(json_decode((string) ($question['applicable_standards'] ?? '[]'), true) ?: []);
+
+        return in_array('COMMON', $applicable, true) || array_intersect($applicable, $selectedStandards) !== [];
+    }
+
+    private function normaliseStandardCodes(array $codes): array
+    {
+        return array_values(array_unique(array_map(
+            static fn (string $code): string => strtoupper(trim($code)),
+            array_filter(array_map('strval', $codes), static fn (string $code): bool => trim($code) !== '')
+        )));
     }
 
     private function seedApplicationReview(int $clientId, int $applicationId, array $scenario, DateTimeImmutable $base, array $standardIds, string $clientNo): int
