@@ -2301,7 +2301,7 @@ class DocumentGeneratorService
                 'Report Submission Date' => $this->auditReportSubmissionDate($data['reports'] ?? []),
             ])],
             ['Report Drafts', $this->recordTable($data['reports'], ['audit_number', 'report_type', 'status', 'version_number', 'submitted_at'])],
-            ['Checklist / Report Notes', $this->recordTable($data['report_sections'] ?? [], ['standard_code', 'clause_number', 'clause_title', 'section_key', 'section_content'])],
+            ['Checklist / Report Notes', $this->reportChecklistNotes($data['report_sections'] ?? [])],
             ['Nonconformities', $this->recordTable($data['ncrs'], ['ncr_number', 'classification', 'status', 'finding'])],
             ['CAPA', $this->recordDetailTables($data['capas'] ?? [], ['capa_number', 'status', 'issue', 'immediate_correction', 'root_cause', 'corrective_action', 'preventive_action', 'responsible_person', 'target_date', 'evidence_reference', 'verification', 'effectiveness', 'closed_at'], 'capa_number')],
         ];
@@ -2317,6 +2317,38 @@ class DocumentGeneratorService
         }
 
         return 'Not submitted';
+    }
+
+    private function reportChecklistNotes(array $sections): string
+    {
+        if ($sections === []) {
+            return '<p class="muted">No checklist notes available.</p>';
+        }
+
+        $html = '';
+        foreach ($sections as $index => $section) {
+            $standard = trim((string) ($section['standard_code'] ?? ''));
+            $clauseNumber = trim((string) ($section['clause_number'] ?? ''));
+            $clauseTitle = trim((string) ($section['clause_title'] ?? ''));
+            $sectionKey = trim((string) ($section['section_key'] ?? 'Audit note'));
+            $content = trim((string) ($section['section_content'] ?? ''));
+            $headingParts = array_filter([$standard, $clauseNumber, $clauseTitle], static fn (string $value): bool => $value !== '');
+            $heading = $headingParts !== [] ? implode(' - ', $headingParts) : 'Checklist item ' . ($index + 1);
+
+            $html .= '<div class="report-note">';
+            $html .= '<div class="report-note-heading">' . esc($heading) . '</div>';
+            $html .= '<table class="report-note-meta"><tbody><tr>';
+            $html .= '<th>Standard</th><td>' . esc($standard !== '' ? $standard : 'N/A') . '</td>';
+            $html .= '<th>Clause</th><td>' . esc($clauseNumber !== '' ? $clauseNumber : 'N/A') . '</td>';
+            $html .= '<th>Record Type</th><td>' . esc(ucwords(str_replace('_', ' ', $sectionKey))) . '</td>';
+            $html .= '</tr></tbody></table>';
+            $html .= '<div class="report-note-body">';
+            $html .= '<div class="report-note-label">Conformity / Audit Evidence Note</div>';
+            $html .= $content !== '' ? nl2br(esc($content)) : '<span class="muted">No note recorded.</span>';
+            $html .= '</div></div>';
+        }
+
+        return $html;
     }
 
     private function ncrCapaSections(array $data): array
@@ -3069,6 +3101,13 @@ class DocumentGeneratorService
             .detail-table { margin-bottom: 0; }
             .detail-table th { width: 27%; background: #eef5fa; color: #0b3558; }
             .detail-table td { width: 74%; }
+            .report-note { border: 1px solid #c8d7e3; margin: 0 0 12px; page-break-inside: avoid; background: #fff; }
+            .report-note-heading { background: #0b3558; color: #fff; font-weight: 700; padding: 7px 9px; font-size: 10.5px; line-height: 1.35; }
+            .report-note-meta { margin: 0; table-layout: fixed; }
+            .report-note-meta th { width: 12%; background: #eaf2f8; color: #0b3558; font-size: 8.8px; padding: 5px 6px; }
+            .report-note-meta td { width: 21%; font-size: 8.8px; padding: 5px 6px; color: #334155; }
+            .report-note-body { padding: 9px 10px 10px; line-height: 1.55; color: #243442; }
+            .report-note-label { color: #0b3558; font-weight: 700; margin-bottom: 5px; font-size: 9.5px; }
             footer { position: fixed; left: 42px; right: 42px; bottom: 18px; border-top: 1px solid #c8d7e3; padding-top: 7px; color: #607080; font-size: 8.6px; }
             footer span:first-child { display: inline-block; width: 78%; }
             .page-number { display: inline-block; width: 20%; text-align: right; }

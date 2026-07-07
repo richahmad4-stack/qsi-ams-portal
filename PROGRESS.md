@@ -45,6 +45,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Controlled PDF styling has been upgraded with a cleaner certification-body layout: wider margins, dark-blue controlled-record headers, calmer table colors, better spacing, softer borders, improved footers, and harmonized official-form styling for application, review, appointment, contract, audit plan, and audit programme outputs.
 - NCR/CAPA content generation now avoids repeated food-safety findings by rotating clause/stage-aware themes such as traceability, PRP verification, CCP/OPRP monitoring, supplier approval, release/allergen checks, and competence evidence. Fresh Valley Stage 2 demo NCRs now have unique findings, root causes and corrective actions.
 - Added `START-AMS-LOCAL.ps1` to launch local XAMPP MySQL and the AMS development server in separate windows for easier local testing.
+- Audit report PDFs now show checklist/conformity notes as full-width controlled audit note blocks instead of squeezing long notes into a narrow table column.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus
