@@ -42,6 +42,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Legacy Import has been removed from the active product: routes, sidebar entry, controller, models, views, dashboard card, client-screen legacy flag, role seed permissions, and reference seed permissions are cleaned up. Historical database columns/tables remain only as safe dormant structure.
 - Demo client data has been reset and rebuilt with 14 fresh full-workflow demo clients. The set covers every active standard as at least one single-standard file, plus common integrated combinations: QMS/EMS/OHS, HACCP + ISO 22000 + ISO 9001, FSSC/HACCP/ISO 22000, ISO 13485 + ISO 9001, and a high-complexity hospital support file combining food, quality, environmental and OHS standards.
 - Application question selection is now strict by selected standard, and certification applications exclude all standard-specific question sections. Demo seeding and application PDFs only show the general application sections needed for the client file, preventing ISO 9001/ISO 45001/HACCP-specific question leakage into application forms.
+- Controlled PDF styling has been upgraded with a cleaner certification-body layout: wider margins, dark-blue controlled-record headers, calmer table colors, better spacing, softer borders, improved footers, and harmonized official-form styling for application, review, appointment, contract, audit plan, and audit programme outputs.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus

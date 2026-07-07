@@ -285,8 +285,12 @@ class DocumentGeneratorService
         }
 
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . '</style></head><body>'
-            . '<header><div class="brand">QSI AMS</div><div class="doc-title">' . esc($title) . '</div></header>'
-            . '<section class="client"><strong>Client:</strong> ' . esc($client['company']) . '<br><strong>Scope:</strong> ' . esc((string) ($client['scope'] ?? '')) . '</section>'
+            . '<header class="document-header"><table><tr>'
+            . '<td class="brand-cell"><div class="brand-mark">QSI</div><div class="brand-subtitle">Audit Management System</div></td>'
+            . '<td class="title-cell"><div class="doc-title">' . esc($title) . '</div><div class="doc-subtitle">Controlled certification body record</div></td>'
+            . '<td class="meta-cell">Prepared<br><strong>' . esc(date('Y-m-d')) . '</strong></td>'
+            . '</tr></table></header>'
+            . '<section class="client"><table><tr><th>Client</th><td>' . esc($client['company']) . '</td></tr><tr><th>Scope</th><td>' . nl2br(esc((string) ($client['scope'] ?? ''))) . '</td></tr></table></section>'
             . $body
             . '<footer><span>Prepared on ' . esc(date('Y-m-d H:i')) . ' | Controlled document prepared by QSI AMS</span><span class="page-number">Page </span></footer>'
             . '</body></html>';
@@ -3031,29 +3035,41 @@ class DocumentGeneratorService
     private function css(): string
     {
         return '
-            @page { margin: 30px 34px 82px; }
+            @page { margin: 38px 42px 78px; }
             * { box-sizing: border-box; }
-            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10.5px; color: #17202a; line-height: 1.38; }
-            header { border-bottom: 2px solid #0a3765; padding-bottom: 10px; margin-bottom: 16px; }
-            .brand { color: #0a3765; font-size: 18px; font-weight: 700; letter-spacing: .2px; }
-            .doc-title { font-size: 16px; font-weight: 700; margin-top: 4px; color: #111827; }
-            .client { background: #f4f7fb; border: 1px solid #cbd8e5; padding: 10px; margin-bottom: 14px; page-break-inside: avoid; }
-            h2 { font-size: 13px; margin: 16px 0 8px; color: #0a3765; page-break-after: avoid; border-bottom: 1px solid #dbe5ef; padding-bottom: 4px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: fixed; }
+            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10px; color: #1f2933; line-height: 1.48; background: #fff; }
+            .document-header { border: 0; padding: 0; margin-bottom: 18px; page-break-inside: avoid; }
+            .document-header table { width: 100%; border-collapse: collapse; margin-bottom: 0; table-layout: fixed; }
+            .document-header td { border: 0; padding: 10px 12px; vertical-align: middle; }
+            .brand-cell { width: 25%; background: #0b3558; color: #fff; }
+            .brand-mark { font-size: 20px; line-height: 1; font-weight: 700; letter-spacing: .4px; }
+            .brand-subtitle { margin-top: 5px; font-size: 8.5px; color: #dce8f2; }
+            .title-cell { width: 56%; background: #f4f8fb; border-top: 1px solid #c8d7e3; border-bottom: 1px solid #c8d7e3; }
+            .doc-title { font-size: 15px; font-weight: 700; color: #0b3558; line-height: 1.28; }
+            .doc-subtitle { margin-top: 5px; color: #64748b; font-size: 8.8px; letter-spacing: .2px; text-transform: uppercase; }
+            .meta-cell { width: 19%; background: #ffffff; color: #475569; font-size: 8.8px; text-align: right; border: 1px solid #c8d7e3 !important; }
+            .meta-cell strong { color: #0b3558; font-size: 10px; }
+            .client { background: #f8fafc; border: 1px solid #d6e1ea; padding: 0; margin-bottom: 16px; page-break-inside: avoid; }
+            .client table { margin-bottom: 0; }
+            .client th { width: 18%; color: #0b3558; background: #eaf2f8; }
+            h2 { font-size: 12.8px; margin: 18px 0 8px; color: #0b3558; page-break-after: avoid; border-bottom: 1px solid #c8d7e3; padding-bottom: 5px; font-weight: 700; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 14px; table-layout: fixed; }
             thead { display: table-header-group; }
             tr { page-break-inside: avoid; page-break-after: auto; }
-            th, td { border: 1px solid #cbd8e5; padding: 6px; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
-            th { background: #eef3f8; text-align: left; font-weight: 700; color: #111827; }
-            p { margin: 0 0 8px; overflow-wrap: anywhere; word-break: break-word; }
-            .muted { color: #6b7785; }
+            th, td { border: 1px solid #d6e1ea; padding: 7px 8px; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
+            th { background: #eaf2f8; text-align: left; font-weight: 700; color: #0f2638; }
+            td { color: #243442; }
+            tbody tr:nth-child(even) td { background: #fbfdff; }
+            p { margin: 0 0 9px; overflow-wrap: anywhere; word-break: break-word; }
+            .muted { color: #6b7785; font-style: italic; }
             .qr { margin-top: 8px; font-size: 9px; color: #56616f; }
             .qr img { width: 80px; height: 80px; }
             .detail-record { page-break-inside: avoid; margin-bottom: 12px; }
-            .detail-record-title { background: #0a3765; color: #fff; font-weight: 700; padding: 6px 8px; border: 1px solid #0a3765; }
+            .detail-record-title { background: #0b3558; color: #fff; font-weight: 700; padding: 7px 9px; border: 1px solid #0b3558; }
             .detail-table { margin-bottom: 0; }
-            .detail-table th { width: 26%; }
+            .detail-table th { width: 27%; background: #eef5fa; color: #0b3558; }
             .detail-table td { width: 74%; }
-            footer { position: fixed; left: 34px; right: 34px; bottom: 16px; border-top: 1px solid #cbd8e5; padding-top: 6px; color: #56616f; font-size: 8.8px; }
+            footer { position: fixed; left: 42px; right: 42px; bottom: 18px; border-top: 1px solid #c8d7e3; padding-top: 7px; color: #607080; font-size: 8.6px; }
             footer span:first-child { display: inline-block; width: 78%; }
             .page-number { display: inline-block; width: 20%; text-align: right; }
             .page-number:after { content: counter(page); }
@@ -3079,133 +3095,133 @@ class DocumentGeneratorService
     private function certificationApplicationCss(): string
     {
         return '
-            @page { margin: 30px 32px 52px; }
+            @page { margin: 36px 40px 62px; }
             .f25-header { border: 0; padding: 0; margin-bottom: 14px; }
-            .f25-header table { border: 2px solid #1d2b3a; margin-bottom: 12px; }
-            .f25-header td { border: 1px solid #1d2b3a; padding: 8px; vertical-align: middle; }
-            .f25-logo { width: 17%; text-align: center; color: #0f5ea8; font-weight: 700; }
+            .f25-header table { border: 1.5px solid #0b3558; margin-bottom: 14px; }
+            .f25-header td { border: 1px solid #b8cad8; padding: 8px; vertical-align: middle; }
+            .f25-logo { width: 17%; text-align: center; color: #0b5f9e; font-weight: 700; background: #f4f8fb; }
             .f25-logo-text { font-size: 24px; line-height: 1; }
             .f25-title { width: 50%; text-align: center; font-size: 17px; font-weight: 700; color: #0a3765; }
-            footer { color: #000; border-top: 1px solid #1d2b3a; }
+            footer { left: 40px; right: 40px; color: #607080; border-top: 1px solid #c8d7e3; }
         ';
     }
 
     private function auditorAppointmentCss(): string
     {
         return '
-            @page { margin: 30px 28px 260px; }
-            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10.5px; color: #000; }
-            h2 { color: #000; font-size: 14px; margin: 18px 0 8px; page-break-after: avoid; }
-            h3 { color: #000; font-size: 12px; margin: 14px 0 8px; page-break-after: avoid; }
+            @page { margin: 36px 36px 120px; }
+            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10px; color: #1f2933; }
+            h2 { color: #0b3558; font-size: 13px; margin: 18px 0 8px; page-break-after: avoid; border-bottom: 1px solid #c8d7e3; padding-bottom: 5px; }
+            h3 { color: #0b3558; font-size: 11.5px; margin: 14px 0 8px; page-break-after: avoid; }
             p { line-height: 1.35; margin: 7px 0 12px; }
             .f30-header { border: 0; padding: 0; margin-bottom: 18px; }
-            .f30-header table { border: 2px solid #000; margin-bottom: 0; }
-            .f30-header td { border: 1px solid #000; padding: 8px; vertical-align: middle; }
-            .f30-logo { width: 23%; text-align: center; color: #0f70bd; font-weight: 700; }
+            .f30-header table { border: 1.5px solid #0b3558; margin-bottom: 0; }
+            .f30-header td { border: 1px solid #b8cad8; padding: 8px; vertical-align: middle; }
+            .f30-logo { width: 23%; text-align: center; color: #0b5f9e; font-weight: 700; background: #f4f8fb; }
             .f30-logo-text { font-size: 34px; line-height: 1; }
             .f30-title { width: 43%; text-align: center; font-size: 17px; font-weight: 700; }
-            .f30-cert { background: #d9e2f3; color: #1f497d; font-size: 15px; padding: 16px 0; margin: 24px -8px -8px; }
+            .f30-cert { background: #eaf2f8; color: #0b3558; font-size: 15px; padding: 16px 0; margin: 24px -8px -8px; }
             .f30-control { margin-bottom: 0; }
-            .f30-control th { width: 54%; background: #fff; border: 1px solid #000; padding: 6px 8px; color: #000; }
-            .f30-control td { width: 46%; background: #d9e2f3; border: 1px solid #000; padding: 6px 8px; color: #1f497d; }
-            .f30-table th { width: 40%; background: #d9e2f3; color: #000; border: 1px solid #000; padding: 7px 8px; font-weight: 700; }
-            .f30-table td { width: 60%; border: 1px solid #000; padding: 7px 8px; }
-            .f30-grid th, .f30-grid td { border: 1px solid #000; padding: 7px 8px; vertical-align: top; }
-            .f30-grid th { background: #d9e2f3; color: #000; text-align: left; }
-            footer { position: fixed; left: 28px; right: 28px; bottom: 24px; border-top: 1px solid #000; padding-top: 5px; color: #000; font-size: 9px; }
+            .f30-control th { width: 54%; background: #fff; border: 1px solid #b8cad8; padding: 6px 8px; color: #0f2638; }
+            .f30-control td { width: 46%; background: #eaf2f8; border: 1px solid #b8cad8; padding: 6px 8px; color: #0b3558; }
+            .f30-table th { width: 40%; background: #eaf2f8; color: #0f2638; border: 1px solid #b8cad8; padding: 7px 8px; font-weight: 700; }
+            .f30-table td { width: 60%; border: 1px solid #b8cad8; padding: 7px 8px; }
+            .f30-grid th, .f30-grid td { border: 1px solid #b8cad8; padding: 7px 8px; vertical-align: top; }
+            .f30-grid th { background: #eaf2f8; color: #0f2638; text-align: left; }
+            footer { position: fixed; left: 36px; right: 36px; bottom: 18px; border-top: 1px solid #c8d7e3; padding-top: 6px; color: #607080; font-size: 8.6px; }
         ';
     }
 
     private function auditPlanCss(): string
     {
         return '
-            @page { margin: 28px 24px 112px; }
-            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 9.6px; color: #000; }
-            h2 { color: #003366; font-size: 13px; margin: 14px 0 7px; page-break-after: avoid; }
+            @page { margin: 32px 30px 88px; }
+            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 9.4px; color: #1f2933; }
+            h2 { color: #0b3558; font-size: 12.6px; margin: 15px 0 7px; page-break-after: avoid; border-bottom: 1px solid #c8d7e3; padding-bottom: 4px; }
             p { line-height: 1.35; margin: 6px 0 10px; }
             .f31-header { border: 0; padding: 0; margin-bottom: 12px; }
-            .f31-header table { border: 2px solid #1d2b3a; margin-bottom: 0; }
-            .f31-header td { border: 1px solid #1d2b3a; padding: 7px; vertical-align: middle; }
-            .f31-logo { width: 18%; text-align: center; color: #0f5ea8; font-weight: 700; }
+            .f31-header table { border: 1.5px solid #0b3558; margin-bottom: 0; }
+            .f31-header td { border: 1px solid #b8cad8; padding: 7px; vertical-align: middle; }
+            .f31-logo { width: 18%; text-align: center; color: #0b5f9e; font-weight: 700; background: #f4f8fb; }
             .f31-logo-text { font-size: 28px; line-height: 1; }
             .f31-title { width: 49%; text-align: center; font-size: 18px; font-weight: 700; color: #0a3765; line-height: 1.25; }
             .f31-title span { font-size: 13px; color: #1f497d; }
             .f31-control { margin-bottom: 0; }
-            .f31-control th { width: 52%; background: #eef5fb; color: #000; border: 1px solid #1d2b3a; padding: 5px 6px; }
-            .f31-control td { width: 48%; border: 1px solid #1d2b3a; padding: 5px 6px; color: #1f497d; }
-            .client { background: #f4f7fb; border: 1px solid #dbe5ef; padding: 8px; margin-bottom: 12px; }
-            .f31-table th { width: 32%; background: #eaf2fb; color: #000; border: 1px solid #b8c8d8; padding: 6px 7px; font-weight: 700; }
-            .f31-table td { width: 68%; border: 1px solid #b8c8d8; padding: 6px 7px; }
-            .f31-grid th, .f31-grid td { border: 1px solid #b8c8d8; padding: 5px 6px; vertical-align: top; }
-            .f31-grid th { background: #eaf2fb; color: #000; text-align: left; font-weight: 700; }
+            .f31-control th { width: 52%; background: #eaf2f8; color: #0f2638; border: 1px solid #b8cad8; padding: 5px 6px; }
+            .f31-control td { width: 48%; border: 1px solid #b8cad8; padding: 5px 6px; color: #0b3558; }
+            .client { background: #f8fafc; border: 1px solid #d6e1ea; padding: 8px; margin-bottom: 12px; }
+            .f31-table th { width: 32%; background: #eaf2f8; color: #0f2638; border: 1px solid #b8cad8; padding: 6px 7px; font-weight: 700; }
+            .f31-table td { width: 68%; border: 1px solid #b8cad8; padding: 6px 7px; }
+            .f31-grid th, .f31-grid td { border: 1px solid #b8cad8; padding: 5px 6px; vertical-align: top; }
+            .f31-grid th { background: #eaf2f8; color: #0f2638; text-align: left; font-weight: 700; }
             .f31-grid thead { display: table-header-group; }
             .f31-grid tr { page-break-inside: avoid; page-break-after: auto; }
             .f31-timetable th, .f31-timetable td { font-size: 8.8px; }
             .f31-note { color: #334155; }
-            footer { position: fixed; left: 24px; right: 24px; bottom: 18px; border-top: 1px solid #1d2b3a; padding-top: 5px; color: #000; font-size: 8.5px; }
+            footer { position: fixed; left: 30px; right: 30px; bottom: 16px; border-top: 1px solid #c8d7e3; padding-top: 6px; color: #607080; font-size: 8.4px; }
         ';
     }
 
     private function contractCss(): string
     {
         return '
-            @page { margin: 30px 32px 118px; }
-            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10.5px; color: #000; }
-            h2 { color: #003366; font-size: 14px; margin: 16px 0 8px; page-break-after: avoid; }
+            @page { margin: 36px 40px 88px; }
+            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10px; color: #1f2933; }
+            h2 { color: #0b3558; font-size: 12.8px; margin: 17px 0 8px; page-break-after: avoid; border-bottom: 1px solid #c8d7e3; padding-bottom: 5px; }
             .f27-header { border: 0; padding: 0; margin-bottom: 14px; }
-            .f27-header table { border: 2px solid #1d2b3a; margin-bottom: 12px; }
-            .f27-header td { border: 1px solid #1d2b3a; padding: 8px; vertical-align: middle; }
-            .f27-logo { width: 17%; text-align: center; color: #0f5ea8; font-weight: 700; }
+            .f27-header table { border: 1.5px solid #0b3558; margin-bottom: 12px; }
+            .f27-header td { border: 1px solid #b8cad8; padding: 8px; vertical-align: middle; }
+            .f27-logo { width: 17%; text-align: center; color: #0b5f9e; font-weight: 700; background: #f4f8fb; }
             .f27-logo-text { font-size: 24px; line-height: 1; }
             .f27-title { width: 50%; text-align: center; font-size: 17px; font-weight: 700; color: #0a3765; }
             .f27-control { margin-bottom: 0; }
-            .f27-control th { width: 48%; background: #eef5fb; color: #000; }
-            .f27-control th, .f27-control td { border: 1px solid #1d2b3a; padding: 5px 6px; }
-            .client { background: #f4f7fb; border: 1px solid #dbe5ef; padding: 10px; margin-bottom: 14px; }
-            footer { color: #000; border-top: 1px solid #1d2b3a; }
+            .f27-control th { width: 48%; background: #eaf2f8; color: #0f2638; }
+            .f27-control th, .f27-control td { border: 1px solid #b8cad8; padding: 5px 6px; }
+            .client { background: #f8fafc; border: 1px solid #d6e1ea; padding: 10px; margin-bottom: 14px; }
+            footer { left: 40px; right: 40px; color: #607080; border-top: 1px solid #c8d7e3; }
         ';
     }
 
     private function auditProgramCss(): string
     {
         return '
-            @page { margin: 30px 32px 126px; }
-            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10.5px; color: #000; }
-            h2 { color: #003366; font-size: 14px; margin: 16px 0 8px; page-break-after: avoid; }
+            @page { margin: 36px 40px 92px; }
+            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10px; color: #1f2933; }
+            h2 { color: #0b3558; font-size: 12.8px; margin: 17px 0 8px; page-break-after: avoid; border-bottom: 1px solid #c8d7e3; padding-bottom: 5px; }
             .f42-header { border: 0; padding: 0; margin-bottom: 14px; }
-            .f42-header table { border: 2px solid #1d2b3a; margin-bottom: 12px; }
-            .f42-header td { border: 1px solid #1d2b3a; padding: 8px; vertical-align: middle; }
-            .f42-logo { width: 17%; text-align: center; color: #0f5ea8; font-weight: 700; }
+            .f42-header table { border: 1.5px solid #0b3558; margin-bottom: 12px; }
+            .f42-header td { border: 1px solid #b8cad8; padding: 8px; vertical-align: middle; }
+            .f42-logo { width: 17%; text-align: center; color: #0b5f9e; font-weight: 700; background: #f4f8fb; }
             .f42-logo-text { font-size: 24px; line-height: 1; }
             .f42-title { width: 50%; text-align: center; font-size: 17px; font-weight: 700; color: #0a3765; }
             .f42-control { margin-bottom: 0; }
-            .f42-control th { width: 48%; background: #eef5fb; color: #000; }
-            .f42-control th, .f42-control td { border: 1px solid #1d2b3a; padding: 5px 6px; }
-            .client { background: #f4f7fb; border: 1px solid #dbe5ef; padding: 10px; margin-bottom: 14px; }
-            footer { color: #000; border-top: 1px solid #1d2b3a; }
+            .f42-control th { width: 48%; background: #eaf2f8; color: #0f2638; }
+            .f42-control th, .f42-control td { border: 1px solid #b8cad8; padding: 5px 6px; }
+            .client { background: #f8fafc; border: 1px solid #d6e1ea; padding: 10px; margin-bottom: 14px; }
+            footer { left: 40px; right: 40px; color: #607080; border-top: 1px solid #c8d7e3; }
         ';
     }
 
     private function applicationReviewCss(): string
     {
         return '
-            @page { margin: 34px 28px 46px; }
-            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10.5px; color: #000; }
-            h2 { color: #000; font-size: 14px; margin: 16px 0 8px; page-break-after: avoid; }
+            @page { margin: 36px 40px 62px; }
+            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10px; color: #1f2933; }
+            h2 { color: #0b3558; font-size: 12.8px; margin: 17px 0 8px; page-break-after: avoid; border-bottom: 1px solid #c8d7e3; padding-bottom: 5px; }
             table { page-break-inside: auto; }
             tr { page-break-inside: avoid; page-break-after: auto; }
-            .f28-header table { border: 2px solid #000; margin-bottom: 18px; }
-            .f28-header td { border: 1px solid #000; padding: 8px; vertical-align: middle; }
-            .f28-logo { width: 18%; text-align: center; color: #0f70bd; font-weight: 700; font-size: 13px; }
+            .f28-header table { border: 1.5px solid #0b3558; margin-bottom: 18px; }
+            .f28-header td { border: 1px solid #b8cad8; padding: 8px; vertical-align: middle; }
+            .f28-logo { width: 18%; text-align: center; color: #0b5f9e; font-weight: 700; font-size: 13px; background: #f4f8fb; }
             .f28-logo-text { font-size: 28px; line-height: 1; }
             .f28-title { width: 54%; text-align: center; font-size: 18px; font-weight: 700; line-height: 1.15; }
-            .f28-cert { background: #d9e2f3; text-align: center; color: #1f497d; font-size: 15px; font-weight: 700; letter-spacing: 1px; }
-            .f28-table th { width: 40%; background: #d9e2f3; color: #000; border: 1px solid #000; padding: 7px 8px; font-weight: 700; }
-            .f28-table td { width: 60%; border: 1px solid #000; padding: 7px 8px; font-weight: 600; }
-            .f28-man-days th, .f28-man-days td { border: 1px solid #000; padding: 6px; text-align: center; }
-            .f28-man-days th { background: #d9e2f3; color: #000; }
+            .f28-cert { background: #eaf2f8; text-align: center; color: #0b3558; font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+            .f28-table th { width: 40%; background: #eaf2f8; color: #0f2638; border: 1px solid #b8cad8; padding: 7px 8px; font-weight: 700; }
+            .f28-table td { width: 60%; border: 1px solid #b8cad8; padding: 7px 8px; font-weight: 600; }
+            .f28-man-days th, .f28-man-days td { border: 1px solid #b8cad8; padding: 6px; text-align: center; }
+            .f28-man-days th { background: #eaf2f8; color: #0f2638; }
             .f28-note { font-size: 10px; margin-top: 18px; }
-            footer { position: fixed; left: 28px; right: 28px; bottom: 14px; border-top: 1px solid #000; padding-top: 5px; color: #000; font-size: 9px; }
+            footer { position: fixed; left: 40px; right: 40px; bottom: 16px; border-top: 1px solid #c8d7e3; padding-top: 6px; color: #607080; font-size: 8.6px; }
         ';
     }
 }
