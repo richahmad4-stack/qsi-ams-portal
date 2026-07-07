@@ -16,6 +16,7 @@ writable/uploads/
 
 # Local database/runtime folders
 .mysql-data/
+.runtime/
 tmp/
 
 # Test/build/editor caches
