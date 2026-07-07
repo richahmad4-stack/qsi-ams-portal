@@ -300,8 +300,14 @@ class CertificationApplicationController extends BaseController
 
     private function excludeFromApplication(array $question): bool
     {
-        return in_array((string) ($question['section'] ?? ''), $this->excludedApplicationSections(), true)
+        return $this->applicationSectionExcluded((string) ($question['section'] ?? ''))
             || (string) ($question['question_type'] ?? '') === 'file';
+    }
+
+    private function applicationSectionExcluded(string $section): bool
+    {
+        return in_array($section, $this->excludedApplicationSections(), true)
+            || str_ends_with(strtoupper(trim($section)), 'SPECIFIC QUESTIONS');
     }
 
     private function excludedApplicationSections(): array

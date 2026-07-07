@@ -533,7 +533,7 @@ class DocumentGeneratorService
         ]];
 
         foreach ($answers as $section => $rows) {
-            if (in_array((string) $section, $this->excludedCertificationApplicationSections(), true)) {
+            if ($this->certificationApplicationSectionExcluded((string) $section)) {
                 continue;
             }
 
@@ -592,6 +592,12 @@ class DocumentGeneratorService
             'Declaration',
             'HACCP Specific Questions',
         ];
+    }
+
+    private function certificationApplicationSectionExcluded(string $section): bool
+    {
+        return in_array($section, $this->excludedCertificationApplicationSections(), true)
+            || str_ends_with(strtoupper(trim($section)), 'SPECIFIC QUESTIONS');
     }
 
     private function applicationReviewSections(array $client, array $data): array
@@ -2735,6 +2741,10 @@ class DocumentGeneratorService
 
         $answers = [];
         foreach ($rows as $row) {
+            if ($this->certificationApplicationSectionExcluded((string) ($row['section'] ?? ''))) {
+                continue;
+            }
+
             if (! $this->applicationQuestionAppliesToStandards($row, $selectedStandardCodes)) {
                 continue;
             }
