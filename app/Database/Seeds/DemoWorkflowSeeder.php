@@ -16,6 +16,7 @@ class DemoWorkflowSeeder extends Seeder
     private array $iaf = [];
     private array $nace = [];
     private array $food = [];
+    private array $medical = [];
 
     public function run(): void
     {
@@ -30,13 +31,14 @@ class DemoWorkflowSeeder extends Seeder
         $this->iaf = $this->lookup('iaf_codes', 'code');
         $this->nace = $this->lookup('nace_codes', 'code');
         $this->food = $this->lookup('food_chain_categories', 'code');
+        $this->medical = $this->lookup('medical_device_categories', 'code');
 
         $scenarios = $this->scenarios();
 
         $this->db->transStart();
         $this->seedDemoRoles();
         $this->seedDemoUsersAndPersonnel();
-        $this->resetDemoClients(array_column($scenarios, 'company'));
+        $this->resetDemoClients();
 
         foreach ($scenarios as $index => $scenario) {
             $this->seedClientLifecycle($scenario, $index + 1);
@@ -50,69 +52,219 @@ class DemoWorkflowSeeder extends Seeder
     {
         return [
             [
-                'company' => 'Demo Al Noor Catering Services LLC',
-                'contact' => 'Mariam Al Harbi',
-                'email' => 'mariam.harbi@demo-qsi.test',
+                'company' => 'Demo Riyadh Precision Components LLC',
+                'contact' => 'Saad Al Jaber',
+                'email' => 'saad.jaber@demo-qsi.test',
                 'phone' => '+966 11 410 1180',
                 'city' => 'Riyadh',
-                'address' => 'Kitchen Complex 4, Sulay District, Riyadh',
+                'address' => 'Industrial Area 2, Riyadh',
+                'scope' => 'Manufacture and inspection of machined metal components for industrial customers.',
+                'employees' => 52,
+                'sites' => 1,
+                'risk' => 'medium',
+                'standards' => ['ISO 9001:2015'],
+                'food' => null,
+                'medical' => null,
+                'iaf' => '17',
+                'nace' => '32',
+                'processes' => ['Sales and contract review', 'CNC machining', 'Final inspection', 'Purchasing', 'Calibration'],
+                'base' => '2024-07-05',
+                'fees' => [7800, 3900, 3900],
+                'ncrs' => ['initial_stage1' => 0, 'initial_stage2' => 3, 'surveillance1' => 1, 'surveillance2' => 1],
+            ],
+            [
+                'company' => 'Demo Eastern Environmental Services Co.',
+                'contact' => 'Noura Al Mutairi',
+                'email' => 'noura.environment@demo-qsi.test',
+                'phone' => '+966 13 620 4460',
+                'city' => 'Dammam',
+                'address' => 'Environmental Services Park, Dammam',
+                'scope' => 'Waste collection, transfer, treatment coordination and environmental monitoring services.',
+                'employees' => 76,
+                'sites' => 2,
+                'risk' => 'medium',
+                'standards' => ['ISO 14001:2015'],
+                'food' => null,
+                'medical' => null,
+                'iaf' => '24',
+                'nace' => '38',
+                'processes' => ['Waste collection planning', 'Transfer station control', 'Environmental monitoring', 'Emergency preparedness', 'Compliance evaluation'],
+                'base' => '2024-08-08',
+                'fees' => [8800, 4400, 4400],
+                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 3, 'surveillance1' => 1, 'surveillance2' => 1],
+            ],
+            [
+                'company' => 'Demo SafeWork Contracting Ltd',
+                'contact' => 'Fahad Al Otaibi',
+                'email' => 'fahad.safework@demo-qsi.test',
+                'phone' => '+966 12 733 8810',
+                'city' => 'Jeddah',
+                'address' => 'Construction Support Zone, Jeddah',
+                'scope' => 'Civil maintenance, scaffolding, access works and site support contracting.',
+                'employees' => 148,
+                'sites' => 3,
+                'risk' => 'high',
+                'standards' => ['ISO 45001:2018'],
+                'food' => null,
+                'medical' => null,
+                'iaf' => '28',
+                'nace' => '43',
+                'processes' => ['Project mobilization', 'Hazard identification', 'Permit control', 'Incident reporting', 'Worker consultation'],
+                'base' => '2024-09-10',
+                'fees' => [11600, 5800, 5800],
+                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 4, 'surveillance1' => 2, 'surveillance2' => 1],
+            ],
+            [
+                'company' => 'Demo Sunrise Catering Kitchens LLC',
+                'contact' => 'Mariam Al Harbi',
+                'email' => 'mariam.sunrise@demo-qsi.test',
+                'phone' => '+966 11 502 9170',
+                'city' => 'Riyadh',
+                'address' => 'Kitchen Complex 7, Riyadh',
                 'scope' => 'Preparation and delivery of chilled and hot meals for hospitals, offices and industrial camps.',
-                'employees' => 58,
+                'employees' => 64,
                 'sites' => 2,
                 'risk' => 'medium',
                 'standards' => ['HACCP'],
                 'food' => 'E',
+                'medical' => null,
                 'iaf' => '03',
-                'nace' => '10',
+                'nace' => '56',
                 'processes' => ['Receiving and storage', 'Hot kitchen', 'Cold kitchen', 'Dispatch and transport', 'Cleaning and sanitation'],
-                'base' => '2024-07-05',
+                'base' => '2024-10-04',
                 'fees' => [8200, 4100, 4100],
                 'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 3, 'surveillance1' => 0, 'surveillance2' => 2],
             ],
             [
-                'company' => 'Demo Oasis Dates Processing Factory',
+                'company' => 'Demo Fresh Valley Dairy Factory',
                 'contact' => 'Khalid Mansour',
-                'email' => 'khalid.mansour@demo-qsi.test',
-                'phone' => '+966 13 620 4460',
-                'city' => 'Al Ahsa',
-                'address' => 'Food Industrial Zone, Al Ahsa',
-                'scope' => 'Sorting, washing, pasteurization, packing and storage of dates and date paste products.',
-                'employees' => 42,
-                'sites' => 1,
-                'risk' => 'low',
-                'standards' => ['HACCP'],
-                'food' => 'CII',
-                'iaf' => '03',
-                'nace' => '10',
-                'processes' => ['Raw date receiving', 'Sorting and washing', 'Heat treatment', 'Packing', 'Pest control'],
-                'base' => '2024-09-08',
-                'fees' => [7600, 3800, 3800],
-                'ncrs' => ['initial_stage1' => 0, 'initial_stage2' => 2, 'surveillance1' => 1, 'surveillance2' => 0],
-            ],
-            [
-                'company' => 'Demo Red Sea Seafood Processing Co.',
-                'contact' => 'Sara Al Omari',
-                'email' => 'sara.omari@demo-qsi.test',
-                'phone' => '+966 12 733 8810',
-                'city' => 'Jeddah',
-                'address' => 'Cold Chain Park, Jeddah Islamic Port Area',
-                'scope' => 'Processing, freezing, cold storage and distribution of seafood products.',
-                'employees' => 126,
+                'email' => 'khalid.dairy@demo-qsi.test',
+                'phone' => '+966 16 320 2188',
+                'city' => 'Qassim',
+                'address' => 'Food Industrial City, Qassim',
+                'scope' => 'Receiving, pasteurization, filling, cold storage and dispatch of dairy products.',
+                'employees' => 118,
                 'sites' => 2,
                 'risk' => 'high',
-                'standards' => ['HACCP', 'ISO 22000:2018'],
+                'standards' => ['ISO 22000:2018'],
                 'food' => 'CI',
+                'medical' => null,
                 'iaf' => '03',
                 'nace' => '10',
-                'processes' => ['Fish receiving', 'Filleting and processing', 'Freezing', 'Cold storage', 'Distribution'],
+                'processes' => ['Milk receiving', 'Pasteurization', 'Filling and packing', 'Cold storage', 'Traceability and recall'],
                 'base' => '2024-11-03',
-                'fees' => [13200, 6600, 6600],
-                'ncrs' => ['initial_stage1' => 2, 'initial_stage2' => 5, 'surveillance1' => 2, 'surveillance2' => 1],
+                'fees' => [12400, 6200, 6200],
+                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 4, 'surveillance1' => 2, 'surveillance2' => 1],
             ],
             [
-                'company' => 'Demo Najd Ready Meals Industries',
+                'company' => 'Demo Gulf Frozen Foods Manufacturing',
+                'contact' => 'Sara Al Omari',
+                'email' => 'sara.frozen@demo-qsi.test',
+                'phone' => '+966 12 640 7711',
+                'city' => 'Jeddah',
+                'address' => 'Cold Chain Park, Jeddah',
+                'scope' => 'Processing, freezing, packing, cold storage and distribution of frozen ready-to-cook foods.',
+                'employees' => 166,
+                'sites' => 2,
+                'risk' => 'high',
+                'standards' => ['FSSC 22000 Version 6'],
+                'food' => 'CIII',
+                'medical' => null,
+                'iaf' => '03',
+                'nace' => '10',
+                'processes' => ['Raw material receiving', 'Freezing', 'Packing', 'Cold storage', 'Food defense and fraud review'],
+                'base' => '2024-12-01',
+                'fees' => [14800, 7400, 7400],
+                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 5, 'surveillance1' => 2, 'surveillance2' => 2],
+            ],
+            [
+                'company' => 'Demo MedTech Devices Manufacturing',
+                'contact' => 'Dr. Laila Hassan',
+                'email' => 'laila.medtech@demo-qsi.test',
+                'phone' => '+966 13 511 2288',
+                'city' => 'Dammam',
+                'address' => 'Medical Technology Park, Dammam',
+                'scope' => 'Manufacture, final inspection and distribution of non-active disposable medical devices.',
+                'employees' => 92,
+                'sites' => 1,
+                'risk' => 'high',
+                'standards' => ['ISO 13485:2016'],
+                'food' => null,
+                'medical' => 'MD-1.2',
+                'iaf' => '13',
+                'nace' => '32',
+                'processes' => ['Design transfer', 'Clean area production', 'Sterile packaging control', 'Final inspection', 'Complaint handling'],
+                'base' => '2025-01-12',
+                'fees' => [15200, 7600, 7600],
+                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 4, 'surveillance1' => 2, 'surveillance2' => 1],
+            ],
+            [
+                'company' => 'Demo Certification Services Bureau',
+                'contact' => 'Omar Al Salem',
+                'email' => 'omar.certbureau@demo-qsi.test',
+                'phone' => '+966 11 610 9910',
+                'city' => 'Riyadh',
+                'address' => 'Business Gate, Riyadh',
+                'scope' => 'Management system certification services including application review, audit planning, audit delivery, review and certification decision.',
+                'employees' => 34,
+                'sites' => 1,
+                'risk' => 'medium',
+                'standards' => ['ISO 17021'],
+                'food' => null,
+                'medical' => null,
+                'iaf' => '35',
+                'nace' => '71',
+                'processes' => ['Application review', 'Auditor competence control', 'Audit delivery', 'Technical review', 'Certification decision'],
+                'base' => '2025-02-10',
+                'fees' => [9800, 4900, 4900],
+                'ncrs' => ['initial_stage1' => 0, 'initial_stage2' => 3, 'surveillance1' => 1, 'surveillance2' => 1],
+            ],
+            [
+                'company' => 'Demo Product Certification House',
+                'contact' => 'Reema Khalid',
+                'email' => 'reema.productcert@demo-qsi.test',
+                'phone' => '+966 11 622 4488',
+                'city' => 'Riyadh',
+                'address' => 'Testing and Certification Zone, Riyadh',
+                'scope' => 'Product certification scheme operation, evaluation, review, decision and surveillance activities.',
+                'employees' => 28,
+                'sites' => 1,
+                'risk' => 'medium',
+                'standards' => ['ISO 17065'],
+                'food' => null,
+                'medical' => null,
+                'iaf' => '35',
+                'nace' => '71',
+                'processes' => ['Scheme application review', 'Evaluation planning', 'Testing subcontract control', 'Review and decision', 'Surveillance of certified products'],
+                'base' => '2025-03-02',
+                'fees' => [9400, 4700, 4700],
+                'ncrs' => ['initial_stage1' => 0, 'initial_stage2' => 3, 'surveillance1' => 1, 'surveillance2' => 1],
+            ],
+            [
+                'company' => 'Demo GreenBuild Integrated Facilities',
+                'contact' => 'Yasir Al Nasser',
+                'email' => 'yasir.greenbuild@demo-qsi.test',
+                'phone' => '+966 13 744 1200',
+                'city' => 'Dammam',
+                'address' => 'Business Gate Tower, Dammam',
+                'scope' => 'Integrated facilities management, maintenance, cleaning, landscaping and HSE support services.',
+                'employees' => 340,
+                'sites' => 4,
+                'risk' => 'medium',
+                'standards' => ['ISO 9001:2015', 'ISO 14001:2015', 'ISO 45001:2018'],
+                'food' => null,
+                'medical' => null,
+                'iaf' => '28',
+                'nace' => '81',
+                'processes' => ['Contract management', 'Preventive maintenance', 'Waste management', 'OHS inspections', 'Customer service'],
+                'base' => '2025-03-28',
+                'fees' => [22800, 11400, 11400],
+                'ncrs' => ['initial_stage1' => 0, 'initial_stage2' => 3, 'surveillance1' => 2, 'surveillance2' => 1],
+            ],
+            [
+                'company' => 'Demo Najd Ready Meals Group',
                 'contact' => 'Faisal Al Qahtani',
-                'email' => 'faisal.qahtani@demo-qsi.test',
+                'email' => 'faisal.readymeals@demo-qsi.test',
                 'phone' => '+966 11 502 9170',
                 'city' => 'Riyadh',
                 'address' => 'Second Industrial City, Riyadh',
@@ -122,32 +274,76 @@ class DemoWorkflowSeeder extends Seeder
                 'risk' => 'high',
                 'standards' => ['HACCP', 'ISO 22000:2018', 'ISO 9001:2015'],
                 'food' => 'CIII',
+                'medical' => null,
                 'iaf' => '03',
                 'nace' => '10',
                 'processes' => ['Product development', 'Cooking and cooling', 'Packing', 'Quality assurance', 'Supplier approval'],
-                'base' => '2025-01-12',
+                'base' => '2025-04-16',
                 'fees' => [18400, 9200, 9200],
                 'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 6, 'surveillance1' => 3, 'surveillance2' => 2],
             ],
             [
-                'company' => 'Demo GreenBuild Facilities Management',
-                'contact' => 'Noura Al Mutairi',
-                'email' => 'noura.mutairi@demo-qsi.test',
-                'phone' => '+966 54 811 0041',
-                'city' => 'Dammam',
-                'address' => 'Business Gate Tower, Dammam',
-                'scope' => 'Integrated facilities management, maintenance, cleaning, landscaping and HSE support services.',
-                'employees' => 340,
-                'sites' => 4,
+                'company' => 'Demo SecurePack Food Packaging',
+                'contact' => 'Mona Saleh',
+                'email' => 'mona.securepack@demo-qsi.test',
+                'phone' => '+966 12 455 1190',
+                'city' => 'Jeddah',
+                'address' => 'Packaging Industrial Zone, Jeddah',
+                'scope' => 'Manufacture of food-contact packaging materials including extrusion, printing, slitting and packing.',
+                'employees' => 186,
+                'sites' => 2,
                 'risk' => 'medium',
-                'standards' => ['ISO 9001:2015', 'ISO 14001:2015', 'ISO 45001:2018'],
+                'standards' => ['HACCP', 'ISO 22000:2018', 'FSSC 22000 Version 6'],
+                'food' => 'I',
+                'medical' => null,
+                'iaf' => '07',
+                'nace' => '32',
+                'processes' => ['Raw material receiving', 'Extrusion', 'Printing', 'Slitting and packing', 'Food safety verification'],
+                'base' => '2025-05-05',
+                'fees' => [19600, 9800, 9800],
+                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 5, 'surveillance1' => 2, 'surveillance2' => 2],
+            ],
+            [
+                'company' => 'Demo CarePlus Medical Distribution',
+                'contact' => 'Abeer Siddiqui',
+                'email' => 'abeer.careplus@demo-qsi.test',
+                'phone' => '+966 11 700 5510',
+                'city' => 'Riyadh',
+                'address' => 'Healthcare Logistics City, Riyadh',
+                'scope' => 'Import, storage, distribution, servicing and complaint handling of non-active medical devices.',
+                'employees' => 68,
+                'sites' => 2,
+                'risk' => 'medium',
+                'standards' => ['ISO 9001:2015', 'ISO 13485:2016'],
                 'food' => null,
-                'iaf' => '28',
-                'nace' => '81',
-                'processes' => ['Contract management', 'Preventive maintenance', 'Waste management', 'OHS inspections', 'Customer service'],
-                'base' => '2025-03-02',
-                'fees' => [22800, 11400, 11400],
-                'ncrs' => ['initial_stage1' => 0, 'initial_stage2' => 3, 'surveillance1' => 2, 'surveillance2' => 1],
+                'medical' => 'MD-7',
+                'iaf' => '13',
+                'nace' => '46',
+                'processes' => ['Supplier qualification', 'Warehouse control', 'Device release', 'Complaint handling', 'Service records'],
+                'base' => '2025-05-26',
+                'fees' => [16200, 8100, 8100],
+                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 4, 'surveillance1' => 2, 'surveillance2' => 1],
+            ],
+            [
+                'company' => 'Demo Central Hospital Support Services',
+                'contact' => 'Dr. Hanan Rashid',
+                'email' => 'hanan.hospital@demo-qsi.test',
+                'phone' => '+966 11 833 4401',
+                'city' => 'Riyadh',
+                'address' => 'Medical District, Riyadh',
+                'scope' => 'Hospital catering, facility maintenance, infection-sensitive support services and occupational safety controls.',
+                'employees' => 420,
+                'sites' => 5,
+                'risk' => 'high',
+                'standards' => ['HACCP', 'ISO 22000:2018', 'ISO 9001:2015', 'ISO 14001:2015', 'ISO 45001:2018'],
+                'food' => 'E',
+                'medical' => null,
+                'iaf' => '38',
+                'nace' => '86',
+                'processes' => ['Patient meal preparation', 'Facilities maintenance', 'Waste and environmental control', 'OHS risk control', 'Quality and complaint management'],
+                'base' => '2025-06-18',
+                'fees' => [28600, 14300, 14300],
+                'ncrs' => ['initial_stage1' => 2, 'initial_stage2' => 6, 'surveillance1' => 3, 'surveillance2' => 2],
             ],
         ];
     }
@@ -312,13 +508,11 @@ class DemoWorkflowSeeder extends Seeder
         }
     }
 
-    private function resetDemoClients(array $companies): void
+    private function resetDemoClients(): void
     {
-        $companies[] = 'Demo Gulf Manufacturing LLC';
         $clients = $this->db->table('clients')
             ->select('id')
             ->where('tenant_id', $this->tenantId)
-            ->whereIn('company', $companies)
             ->get()
             ->getResultArray();
         $clientIds = array_map(static fn (array $row): int => (int) $row['id'], $clients);
@@ -345,6 +539,8 @@ class DemoWorkflowSeeder extends Seeder
         $applicationIds = $this->ids('certification_applications', 'client_id', $clientIds);
         $applicationQuestionIds = $applicationIds === [] ? [] : $this->ids('application_questions', 'application_id', $applicationIds);
 
+        $this->deleteWhereIn('automation_runs', 'client_id', $clientIds);
+        $this->deleteWhereIn('questionnaire_responses', 'client_id', $clientIds);
         $this->deleteWhereIn('certificate_public_events', 'certificate_id', $certificateIds);
         $this->deleteWhereIn('client_feedback', 'client_id', $clientIds);
         $this->deleteWhereIn('certificates', 'client_id', $clientIds);
@@ -381,6 +577,7 @@ class DemoWorkflowSeeder extends Seeder
         $this->deleteWhereIn('client_sites', 'client_id', $clientIds);
         $this->deleteWhereIn('client_processes', 'client_id', $clientIds);
         $this->deleteWhereIn('client_standards', 'client_id', $clientIds);
+        $this->db->table('personnel')->whereIn('client_id', $clientIds)->update(['client_id' => null]);
         $this->deleteWhereIn('clients', 'id', $clientIds);
     }
 
@@ -486,6 +683,7 @@ class DemoWorkflowSeeder extends Seeder
         $iafId = $this->iaf[$scenario['iaf']]['id'] ?? null;
         $naceId = $this->nace[$scenario['nace']]['id'] ?? null;
         $foodId = $scenario['food'] === null ? null : ($this->food[$scenario['food']]['id'] ?? null);
+        $medicalId = ($scenario['medical'] ?? null) === null ? null : ($this->medical[$scenario['medical']]['id'] ?? null);
 
         foreach ($scenario['standards'] as $code) {
             $standardId = (int) $this->standards[$code]['id'];
@@ -496,6 +694,7 @@ class DemoWorkflowSeeder extends Seeder
                 'iaf_code_id' => $iafId,
                 'nace_code_id' => $naceId,
                 'food_chain_category_id' => str_contains($code, 'HACCP') || str_contains($code, '22000') ? $foodId : null,
+                'medical_device_category_id' => str_contains($code, '13485') ? $medicalId : null,
                 'scope' => $scenario['scope'],
                 'created_at' => date('Y-m-d H:i:s'),
             ]);

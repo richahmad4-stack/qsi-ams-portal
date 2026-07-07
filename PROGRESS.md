@@ -40,6 +40,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - A shared Smart Audit Content Engine now drives report conformity notes and NCR/CAPA packages across audit execution and Cycle Builder. It combines approved Clause Pool material with clause-specific evidence references so each clause has aligned evidence, document references, CAPA text, and auditor-confirmed status without duplicating existing report or NCR/CAPA rows.
 - Cycle Builder preview wording now shows that application review, audit evidence, Technical Review, and Decision basis will be system-prepared from controlled inputs instead of saying those items are still pending manual completion.
 - Legacy Import has been removed from the active product: routes, sidebar entry, controller, models, views, dashboard card, client-screen legacy flag, role seed permissions, and reference seed permissions are cleaned up. Historical database columns/tables remain only as safe dormant structure.
+- Demo client data has been reset and rebuilt with 14 fresh full-workflow demo clients. The set covers every active standard as at least one single-standard file, plus common integrated combinations: QMS/EMS/OHS, HACCP + ISO 22000 + ISO 9001, FSSC/HACCP/ISO 22000, ISO 13485 + ISO 9001, and a high-complexity hospital support file combining food, quality, environmental and OHS standards.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus
@@ -49,6 +50,7 @@ Project-owner compliance hardening and workflow validation: core gates are now i
 ## Next
 
 - Browser-test the Cycle Builder with one HACCP file, one ISO 9001 file, and one multi-standard file, then review the prepared workflow screens and PDFs.
+- Review the new 14-client demo set in the browser and confirm the workflow list, client standards badges, certificates, surveillance states, PDFs, and role dashboards read correctly.
 - Browser-test the new Smart Audit Content Engine on HACCP, ISO 9001, and multi-standard client files to confirm report clauses and NCR/CAPA records are varied, clause-aligned, and not duplicated.
 - Continue refining Clause Pool matching and screen actions so auditors can prepare all clauses, refresh individual clause answers, and refresh NC/CAPA records from approved templates.
 - Convert the user-supplied official forms into richer controlled HTML/PDF sections for application, review, proposal, contract, audit programme, appointment, plan, report, NCR/CAPA, technical review, decision, certificate and feedback.
