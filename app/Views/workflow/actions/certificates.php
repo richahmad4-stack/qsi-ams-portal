@@ -93,7 +93,7 @@
                 <th>Expiry</th>
                 <th>Status</th>
                 <th>Verification</th>
-                <th class="text-end">PDF</th>
+                <th class="text-end">Outputs</th>
             </tr>
             </thead>
             <tbody>
@@ -106,6 +106,10 @@
                     <td><?= esc($certificate['status']) ?></td>
                     <td class="small"><?= esc($certificate['qr_payload']) ?></td>
                     <td class="text-end">
+                        <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('workflow/certification/certificates/' . $certificate['id'] . '/docx') ?>">
+                            <i class="fa-solid fa-file-word me-1" aria-hidden="true"></i>
+                            Word
+                        </a>
                         <a class="btn btn-outline-primary btn-sm" href="<?= site_url('workflow/certification/certificates/' . $certificate['id'] . '/pdf') ?>">
                             <i class="fa-solid fa-file-pdf me-1" aria-hidden="true"></i>
                             PDF

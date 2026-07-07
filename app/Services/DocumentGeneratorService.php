@@ -9,6 +9,11 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Writer\PngWriter;
+use PhpOffice\PhpWord\IOFactory;
+use PhpOffice\PhpWord\PhpWord;
+use PhpOffice\PhpWord\Shared\Converter;
+use PhpOffice\PhpWord\SimpleType\Jc;
+use PhpOffice\PhpWord\Style\Image;
 
 class DocumentGeneratorService
 {
@@ -49,19 +54,7 @@ class DocumentGeneratorService
 
     public function generateCertificate(int $tenantId, int $certificateId, int $userId): array
     {
-        $certificate = $this->db->table('certificates')
-            ->select('certificates.*, clients.company, clients.legal_name, clients.address, clients.city, clients.country, standards.code AS standard_code, standards.name AS standard_name')
-            ->join('clients', 'clients.id = certificates.client_id')
-            ->join('standards', 'standards.id = certificates.standard_id')
-            ->where('certificates.tenant_id', $tenantId)
-            ->where('certificates.id', $certificateId)
-            ->get(1)
-            ->getRowArray();
-
-        if ($certificate === null) {
-            throw new \RuntimeException('Certificate not found.');
-        }
-
+        $certificate = $this->certificateRecord($tenantId, $certificateId);
         $title = 'Certificate - ' . $certificate['certificate_number'];
         $html = $this->certificateHtml($certificate);
 
@@ -75,6 +68,32 @@ class DocumentGeneratorService
             $html,
             $userId
         );
+    }
+
+    public function generateCertificateWord(int $tenantId, int $certificateId, int $userId): array
+    {
+        $certificate = $this->certificateRecord($tenantId, $certificateId);
+        $title = 'Certificate Word - ' . $certificate['certificate_number'];
+
+        return $this->writeCertificateDocx($tenantId, (int) $certificate['client_id'], $title, $certificateId, $certificate, $userId);
+    }
+
+    private function certificateRecord(int $tenantId, int $certificateId): array
+    {
+        $certificate = $this->db->table('certificates')
+            ->select('certificates.*, clients.company, clients.legal_name, clients.address, clients.city, clients.country, standards.code AS standard_code, standards.name AS standard_name')
+            ->join('clients', 'clients.id = certificates.client_id')
+            ->join('standards', 'standards.id = certificates.standard_id')
+            ->where('certificates.tenant_id', $tenantId)
+            ->where('certificates.id', $certificateId)
+            ->get(1)
+            ->getRowArray();
+
+        if ($certificate === null) {
+            throw new \RuntimeException('Certificate not found.');
+        }
+
+        return $certificate;
     }
 
     private function dataForClientDocument(int $tenantId, int $clientId, string $documentKey): array
@@ -390,6 +409,171 @@ class DocumentGeneratorService
         $timestamp = strtotime($modifier . ' -1 day', strtotime($issueDate));
 
         return $timestamp === false ? '' : date('d-m-Y', $timestamp);
+    }
+
+    private function writeCertificateDocx(int $tenantId, int $clientId, string $title, int $certificateId, array $certificate, int $userId): array
+    {
+        $standardCode = (string) ($certificate['standard_code'] ?? '');
+        $certificateNumber = (string) ($certificate['certificate_number'] ?? '');
+        $issueDate = $this->certificateDate((string) ($certificate['issue_date'] ?? ''));
+        $initialDate = $this->certificateDate((string) ($certificate['initial_certification_date'] ?? $certificate['issue_date'] ?? ''));
+        $surveillance1 = $this->certificateCycleDate((string) ($certificate['issue_date'] ?? ''), '+1 year');
+        $surveillance2 = $this->certificateCycleDate((string) ($certificate['issue_date'] ?? ''), '+2 years');
+        $expiryDate = $this->certificateDate((string) ($certificate['expiry_date'] ?? ''));
+        $address = trim(implode(', ', array_filter([
+            (string) ($certificate['address'] ?? ''),
+            (string) ($certificate['city'] ?? ''),
+            (string) ($certificate['country'] ?? ''),
+        ], static fn (string $value): bool => trim($value) !== '')));
+
+        $phpWord = new PhpWord();
+        $phpWord->setDefaultFontName('Aptos');
+        $phpWord->setDefaultFontSize(10);
+
+        $section = $phpWord->addSection([
+            'pageSizeW' => 11906,
+            'pageSizeH' => 16838,
+            'marginLeft' => (int) round(Converter::cmToTwip(5.6)),
+            'marginRight' => (int) round(Converter::cmToTwip(1.7)),
+            'marginTop' => (int) round(Converter::cmToTwip(2.7)),
+            'marginBottom' => (int) round(Converter::cmToTwip(0.8)),
+        ]);
+
+        $backgroundPath = $this->publicAssetPath('assets/img/qsi-certificate-template.jpeg');
+        if ($backgroundPath !== '') {
+            $section->addImage($backgroundPath, [
+                'width' => Converter::cmToPixel(21),
+                'height' => Converter::cmToPixel(29.7),
+                'wrappingStyle' => Image::WRAPPING_STYLE_BEHIND,
+                'positioning' => Image::POSITION_ABSOLUTE,
+                'posHorizontal' => Image::POSITION_HORIZONTAL_LEFT,
+                'posHorizontalRel' => Image::POSITION_RELATIVE_TO_PAGE,
+                'posVertical' => Image::POSITION_VERTICAL_TOP,
+                'posVerticalRel' => Image::POSITION_RELATIVE_TO_PAGE,
+                'marginLeft' => 0,
+                'marginTop' => 0,
+            ]);
+        }
+
+        $section->addText(
+            'This is to certify the ' . $this->certificateSystemName($standardCode) . ' of',
+            ['size' => 11],
+            ['spaceAfter' => Converter::pointToTwip(22)]
+        );
+        $section->addText(
+            (string) ($certificate['legal_name'] ?: $certificate['company']),
+            ['size' => 22, 'bold' => true],
+            ['spaceAfter' => Converter::pointToTwip(4)]
+        );
+        $section->addText($address, ['size' => 9], ['spaceAfter' => Converter::pointToTwip(24)]);
+        $section->addText(
+            'has been assessed and found to be in compliance with the ' . (str_contains(strtoupper($standardCode), 'HACCP') ? 'document' : 'Standard'),
+            ['size' => 11],
+            ['spaceAfter' => Converter::pointToTwip(16)]
+        );
+        $section->addText($standardCode, ['size' => 30], ['spaceAfter' => Converter::pointToTwip(10)]);
+        $this->addDocxMultilineText(
+            $section,
+            $this->certificateStandardDescription($standardCode),
+            ['size' => 9.5, 'bold' => true, 'italic' => true],
+            ['spaceAfter' => Converter::pointToTwip(16)]
+        );
+        $section->addText('applicable to', ['size' => 14], ['spaceAfter' => Converter::pointToTwip(8)]);
+        $this->addDocxMultilineText(
+            $section,
+            (string) ($certificate['scope'] ?? ''),
+            ['size' => 15, 'bold' => true],
+            ['spaceAfter' => Converter::pointToTwip(10)]
+        );
+
+        $dateTable = $section->addTable([
+            'borderTopSize' => 8,
+            'borderBottomSize' => 8,
+            'borderColor' => '1f2933',
+            'cellMarginTop' => 45,
+            'cellMarginBottom' => 45,
+            'cellMarginLeft' => 55,
+            'cellMarginRight' => 55,
+        ]);
+        $this->addCertificateDateRow($dateTable, 'Initial Certification Date:', $initialDate, 'Certification Date:', $issueDate);
+        $this->addCertificateDateRow($dateTable, 'Surveillance 1 Date:', $surveillance1, 'Surveillance 2 Date:', $surveillance2);
+        $this->addCertificateDateRow($dateTable, 'Valid Till:', $expiryDate, 'Certificate Number:', $certificateNumber);
+
+        $section->addText(
+            'This Certificate is valid upon the successful completion of periodic surveillance audits to maintain compliance with the relevant standards.',
+            ['size' => 8.5, 'italic' => true],
+            ['spaceBefore' => Converter::pointToTwip(4), 'spaceAfter' => Converter::pointToTwip(24)]
+        );
+
+        $signatures = $section->addTable(['cellMarginTop' => 30, 'cellMarginBottom' => 30]);
+        $signatures->addRow(950);
+        $approved = $signatures->addCell(2100);
+        $approved->addText('', [], ['borderBottomSize' => 6, 'borderBottomColor' => '1f2933']);
+        $approved->addText('Approved by', ['size' => 9], ['alignment' => Jc::CENTER]);
+        $printed = $signatures->addCell(2100);
+        $printed->addText('', [], ['borderBottomSize' => 6, 'borderBottomColor' => '1f2933']);
+        $printed->addText('Printed by', ['size' => 9], ['alignment' => Jc::CENTER]);
+        $qrCell = $signatures->addCell(2500);
+        $qrPath = $this->qrPngPath((string) ($certificate['qr_payload'] ?? $certificateNumber));
+        if ($qrPath !== '') {
+            $qrCell->addImage($qrPath, ['width' => 78, 'height' => 78, 'alignment' => Jc::RIGHT]);
+        }
+
+        $section->addText('Validity code: ' . $certificateNumber, ['size' => 12, 'bold' => true, 'color' => '1c6d8a']);
+        $section->addText('Check validity of the certificate using this code on certificate.qsicert.ca', ['size' => 8]);
+        $section->addText('Or email us at info@qsi-cert.com', ['size' => 8]);
+        $section->addText('QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia', ['size' => 8]);
+
+        $directory = WRITEPATH . 'uploads' . DIRECTORY_SEPARATOR . 'documents' . DIRECTORY_SEPARATOR . 'tenant_' . $tenantId . DIRECTORY_SEPARATOR . 'client_' . $clientId;
+        if (! is_dir($directory)) {
+            mkdir($directory, 0775, true);
+        }
+
+        $fileName = preg_replace('/[^a-zA-Z0-9_-]+/', '-', strtolower('certificate-word-' . $title)) . '-' . date('YmdHis') . '.docx';
+        $path = $directory . DIRECTORY_SEPARATOR . $fileName;
+        IOFactory::createWriter($phpWord, 'Word2007')->save($path);
+
+        $record = [
+            'tenant_id' => $tenantId,
+            'client_id' => $clientId,
+            'document_key' => 'certificate_docx',
+            'document_title' => $title,
+            'related_table' => 'certificates',
+            'related_id' => $certificateId,
+            'storage_path' => $path,
+            'mime_type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'generated_by' => $userId,
+            'generated_at' => date('Y-m-d H:i:s'),
+        ];
+
+        $id = (int) $this->documents->insert($record);
+        $record['id'] = $id;
+
+        return $record;
+    }
+
+    private function addDocxMultilineText(mixed $container, string $text, array $fontStyle, array $paragraphStyle): void
+    {
+        $lines = preg_split('/\R+/', trim($text)) ?: [];
+        if ($lines === []) {
+            $container->addText('', $fontStyle, $paragraphStyle);
+
+            return;
+        }
+
+        $lastIndex = count($lines) - 1;
+        foreach ($lines as $index => $line) {
+            $container->addText($line, $fontStyle, $index === $lastIndex ? $paragraphStyle : ['spaceAfter' => 0]);
+        }
+    }
+
+    private function addCertificateDateRow(mixed $table, string $leftLabel, string $leftValue, string $rightLabel, string $rightValue): void
+    {
+        $table->addRow();
+        $table->addCell(2100)->addText($leftLabel, ['size' => 8.5, 'bold' => true]);
+        $table->addCell(1450)->addText($leftValue, ['size' => 8.5], ['alignment' => Jc::RIGHT]);
+        $table->addCell(1800)->addText($rightLabel, ['size' => 8.5, 'bold' => true]);
+        $table->addCell(1700)->addText($rightValue, ['size' => 8.5], ['alignment' => Jc::RIGHT]);
     }
 
     private function writePdf(int $tenantId, ?int $clientId, string $key, string $title, ?string $relatedTable, ?int $relatedId, string $html, int $userId): array
@@ -3093,6 +3277,35 @@ class DocumentGeneratorService
             ->getDataUri();
     }
 
+    private function qrPngPath(string $payload): string
+    {
+        $payload = trim($payload);
+        if ($payload === '') {
+            return '';
+        }
+
+        $directory = WRITEPATH . 'cache';
+        if (! is_dir($directory)) {
+            mkdir($directory, 0775, true);
+        }
+
+        $path = $directory . DIRECTORY_SEPARATOR . 'certificate-qr-' . sha1($payload) . '.png';
+        if (is_file($path)) {
+            return $path;
+        }
+
+        $result = Builder::create()
+            ->writer(new PngWriter())
+            ->data($payload)
+            ->size(220)
+            ->margin(5)
+            ->build();
+
+        file_put_contents($path, $result->getString());
+
+        return $path;
+    }
+
     private function documentTitle(string $key, string $company): string
     {
         if ($key === 'certification_application') {
@@ -3169,6 +3382,13 @@ class DocumentGeneratorService
     private function certificateBackgroundDataUri(): string
     {
         return $this->assetDataUri('assets/img/qsi-certificate-template.jpeg');
+    }
+
+    private function publicAssetPath(string $relativePath): string
+    {
+        $path = FCPATH . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+
+        return is_file($path) ? $path : '';
     }
 
     private function assetDataUri(string $relativePath): string

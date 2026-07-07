@@ -64,6 +64,25 @@ class WorkflowDocumentController extends BaseController
             ->setFileName($this->downloadName($document['document_title']));
     }
 
+    public function certificateWord(int $certificateId)
+    {
+        $tenantId = (int) session()->get('tenant_id');
+        $certificate = $this->certificates
+            ->where('tenant_id', $tenantId)
+            ->where('id', $certificateId)
+            ->first();
+
+        if ($certificate === null) {
+            return redirect()->to('/workflow/certification')->with('error', 'Certificate not found.');
+        }
+
+        $document = $this->generator->generateCertificateWord($tenantId, $certificateId, (int) session()->get('user_id'));
+        $this->auditLogger->record('download', 'documents', 'generated_documents', (int) $document['id'], null, $document);
+
+        return $this->response->download($document['storage_path'], null)
+            ->setFileName($this->downloadName($document['document_title'], 'docx'));
+    }
+
     public function eventDocument(int $clientId, int $eventId, string $documentKey)
     {
         $tenantId = (int) session()->get('tenant_id');
@@ -109,9 +128,9 @@ class WorkflowDocumentController extends BaseController
         ];
     }
 
-    private function downloadName(string $title): string
+    private function downloadName(string $title, string $extension = 'pdf'): string
     {
-        return preg_replace('/[^a-zA-Z0-9_-]+/', '-', strtolower($title)) . '.pdf';
+        return preg_replace('/[^a-zA-Z0-9_-]+/', '-', strtolower($title)) . '.' . $extension;
     }
 
     private function eventForClient(int $tenantId, int $clientId, int $eventId): ?array

@@ -49,6 +49,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - The supplied QSI Canada Cert logo is now used in the portal login/sidebar and controlled PDF document headers, replacing text-only QSI marks in the main document pack.
 - Audit report conformity note rendering now removes repeated internal labels and system metadata such as "Conformity note", "Clause Pool basis", and template-reference wording from PDF output while preserving the audit conclusion and objective evidence.
 - Certificate PDFs now use the supplied QSI certificate visual style with the blue vertical certificate band, QSI background, dynamic client/standard/scope text, certification cycle date matrix, QR code, validity code, approval/print areas, and seal-style mark.
+- Certificate issue now provides two controlled outputs from the same certificate record: a branded PDF for electronic issue and a branded Word DOCX for printing hard-copy certificates.
 - Operations readiness has been added as a Super Admin dashboard for go-live status covering production environment, public URL/SSL, SMTP/email, reminder processor, schema exports, backup restore proof, website lead intake, and user administration readiness.
 - User Administration is now available in the portal: Super Admin/Admin can create users, edit profile/status, assign multiple roles, reset passwords, and require password change without database/seed edits.
 - Reminder processing foundation is now active through `php spark ams:process-reminders`, creating upcoming/overdue audit reminders and certificate-expiry reminders with dashboard notifications for responsible admin roles.
@@ -58,7 +59,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 
 ## Current Focus
 
-Project-owner compliance hardening and operational readiness: core workflow gates are in place, and the current focus has moved to production readiness, user administration, reminder/email operations, website lead intake, controlled data migration, and management reporting.
+Project-owner compliance hardening and operational readiness: core workflow gates are in place, certificate PDF/DOCX outputs are active, and the current focus has moved to production readiness, reminder/email operations, website lead intake, controlled data migration, and management reporting.
 
 ## Next
 

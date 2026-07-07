@@ -58,6 +58,12 @@
                                 Generate PDF
                             </a>
                         <?php endif; ?>
+                        <?php if (! empty($row['docx'])): ?>
+                            <a class="btn btn-outline-secondary btn-sm" href="<?= esc($row['docx']) ?>">
+                                <i class="fa-solid fa-file-word" aria-hidden="true"></i>
+                                Word
+                            </a>
+                        <?php endif; ?>
                     </td>
                 </tr>
             <?php endforeach; ?>
