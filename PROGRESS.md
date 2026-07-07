@@ -50,6 +50,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - User Administration is now available in the portal: Super Admin/Admin can create users, edit profile/status, assign multiple roles, reset passwords, and require password change without database/seed edits.
 - Reminder processing foundation is now active through `php spark ams:process-reminders`, creating upcoming/overdue audit reminders and certificate-expiry reminders with dashboard notifications for responsible admin roles.
 - Website lead intake now has a local `website_leads` table and permissions, ready for the next step of connecting the website/Supabase leads feed to AMS screens.
+- Certification workflow status now selects the Initial Stage 2 Technical Review for the certification file card, so future surveillance/recertification pending reviews no longer make an approved certification Technical Review appear in progress.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 
 ## Current Focus

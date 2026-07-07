@@ -98,7 +98,7 @@ class CertificationWorkflowService
         $surveillance1 = $this->eventByType($auditEvents, ['surveillance1']);
         $surveillance2 = $this->eventByType($auditEvents, ['surveillance2']);
         $recertification = $this->eventByType($auditEvents, ['recertification']);
-        $technicalReview = $this->latestTechnicalReview($tenantId, $auditEvents);
+        $technicalReview = $this->certificationTechnicalReview($tenantId, $stage1, $stage2);
         $decision = $technicalReview === null ? null : $this->latest('certification_decisions', [
             'tenant_id' => $tenantId,
             'technical_review_id' => (int) $technicalReview['id'],
@@ -450,15 +450,24 @@ class CertificationWorkflowService
         return $builder->countAllResults();
     }
 
-    private function latestTechnicalReview(int $tenantId, array $events): ?array
+    private function certificationTechnicalReview(int $tenantId, ?array $stage1, ?array $stage2): ?array
     {
-        if ($events === []) {
-            return null;
+        if ($stage2 !== null) {
+            return $this->technicalReviewForEvent($tenantId, (int) $stage2['id']);
         }
 
+        if ($stage1 !== null) {
+            return $this->technicalReviewForEvent($tenantId, (int) $stage1['id']);
+        }
+
+        return null;
+    }
+
+    private function technicalReviewForEvent(int $tenantId, int $eventId): ?array
+    {
         return $this->db->table('technical_reviews')
             ->where('tenant_id', $tenantId)
-            ->whereIn('audit_event_id', array_column($events, 'id'))
+            ->where('audit_event_id', $eventId)
             ->orderBy('id', 'DESC')
             ->get(1)
             ->getRowArray() ?: null;
