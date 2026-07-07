@@ -299,22 +299,97 @@ class DocumentGeneratorService
     private function certificateHtml(array $certificate): string
     {
         $qr = $this->qrDataUri((string) $certificate['qr_payload']);
+        $background = $this->certificateBackgroundDataUri();
+        $standardCode = (string) ($certificate['standard_code'] ?? '');
+        $certificateNumber = (string) ($certificate['certificate_number'] ?? '');
+        $issueDate = $this->certificateDate((string) ($certificate['issue_date'] ?? ''));
+        $initialDate = $this->certificateDate((string) ($certificate['initial_certification_date'] ?? $certificate['issue_date'] ?? ''));
+        $surveillance1 = $this->certificateCycleDate((string) ($certificate['issue_date'] ?? ''), '+1 year');
+        $surveillance2 = $this->certificateCycleDate((string) ($certificate['issue_date'] ?? ''), '+2 years');
+        $expiryDate = $this->certificateDate((string) ($certificate['expiry_date'] ?? ''));
+        $address = trim(implode(', ', array_filter([
+            (string) ($certificate['address'] ?? ''),
+            (string) ($certificate['city'] ?? ''),
+            (string) ($certificate['country'] ?? ''),
+        ], static fn (string $value): bool => trim($value) !== '')));
 
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->certificateCss() . '</style></head><body>'
-            . '<div class="certificate-shell">'
-            . '<div class="brand">QSI AMS</div>'
-            . '<h1>Certificate of Registration</h1>'
-            . '<p class="certifies">This is to certify that</p>'
-            . '<h2>' . esc($certificate['company']) . '</h2>'
-            . '<p>' . esc(trim((string) ($certificate['address'] . ', ' . $certificate['city'] . ', ' . $certificate['country']))) . '</p>'
-            . '<p class="certifies">has been assessed and registered for</p>'
-            . '<h3>' . esc($certificate['standard_code']) . '</h3>'
-            . '<div class="scope">' . nl2br(esc($certificate['scope'])) . '</div>'
-            . '<table class="meta"><tr><th>Certificate No.</th><td>' . esc($certificate['certificate_number']) . '</td><th>Issue Date</th><td>' . esc($certificate['issue_date']) . '</td></tr>'
-            . '<tr><th>Initial Date</th><td>' . esc((string) $certificate['initial_certification_date']) . '</td><th>Expiry Date</th><td>' . esc($certificate['expiry_date']) . '</td></tr></table>'
-            . '<div class="qr"><img src="' . esc($qr, 'attr') . '"><div>Scan to verify<br>' . esc($certificate['public_slug']) . '</div></div>'
-            . '<footer>Prepared on ' . esc(date('Y-m-d H:i')) . ' | Verification URL: ' . esc($certificate['qr_payload']) . '</footer>'
-            . '</div></body></html>';
+            . '<div class="certificate-page"' . ($background === '' ? '' : ' style="background-image: url(' . esc($background, 'attr') . ');"') . '>'
+            . '<div class="certificate-content">'
+            . '<div class="certificate-intro">This is to certify the ' . esc($this->certificateSystemName($standardCode)) . ' of</div>'
+            . '<div class="certificate-company">' . esc((string) ($certificate['legal_name'] ?: $certificate['company'])) . '</div>'
+            . '<div class="certificate-address">' . esc($address) . '</div>'
+            . '<div class="certificate-compliance">has been assessed and found to be in compliance with the ' . esc(str_contains(strtoupper($standardCode), 'HACCP') ? 'document' : 'Standard') . '</div>'
+            . '<div class="certificate-standard">' . esc($standardCode) . '</div>'
+            . '<div class="certificate-description">' . nl2br(esc($this->certificateStandardDescription($standardCode))) . '</div>'
+            . '<div class="certificate-applicable">applicable to</div>'
+            . '<div class="certificate-scope">' . nl2br(esc((string) ($certificate['scope'] ?? ''))) . '</div>'
+            . '<table class="certificate-dates"><tbody>'
+            . '<tr><th>Initial Certification Date:</th><td>' . esc($initialDate) . '</td><th>Certification Date:</th><td>' . esc($issueDate) . '</td></tr>'
+            . '<tr><th>Surveillance 1 Date:</th><td>' . esc($surveillance1) . '</td><th>Surveillance 2 Date:</th><td>' . esc($surveillance2) . '</td></tr>'
+            . '<tr><th>Valid Till:</th><td>' . esc($expiryDate) . '</td><th>Certificate Number:</th><td>' . esc($certificateNumber) . '</td></tr>'
+            . '</tbody></table>'
+            . '<div class="certificate-validity-note">This Certificate is valid upon the successful completion of periodic surveillance audits to maintain compliance with the relevant standards.</div>'
+            . '<div class="certificate-signature certificate-approved"><div class="signature-line"></div><div>Approved by</div></div>'
+            . '<div class="certificate-signature certificate-printed"><div class="signature-line"></div><div>Printed by</div></div>'
+            . '<div class="certificate-qr"><img src="' . esc($qr, 'attr') . '" alt="Certificate QR"></div>'
+            . '<div class="certificate-seal"><span>QSI</span></div>'
+            . '<div class="certificate-validity">Validity code: <strong>' . esc($certificateNumber) . '</strong></div>'
+            . '<div class="certificate-verify">Check validity of the certificate using this code on <strong>certificate.qsicert.ca</strong><br>Or email us at <strong>info@qsi-cert.com</strong><br>QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia</div>'
+            . '</div></div></body></html>';
+    }
+
+    private function certificateSystemName(string $standardCode): string
+    {
+        $code = strtoupper($standardCode);
+
+        return match (true) {
+            str_contains($code, 'HACCP') => 'Hazard Analysis Critical Control Point System',
+            str_contains($code, '22000') || str_contains($code, 'FSSC') => 'Food Safety Management System',
+            str_contains($code, '9001') => 'Quality Management System',
+            str_contains($code, '14001') => 'Environmental Management System',
+            str_contains($code, '45001') => 'Occupational Health and Safety Management System',
+            str_contains($code, '13485') => 'Medical Device Quality Management System',
+            default => 'Management System',
+        };
+    }
+
+    private function certificateStandardDescription(string $standardCode): string
+    {
+        $code = strtoupper($standardCode);
+
+        return match (true) {
+            str_contains($code, 'HACCP') => 'General Principles of Food Hygiene and Guidelines for the implementation & certification of the Hazard Analysis and Critical Control Points (HACCP) system, as per the Codex Alimentarius, CXC 1-1969 (2020).',
+            str_contains($code, '22000') => 'Food safety management systems - Requirements for any organization in the food chain.',
+            str_contains($code, 'FSSC') => 'Food safety system certification requirements for organizations in the food chain.',
+            str_contains($code, '9001') => 'Quality management systems - Requirements.',
+            str_contains($code, '14001') => 'Environmental management systems - Requirements with guidance for use.',
+            str_contains($code, '45001') => 'Occupational health and safety management systems - Requirements with guidance for use.',
+            str_contains($code, '13485') => 'Medical devices - Quality management systems - Requirements for regulatory purposes.',
+            default => 'Applicable certification standard and scheme requirements.',
+        };
+    }
+
+    private function certificateDate(string $date): string
+    {
+        if (trim($date) === '') {
+            return '';
+        }
+
+        $timestamp = strtotime($date);
+
+        return $timestamp === false ? $date : date('d-m-Y', $timestamp);
+    }
+
+    private function certificateCycleDate(string $issueDate, string $modifier): string
+    {
+        if (trim($issueDate) === '') {
+            return '';
+        }
+
+        $timestamp = strtotime($modifier . ' -1 day', strtotime($issueDate));
+
+        return $timestamp === false ? '' : date('d-m-Y', $timestamp);
     }
 
     private function writePdf(int $tenantId, ?int $clientId, string $key, string $title, ?string $relatedTable, ?int $relatedId, string $html, int $userId): array
@@ -3088,7 +3163,17 @@ class DocumentGeneratorService
 
     private function logoDataUri(): string
     {
-        $path = FCPATH . 'assets/img/qsi-logo.png';
+        return $this->assetDataUri('assets/img/qsi-logo.png');
+    }
+
+    private function certificateBackgroundDataUri(): string
+    {
+        return $this->assetDataUri('assets/img/qsi-certificate-template.jpeg');
+    }
+
+    private function assetDataUri(string $relativePath): string
+    {
+        $path = FCPATH . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
 
         if (! is_file($path)) {
             return '';
@@ -3099,7 +3184,14 @@ class DocumentGeneratorService
             return '';
         }
 
-        return 'data:image/png;base64,' . base64_encode($contents);
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $mime = match ($extension) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            default => 'image/png',
+        };
+
+        return 'data:' . $mime . ';base64,' . base64_encode($contents);
     }
 
     private function css(): string
@@ -3158,16 +3250,36 @@ class DocumentGeneratorService
     private function certificateCss(): string
     {
         return '
-            body { text-align: center; }
-            .certificate-shell { border: 5px solid #0f5ea8; padding: 34px; min-height: 930px; }
-            h1 { font-size: 28px; color: #0a3765; margin: 42px 0 24px; }
-            h2 { font-size: 24px; color: #17202a; margin: 14px 0; }
-            h3 { font-size: 22px; color: #0f5ea8; margin: 18px 0; }
-            .certifies { color: #56616f; font-size: 13px; }
-            .scope { border: 1px solid #dbe5ef; padding: 14px; margin: 22px 20px; font-size: 13px; }
-            .meta th, .meta td { font-size: 10px; text-align: left; }
-            .qr { margin-top: 20px; font-size: 9px; color: #56616f; }
-            .qr img { width: 92px; height: 92px; }
+            @page { margin: 0; }
+            * { box-sizing: border-box; }
+            body { margin: 0; padding: 0; font-family: DejaVu Sans, Arial, sans-serif; color: #111827; background: #fff; }
+            .certificate-page { position: relative; width: 210mm; height: 297mm; background-repeat: no-repeat; background-position: 0 0; background-size: 210mm 297mm; overflow: hidden; }
+            .certificate-content { position: absolute; left: 56mm; right: 17mm; top: 27mm; bottom: 0; text-align: left; }
+            .certificate-intro { font-size: 11.4pt; margin-bottom: 11mm; }
+            .certificate-company { font-size: 23pt; line-height: 1.16; font-weight: 700; max-width: 125mm; margin-bottom: 3mm; }
+            .certificate-address { font-size: 9.3pt; line-height: 1.22; max-width: 112mm; margin-bottom: 11mm; }
+            .certificate-compliance { font-size: 11.4pt; margin-bottom: 9mm; }
+            .certificate-standard { font-size: 30pt; line-height: 1; margin-bottom: 6mm; font-weight: 400; }
+            .certificate-description { font-size: 9.7pt; line-height: 1.28; font-weight: 700; font-style: italic; max-width: 130mm; margin-bottom: 9mm; }
+            .certificate-applicable { font-size: 14pt; margin-bottom: 6mm; }
+            .certificate-scope { font-size: 15.5pt; line-height: 1.18; font-weight: 700; max-width: 134mm; margin-bottom: 6mm; }
+            .certificate-dates { width: 137mm; table-layout: fixed; margin: 0 0 3mm; border-collapse: collapse; border-top: 0.4mm solid #1f2933; border-bottom: 0.4mm solid #1f2933; }
+            .certificate-dates th, .certificate-dates td { border: 0; padding: 0.75mm 1mm; font-size: 8.7pt; color: #111827; background: transparent !important; line-height: 1.1; }
+            .certificate-dates tbody tr:nth-child(even) td { background: transparent !important; }
+            .certificate-dates th { width: 35mm; font-weight: 700; text-align: left; }
+            .certificate-dates td { width: 31mm; text-align: right; }
+            .certificate-validity-note { font-size: 8.8pt; line-height: 1.3; font-style: italic; max-width: 134mm; margin-bottom: 10mm; }
+            .certificate-signature { position: absolute; top: 183mm; width: 37mm; text-align: center; font-size: 9.5pt; }
+            .certificate-approved { left: 0; }
+            .certificate-printed { left: 43mm; }
+            .signature-line { height: 12mm; border-bottom: 0.25mm solid #1f2933; margin-bottom: 3mm; }
+            .certificate-qr { position: absolute; left: 0; top: 209mm; width: 28mm; height: 28mm; }
+            .certificate-qr img { width: 28mm; height: 28mm; }
+            .certificate-seal { position: absolute; right: 14mm; top: 184mm; width: 45mm; height: 45mm; border-radius: 50%; background: #050505; border: 1.4mm solid #050505; color: #d4af37; text-align: center; font-weight: 700; font-size: 22pt; line-height: 42mm; box-shadow: 0 0 0 1mm #2f260b inset; }
+            .certificate-seal span { display: inline-block; transform: scaleX(1.15); }
+            .certificate-validity { position: absolute; left: 0; top: 237mm; font-size: 12pt; }
+            .certificate-validity strong { color: #1c6d8a; font-size: 13pt; }
+            .certificate-verify { position: absolute; left: 0; top: 244mm; font-size: 8.2pt; line-height: 1.25; color: #1f2933; }
         ';
     }
 
