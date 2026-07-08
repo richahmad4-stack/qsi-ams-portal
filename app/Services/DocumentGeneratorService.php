@@ -266,6 +266,10 @@ class DocumentGeneratorService
             return $this->applicationReviewHtml($title, $client, $data);
         }
 
+        if ($documentKey === 'proposal') {
+            return $this->proposalHtml($title, $client, $data);
+        }
+
         if ($documentKey === 'contract') {
             return $this->contractHtml($title, $client, $data);
         }
@@ -720,7 +724,7 @@ class DocumentGeneratorService
                 'surveillance2_days' => $payload['surveillance2_days'] ?? '',
                 'recertification_days' => $payload['recertification_days'] ?? '',
             ]], ['total_audit_days', 'stage1_days', 'stage2_days', 'surveillance1_days', 'surveillance2_days', 'recertification_days'])],
-            ['Certification Process and Obligations', '<p>' . nl2br(esc((string) ($payload['certification_process_obligations'] ?? ''))) . '</p>'],
+            ['Certification Process and Obligations', $this->commercialObligationsHtml((string) ($payload['certification_process_obligations'] ?? ''))],
             ['Fees Detail', $this->keyValueTable([
                 'Currency' => $proposal['currency'] ?? '',
                 'Initial Certification Audit' => $this->money($proposal['certification_fee'] ?? 0),
@@ -760,6 +764,104 @@ class DocumentGeneratorService
             ['Important Note', $this->commercialImportantNoteHtml($payload)],
             ['Certification Assessment Note', '<p>Following the audit and based on the auditor&apos;s recommendations, QSI-Cert will conduct the certification assessment. If the QSI assessor confirms that all requirements, accreditation conditions, and contractual terms have been met, the corresponding certificates will be issued.</p>'],
         ];
+    }
+
+    private function proposalHtml(string $title, array $client, array $data): string
+    {
+        $proposal = $data['proposal'] ?? [];
+        $payload = $this->proposalPayloadForDocument($data);
+        $sections = $this->proposalSections($data);
+        $body = '';
+
+        foreach ($sections as [$heading, $content]) {
+            $body .= '<h2>' . esc($heading) . '</h2>' . $content;
+        }
+
+        $cover = $this->commercialCoverHtml(
+            'Certification Proposal',
+            $title,
+            $client,
+            $payload,
+            [
+                'Proposal Number' => (string) ($proposal['proposal_number'] ?? 'Not created'),
+                'Proposal Date' => (string) ($proposal['proposal_date'] ?? substr((string) ($proposal['created_at'] ?? ''), 0, 10)),
+                'Valid Until' => (string) ($proposal['valid_until'] ?? ''),
+                'Prepared For' => (string) ($client['company'] ?? ''),
+            ]
+        );
+
+        return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->commercialDocumentCss() . '</style></head><body>'
+            . $cover
+            . '<main class="commercial-body">'
+            . '<section class="client"><table><tr><th>Client</th><td>' . esc($client['company']) . '</td></tr><tr><th>Scope</th><td>' . nl2br(esc((string) ($client['scope'] ?? ''))) . '</td></tr></table></section>'
+            . $body
+            . '</main>'
+            . '</body></html>';
+    }
+
+    private function commercialCoverHtml(string $documentType, string $title, array $client, array $payload, array $meta): string
+    {
+        $metaRows = '';
+        foreach ($meta as $label => $value) {
+            if (trim((string) $value) === '') {
+                continue;
+            }
+            $metaRows .= '<tr><th>' . esc((string) $label) . '</th><td>' . esc((string) $value) . '</td></tr>';
+        }
+
+        $standards = trim((string) ($payload['standards_text'] ?? ''));
+        if ($standards !== '') {
+            $metaRows .= '<tr><th>Standard(s)</th><td>' . esc($standards) . '</td></tr>';
+        }
+
+        return '<section class="commercial-cover">'
+            . '<div class="cover-topline"></div>'
+            . '<div class="cover-logo">' . $this->logoHtml('cover-logo-img') . '</div>'
+            . '<div class="cover-kicker">QSI Canada Cert</div>'
+            . '<h1>' . esc($documentType) . '</h1>'
+            . '<div class="cover-title">' . esc($title) . '</div>'
+            . '<div class="cover-card">'
+            . '<div class="cover-label">Prepared for</div>'
+            . '<div class="cover-client">' . esc((string) ($client['company'] ?? '')) . '</div>'
+            . '<div class="cover-scope">' . nl2br(esc((string) ($client['scope'] ?? ''))) . '</div>'
+            . '</div>'
+            . '<table class="cover-meta"><tbody>' . $metaRows . '</tbody></table>'
+            . '<div class="cover-footer-line">'
+            . '<span>Controlled certification body document</span>'
+            . '<span>Prepared ' . esc(date('Y-m-d')) . '</span>'
+            . '</div>'
+            . '</section>';
+    }
+
+    private function commercialObligationsHtml(string $text): string
+    {
+        $headings = [
+            'Access to Site and Records',
+            'Availability of Last Audit Report',
+            'Evidence of Certification Process',
+        ];
+        $html = '<div class="commercial-obligations">';
+        $paragraphs = preg_split('/\R{2,}/', trim($text)) ?: [];
+
+        foreach ($paragraphs as $paragraph) {
+            $paragraph = trim($paragraph);
+            if ($paragraph === '') {
+                continue;
+            }
+
+            $lines = array_values(array_filter(preg_split('/\R/', $paragraph) ?: [], static fn (string $line): bool => trim($line) !== ''));
+            if ($lines !== [] && in_array(trim($lines[0]), $headings, true)) {
+                $html .= '<h3>' . esc(trim($lines[0])) . '</h3>';
+                $body = trim(implode("\n", array_slice($lines, 1)));
+                if ($body !== '') {
+                    $html .= '<p>' . nl2br(esc($body)) . '</p>';
+                }
+            } else {
+                $html .= '<p>' . nl2br(esc($paragraph)) . '</p>';
+            }
+        }
+
+        return $html . '</div>';
     }
 
     private function proposalPayloadForDocument(array $data): array
@@ -1502,28 +1604,34 @@ class DocumentGeneratorService
             $body .= '<h2>' . esc($heading) . '</h2>' . $content;
         }
 
-        $header = '<header class="f27-header"><table><tr>'
-            . '<td class="f27-logo">' . $this->logoHtml('pdf-logo') . '</td>'
-            . '<td class="f27-title">' . esc($title) . '</td>'
-            . '<td><table class="f27-control">'
-            . '<tr><th>Document No.</th><td>' . esc((string) $documentNumber) . '</td></tr>'
-            . '<tr><th>Revision No.</th><td>' . esc((string) $revisionNumber) . '</td></tr>'
-            . '<tr><th>Issue No.</th><td>' . esc((string) $issueNumber) . '</td></tr>'
-            . '<tr><th>Date</th><td>' . esc((string) $documentDate) . '</td></tr>'
-            . '</table></td></tr></table></header>';
+        $payload = $this->contractPayloadForDocument($data);
+        $cover = $this->commercialCoverHtml(
+            'Certification Contract',
+            $title,
+            $client,
+            $payload,
+            [
+                'Contract Number' => (string) ($contract['contract_number'] ?? 'Not created'),
+                'Proposal Number' => (string) ($proposal['proposal_number'] ?? ''),
+                'Document No.' => (string) $documentNumber,
+                'Document Date' => (string) $documentDate,
+            ]
+        );
 
-        $clientBlock = '<section class="client"><strong>Client:</strong> ' . esc((string) ($client['company'] ?? ''))
-            . '<br><strong>Scope:</strong> ' . esc((string) ($client['scope'] ?? ''))
-            . '<br><strong>Contract Number:</strong> ' . esc((string) ($contract['contract_number'] ?? 'Not created'))
-            . ' &nbsp; <strong>Proposal Number:</strong> ' . esc((string) ($proposal['proposal_number'] ?? ''))
-            . ' &nbsp; <strong>Status:</strong> ' . esc((string) ($contract['status'] ?? ''))
-            . '</section>';
+        $clientBlock = '<section class="client"><table>'
+            . '<tr><th>Client</th><td>' . esc((string) ($client['company'] ?? '')) . '</td></tr>'
+            . '<tr><th>Scope</th><td>' . nl2br(esc((string) ($client['scope'] ?? ''))) . '</td></tr>'
+            . '<tr><th>Contract Number</th><td>' . esc((string) ($contract['contract_number'] ?? 'Not created')) . '</td></tr>'
+            . '<tr><th>Proposal Number</th><td>' . esc((string) ($proposal['proposal_number'] ?? '')) . '</td></tr>'
+            . '<tr><th>Status</th><td>' . esc((string) ($contract['status'] ?? '')) . '</td></tr>'
+            . '</table></section>';
 
-        return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->contractCss() . '</style></head><body>'
-            . $header
+        return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->contractCss() . $this->commercialDocumentCss() . '</style></head><body>'
+            . $cover
+            . '<main class="commercial-body">'
             . $clientBlock
             . $body
-            . '<footer>Document No: ' . esc((string) $documentNumber) . ' | Revision No: ' . esc((string) $revisionNumber) . ' | Issue No: ' . esc((string) $issueNumber) . ' | Date: ' . esc((string) $documentDate) . '</footer>'
+            . '</main>'
             . '</body></html>';
     }
 
@@ -1671,7 +1779,7 @@ class DocumentGeneratorService
         $stamp = $confirmed ? '<div class="commercial-stamp">CONFIRMED</div>' : '<div class="commercial-stamp pending">PENDING</div>';
 
         return '<table class="commercial-acceptance"><thead><tr><th>On Behalf of QSI-Cert</th><th>On Behalf of Client</th></tr></thead><tbody><tr>'
-            . '<td><div class="commercial-logo-wrap">' . $this->logoHtml('commercial-logo') . '</div><div class="commercial-name">' . esc($qsiName) . '</div><div class="commercial-date">' . esc($qsiDate) . '</div></td>'
+            . '<td><div class="commercial-stamp-wrap">' . $this->stampHtml('commercial-stamp-image') . '</div><div class="commercial-name">' . esc($qsiName) . '</div><div class="commercial-date">' . esc($qsiDate) . '</div></td>'
             . '<td>' . $stamp . '<div class="commercial-name">' . esc($clientName) . '</div><div class="commercial-date">' . esc($clientDate) . '</div></td>'
             . '</tr></tbody></table>';
     }
@@ -1752,7 +1860,7 @@ class DocumentGeneratorService
                 'surveillance2_days' => $payload['surveillance2_days'] ?? '',
                 'recertification_days' => $payload['recertification_days'] ?? '',
             ]], ['total_audit_days', 'stage1_days', 'stage2_days', 'surveillance1_days', 'surveillance2_days', 'recertification_days'])],
-            ['Certification Process and Obligations', '<p>' . nl2br(esc((string) ($payload['certification_process_obligations'] ?? ''))) . '</p>'],
+            ['Certification Process and Obligations', $this->commercialObligationsHtml((string) ($payload['certification_process_obligations'] ?? ''))],
             ['Fees Detail', $this->keyValueTable([
                 'Currency' => $proposal['currency'] ?? '',
                 'Initial Certification Audit' => $this->money($proposal['certification_fee'] ?? 0),
@@ -3617,6 +3725,15 @@ class DocumentGeneratorService
         return $this->assetDataUri('assets/img/qsi-logo.png');
     }
 
+    private function stampHtml(string $class): string
+    {
+        $stamp = $this->assetDataUri('assets/img/qsi-stamp-ksa.png');
+
+        return $stamp === ''
+            ? $this->logoHtml($class)
+            : '<img class="' . esc($class, 'attr') . '" src="' . esc($stamp, 'attr') . '" alt="QSI-Cert stamp">';
+    }
+
     private function certificateBackgroundDataUri(): string
     {
         return $this->assetDataUri('assets/img/qsi-certificate-template.jpeg');
@@ -3727,13 +3844,15 @@ class DocumentGeneratorService
             .muted { color: #6b7785; font-style: italic; }
             .commercial-acceptance { margin-top: 8px; page-break-inside: avoid; table-layout: fixed; }
             .commercial-acceptance th { text-align: center; color: #123d70; font-size: 11px; background: #f8fafc; border: 1px solid #1f2933; padding: 8px; }
-            .commercial-acceptance td { height: 124px; text-align: center; vertical-align: middle; border: 1px solid #1f2933; background: #fff; padding: 12px 14px; }
-            .commercial-logo-wrap { height: 42px; margin-bottom: 8px; }
-            .commercial-logo { max-width: 92px; max-height: 42px; object-fit: contain; }
+            .commercial-acceptance td { height: 138px; text-align: center; vertical-align: middle; border: 1px solid #1f2933; background: #fff; padding: 12px 14px; }
+            .commercial-stamp-wrap { height: 72px; margin-bottom: 8px; }
+            .commercial-stamp-image { max-width: 170px; max-height: 72px; object-fit: contain; }
             .commercial-name { margin-top: 8px; font-size: 11px; font-weight: 700; color: #111827; }
             .commercial-date { margin-top: 9px; font-size: 10.5px; font-weight: 700; color: #111827; }
             .commercial-stamp { display: inline-block; margin-bottom: 12px; padding: 4px 10px; border: 2px solid #d92929; color: #d92929; font-weight: 800; font-size: 11px; letter-spacing: .8px; transform: rotate(-10deg); }
             .commercial-stamp.pending { border-color: #64748b; color: #64748b; transform: none; }
+            .commercial-obligations h3 { color: #0b3558; font-size: 11.2px; margin: 11px 0 4px; border-bottom: 0; padding: 0; }
+            .commercial-obligations p { margin-bottom: 9px; }
             .commercial-note { color: #123d70; font-style: italic; font-size: 10.4px; line-height: 1.45; page-break-inside: avoid; }
             .commercial-note ul { margin: 6px 0 11px 24px; color: #0033cc; font-style: normal; font-weight: 700; }
             .commercial-note li { margin: 2px 0; }
@@ -3895,6 +4014,36 @@ class DocumentGeneratorService
             .f27-control th, .f27-control td { border: 1px solid #b8cad8; padding: 5px 6px; }
             .client { background: #f8fafc; border: 1px solid #d6e1ea; padding: 10px; margin-bottom: 14px; }
             footer { left: 40px; right: 40px; color: #607080; border-top: 1px solid #c8d7e3; }
+        ';
+    }
+
+    private function commercialDocumentCss(): string
+    {
+        return '
+            @page { margin: 34px 42px 42px; }
+            body { font-size: 10.2px; }
+            .commercial-cover { page-break-after: always; min-height: 760px; position: relative; padding: 34px 38px 28px; border: 1.5px solid #0b3558; background: #ffffff; overflow: hidden; }
+            .commercial-cover:before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 18px; background: #0b3558; }
+            .commercial-cover:after { content: ""; position: absolute; right: -80px; top: -80px; width: 260px; height: 260px; border: 34px solid #eaf2f8; border-radius: 50%; z-index: 0; }
+            .cover-topline { position: absolute; left: 18px; right: 0; top: 0; height: 8px; background: #d7a500; z-index: 1; }
+            .cover-logo { position: relative; z-index: 2; margin: 26px 0 30px; }
+            .cover-logo-img { display: block; width: 168px; max-height: 86px; object-fit: contain; }
+            .cover-kicker { position: relative; z-index: 2; color: #d71920; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; font-size: 10px; margin-bottom: 18px; }
+            .commercial-cover h1 { position: relative; z-index: 2; color: #0b3558; font-size: 30px; line-height: 1.12; margin: 0 0 10px; font-weight: 800; }
+            .cover-title { position: relative; z-index: 2; color: #223449; font-size: 14px; font-weight: 700; margin-bottom: 32px; }
+            .cover-card { position: relative; z-index: 2; border-left: 4px solid #d7a500; background: #f8fafc; padding: 18px 20px; margin: 0 0 26px; }
+            .cover-label { color: #64748b; text-transform: uppercase; letter-spacing: .8px; font-size: 8.8px; margin-bottom: 6px; }
+            .cover-client { color: #0b3558; font-size: 20px; font-weight: 800; line-height: 1.22; margin-bottom: 8px; }
+            .cover-scope { color: #243442; font-size: 10.2px; line-height: 1.48; }
+            .cover-meta { position: relative; z-index: 2; width: 72%; margin-top: 22px; table-layout: fixed; }
+            .cover-meta th { width: 34%; background: #0b3558; color: #fff; border-color: #0b3558; padding: 8px 10px; }
+            .cover-meta td { background: #fff; border-color: #b8cad8; padding: 8px 10px; font-weight: 700; color: #123d70; }
+            .cover-footer-line { position: absolute; z-index: 2; left: 56px; right: 38px; bottom: 28px; border-top: 1px solid #b8cad8; padding-top: 10px; color: #64748b; font-size: 9px; }
+            .cover-footer-line span:last-child { float: right; }
+            .commercial-body { page-break-before: auto; }
+            .commercial-body h2:first-child { margin-top: 0; }
+            .commercial-body .client { margin-bottom: 18px; }
+            .commercial-body .commercial-contact td { font-size: 10.4px; }
         ';
     }
 

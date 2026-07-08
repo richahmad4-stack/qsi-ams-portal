@@ -83,5 +83,8 @@ class WorkflowGateWiringTest extends TestCase
         self::assertStringContainsString('The Stage 2 audit must be completed within 90 days', $documentGenerator);
         self::assertStringContainsString('commercialAcceptanceTable', $documentGenerator);
         self::assertStringContainsString('commercialImportantNoteHtml', $documentGenerator);
+        self::assertStringContainsString('commercialCoverHtml', $documentGenerator);
+        self::assertStringContainsString('qsi-stamp-ksa.png', $documentGenerator);
+        self::assertStringContainsString('commercialObligationsHtml', $documentGenerator);
     }
 }
