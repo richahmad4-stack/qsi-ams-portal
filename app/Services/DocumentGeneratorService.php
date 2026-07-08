@@ -779,14 +779,12 @@ class DocumentGeneratorService
 
         $cover = $this->commercialCoverHtml(
             'Certification Proposal',
-            $title,
             $client,
             $payload,
             [
                 'Proposal Number' => (string) ($proposal['proposal_number'] ?? 'Not created'),
                 'Proposal Date' => (string) ($proposal['proposal_date'] ?? substr((string) ($proposal['created_at'] ?? ''), 0, 10)),
                 'Valid Until' => (string) ($proposal['valid_until'] ?? ''),
-                'Prepared For' => (string) ($client['company'] ?? ''),
             ]
         );
 
@@ -799,7 +797,7 @@ class DocumentGeneratorService
             . '</body></html>';
     }
 
-    private function commercialCoverHtml(string $documentType, string $title, array $client, array $payload, array $meta): string
+    private function commercialCoverHtml(string $documentType, array $client, array $payload, array $meta): string
     {
         $metaRows = '';
         foreach ($meta as $label => $value) {
@@ -815,21 +813,16 @@ class DocumentGeneratorService
         }
 
         return '<section class="commercial-cover">'
-            . '<div class="cover-topline"></div>'
+            . '<div class="cover-accent"></div>'
             . '<div class="cover-logo">' . $this->logoHtml('cover-logo-img') . '</div>'
-            . '<div class="cover-kicker">QSI Canada Cert</div>'
+            . '<div class="cover-document">Controlled Certification Body Document</div>'
             . '<h1>' . esc($documentType) . '</h1>'
-            . '<div class="cover-title">' . esc($title) . '</div>'
-            . '<div class="cover-card">'
+            . '<div class="cover-rule"></div>'
             . '<div class="cover-label">Prepared for</div>'
             . '<div class="cover-client">' . esc((string) ($client['company'] ?? '')) . '</div>'
             . '<div class="cover-scope">' . nl2br(esc((string) ($client['scope'] ?? ''))) . '</div>'
-            . '</div>'
             . '<table class="cover-meta"><tbody>' . $metaRows . '</tbody></table>'
-            . '<div class="cover-footer-line">'
-            . '<span>Controlled certification body document</span>'
-            . '<span>Prepared ' . esc(date('Y-m-d')) . '</span>'
-            . '</div>'
+            . '<div class="cover-issued">Prepared ' . esc(date('Y-m-d')) . '</div>'
             . '</section>';
     }
 
@@ -1607,7 +1600,6 @@ class DocumentGeneratorService
         $payload = $this->contractPayloadForDocument($data);
         $cover = $this->commercialCoverHtml(
             'Certification Contract',
-            $title,
             $client,
             $payload,
             [
@@ -4021,25 +4013,24 @@ class DocumentGeneratorService
     {
         return '
             @page { margin: 34px 42px 42px; }
-            body { font-size: 10.2px; }
-            .commercial-cover { page-break-after: always; min-height: 760px; position: relative; padding: 34px 38px 28px; border: 1.5px solid #0b3558; background: #ffffff; overflow: hidden; }
-            .commercial-cover:before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 18px; background: #0b3558; }
-            .commercial-cover:after { content: ""; position: absolute; right: -80px; top: -80px; width: 260px; height: 260px; border: 34px solid #eaf2f8; border-radius: 50%; z-index: 0; }
-            .cover-topline { position: absolute; left: 18px; right: 0; top: 0; height: 8px; background: #d7a500; z-index: 1; }
-            .cover-logo { position: relative; z-index: 2; margin: 26px 0 30px; }
-            .cover-logo-img { display: block; width: 168px; max-height: 86px; object-fit: contain; }
-            .cover-kicker { position: relative; z-index: 2; color: #d71920; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; font-size: 10px; margin-bottom: 18px; }
-            .commercial-cover h1 { position: relative; z-index: 2; color: #0b3558; font-size: 30px; line-height: 1.12; margin: 0 0 10px; font-weight: 800; }
-            .cover-title { position: relative; z-index: 2; color: #223449; font-size: 14px; font-weight: 700; margin-bottom: 32px; }
-            .cover-card { position: relative; z-index: 2; border-left: 4px solid #d7a500; background: #f8fafc; padding: 18px 20px; margin: 0 0 26px; }
-            .cover-label { color: #64748b; text-transform: uppercase; letter-spacing: .8px; font-size: 8.8px; margin-bottom: 6px; }
-            .cover-client { color: #0b3558; font-size: 20px; font-weight: 800; line-height: 1.22; margin-bottom: 8px; }
-            .cover-scope { color: #243442; font-size: 10.2px; line-height: 1.48; }
-            .cover-meta { position: relative; z-index: 2; width: 72%; margin-top: 22px; table-layout: fixed; }
-            .cover-meta th { width: 34%; background: #0b3558; color: #fff; border-color: #0b3558; padding: 8px 10px; }
-            .cover-meta td { background: #fff; border-color: #b8cad8; padding: 8px 10px; font-weight: 700; color: #123d70; }
-            .cover-footer-line { position: absolute; z-index: 2; left: 56px; right: 38px; bottom: 28px; border-top: 1px solid #b8cad8; padding-top: 10px; color: #64748b; font-size: 9px; }
-            .cover-footer-line span:last-child { float: right; }
+            @page:first { margin: 0; }
+            body { font-size: 10.2px; margin: 0; }
+            .commercial-cover { page-break-after: always; width: 210mm; height: 297mm; position: relative; padding: 0; background: #ffffff; overflow: hidden; }
+            .commercial-cover:before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 29mm; background: #0b3558; z-index: 0; }
+            .commercial-cover:after { content: ""; position: absolute; right: -48mm; top: -30mm; width: 116mm; height: 116mm; border: 15mm solid #eaf2f8; border-radius: 50%; z-index: 0; }
+            .cover-accent { position: absolute; left: 29mm; top: 0; right: 0; height: 5mm; background: #d7a500; z-index: 1; }
+            .cover-logo { position: absolute; z-index: 2; left: 42mm; top: 28mm; }
+            .cover-logo-img { display: block; width: 46mm; max-height: 24mm; object-fit: contain; }
+            .cover-document { position: absolute; z-index: 2; left: 42mm; top: 66mm; color: #d71920; font-weight: 800; letter-spacing: 2.2px; text-transform: uppercase; font-size: 9.5px; }
+            .commercial-cover h1 { position: absolute; z-index: 2; left: 42mm; top: 82mm; width: 128mm; color: #0b3558; font-size: 35px; line-height: 1.08; margin: 0; font-weight: 800; }
+            .cover-rule { position: absolute; z-index: 2; left: 42mm; top: 111mm; width: 55mm; height: 2px; background: #d7a500; }
+            .cover-label { position: absolute; z-index: 2; left: 42mm; top: 130mm; color: #64748b; text-transform: uppercase; letter-spacing: .9px; font-size: 9px; }
+            .cover-client { position: absolute; z-index: 2; left: 42mm; top: 140mm; width: 130mm; color: #0b3558; font-size: 24px; font-weight: 800; line-height: 1.18; }
+            .cover-scope { position: absolute; z-index: 2; left: 42mm; top: 164mm; width: 130mm; color: #243442; font-size: 10.4px; line-height: 1.5; }
+            .cover-meta { position: absolute; z-index: 2; left: 42mm; bottom: 42mm; width: 96mm; table-layout: fixed; margin: 0; }
+            .cover-meta th { width: 40%; background: #0b3558; color: #fff; border-color: #0b3558; padding: 7px 9px; }
+            .cover-meta td { background: #fff; border-color: #b8cad8; padding: 7px 9px; font-weight: 700; color: #123d70; }
+            .cover-issued { position: absolute; z-index: 2; right: 22mm; bottom: 24mm; color: #64748b; font-size: 9px; }
             .commercial-body { page-break-before: auto; }
             .commercial-body h2:first-child { margin-top: 0; }
             .commercial-body .client { margin-bottom: 18px; }
