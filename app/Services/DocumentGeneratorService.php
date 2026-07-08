@@ -841,13 +841,24 @@ class DocumentGeneratorService
             . '<div class="cover-subtitle">For Certification Services</div>'
             . '<div class="cover-tagline">Your Partner in <strong>Excellence &amp; Compliance</strong></div>'
             . '<table class="cover-badges"><tbody><tr>'
-            . '<td><span>CB</span><b>Accredited<br>Certification</b><small>Controlled certification cycle</small></td>'
-            . '<td><span>TA</span><b>Technical<br>Assessment</b><small>Competent audit team</small></td>'
-            . '<td><span>IC</span><b>Impartial<br>Decision</b><small>Independent review</small></td>'
+            . '<td>' . $this->coverBadgeHtml('assets/img/qsi-cover-badge-certification.png', 'Certification badge') . '<b>Accredited<br>Certification</b><small>Controlled certification cycle</small></td>'
+            . '<td>' . $this->coverBadgeHtml('assets/img/qsi-cover-badge-assessment.png', 'Assessment badge') . '<b>Technical<br>Assessment</b><small>Competent audit team</small></td>'
+            . '<td>' . $this->coverBadgeHtml('assets/img/qsi-cover-badge-decision.png', 'Decision badge') . '<b>Impartial<br>Decision</b><small>Independent review</small></td>'
             . '</tr></tbody></table>'
             . '<div class="cover-label">Prepared for</div>'
             . '<table class="cover-info"><tbody>' . $coverTableRows . '</tbody></table>'
             . '</section>';
+    }
+
+    private function coverBadgeHtml(string $relativePath, string $alt): string
+    {
+        $badge = $this->assetDataUri($relativePath);
+
+        if ($badge === '') {
+            return '<span class="cover-badge-fallback">QSI</span>';
+        }
+
+        return '<img class="cover-badge-img" src="' . esc($badge, 'attr') . '" alt="' . esc($alt, 'attr') . '">';
     }
 
     private function commercialObligationsHtml(string $text): string
@@ -3989,7 +4000,8 @@ class DocumentGeneratorService
             .cover-badges { position: absolute; z-index: 4; left: 0; top: 164mm; width: 124mm; height: 38mm; margin: 0; table-layout: fixed; background: #082b4d; color: #ffffff; }
             .cover-badges td { border: 0; border-right: 1px solid rgba(255,255,255,.45); text-align: center; vertical-align: middle; padding: 5px 7px; }
             .cover-badges td:last-child { border-right: 0; }
-            .cover-badges span { display: block; width: 15mm; height: 15mm; line-height: 15mm; margin: 0 auto 4px; border: 1.5px solid #ffffff; border-radius: 50%; background: #e11f27; color: #ffffff; font-size: 9px; font-weight: 900; }
+            .cover-badge-img { display: block; width: 16.5mm; height: 16.5mm; margin: 0 auto 4px; }
+            .cover-badge-fallback { display: block; width: 15mm; height: 15mm; line-height: 15mm; margin: 0 auto 4px; border: 1.5px solid #ffffff; border-radius: 50%; background: #e11f27; color: #ffffff; font-size: 9px; font-weight: 900; }
             .cover-badges b { display: block; color: #ffffff; font-size: 8.9px; line-height: 1.18; text-transform: uppercase; letter-spacing: .2px; }
             .cover-badges small { display: block; margin-top: 3px; color: #dce8f4; font-size: 7.2px; line-height: 1.15; }
             .cover-label { position: absolute; z-index: 4; left: 13mm; top: 208mm; color: #0b3558; text-transform: uppercase; letter-spacing: .7px; font-size: 12px; font-weight: 800; border-bottom: 1.6px solid #e11f27; padding-bottom: 3px; width: 42mm; }
