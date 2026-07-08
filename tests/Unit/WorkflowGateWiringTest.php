@@ -97,4 +97,17 @@ class WorkflowGateWiringTest extends TestCase
         self::assertStringContainsString('commercialObligationsHtml', $documentGenerator);
         self::assertStringNotContainsString('Controlled Certification Body Document', $documentGenerator);
     }
+
+    public function testAuditProgramPdfUsesControlledCycleLayout(): void
+    {
+        $documentGenerator = file_get_contents(__DIR__ . '/../../app/Services/DocumentGeneratorService.php') ?: '';
+
+        self::assertStringContainsString('f42-control-band', $documentGenerator);
+        self::assertStringContainsString('Three-Year Certification Cycle', $documentGenerator);
+        self::assertStringContainsString('Responsible Auditor', $documentGenerator);
+        self::assertStringContainsString('auditProgramResponsibleAuditor', $documentGenerator);
+        self::assertStringContainsString('f42-coverage', $documentGenerator);
+        self::assertStringContainsString('auditProgramNcSummaryRows', $documentGenerator);
+        self::assertStringNotContainsString('<footer>Document No: F 42', $documentGenerator);
+    }
 }

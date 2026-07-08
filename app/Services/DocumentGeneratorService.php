@@ -2434,27 +2434,29 @@ class DocumentGeneratorService
             $body .= '<h2>' . esc($heading) . '</h2>' . $content;
         }
 
-        $header = '<header class="f42-header"><table><tr>'
+        $header = '<header class="f42-header"><table class="f42-header-table"><tbody>'
+            . '<tr>'
             . '<td class="f42-logo">' . $this->logoHtml('pdf-logo') . '</td>'
-            . '<td class="f42-title">' . esc($title) . '</td>'
-            . '<td><table class="f42-control">'
-            . '<tr><th>Document No.</th><td>' . esc((string) $documentNumber) . '</td></tr>'
-            . '<tr><th>Revision No.</th><td>' . esc((string) $revisionNumber) . '</td></tr>'
-            . '<tr><th>Issue No.</th><td>' . esc((string) $issueNumber) . '</td></tr>'
-            . '<tr><th>Date</th><td>' . esc((string) $documentDate) . '</td></tr>'
-            . '</table></td></tr></table></header>';
+            . '<td class="f42-title">' . esc($title) . '<div>Three-year certification audit programme</div></td>'
+            . '<td class="f42-control-band">'
+            . '<div><b>Document No.</b><span>' . esc((string) $documentNumber) . '</span></div>'
+            . '<div><b>Revision No.</b><span>' . esc((string) $revisionNumber) . '</span></div>'
+            . '<div><b>Issue No.</b><span>' . esc((string) $issueNumber) . '</span></div>'
+            . '<div><b>Date</b><span>' . esc((string) $documentDate) . '</span></div>'
+            . '</td>'
+            . '</tr>'
+            . '</tbody></table></header>';
 
-        $clientBlock = '<section class="client"><strong>Client:</strong> ' . esc((string) ($client['company'] ?? ''))
-            . '<br><strong>Scope:</strong> ' . esc((string) ($client['scope'] ?? ''))
-            . '<br><strong>Program Number:</strong> ' . esc((string) ($program['program_number'] ?? 'Not created'))
-            . ' &nbsp; <strong>Status:</strong> ' . esc((string) ($program['status'] ?? ''))
-            . '</section>';
+        $clientBlock = '<section class="client f42-client"><table><tbody>'
+            . '<tr><th>Client</th><td>' . esc((string) ($client['company'] ?? '')) . '</td><th>Program No.</th><td>' . esc((string) ($program['program_number'] ?? 'Not created')) . '</td></tr>'
+            . '<tr><th>Scope</th><td colspan="3">' . esc((string) ($client['scope'] ?? '')) . '</td></tr>'
+            . '<tr><th>Status</th><td>' . esc((string) ($program['status'] ?? '')) . '</td><th>Generated</th><td>' . esc(date('Y-m-d')) . '</td></tr>'
+            . '</tbody></table></section>';
 
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->auditProgramCss() . '</style></head><body>'
             . $header
             . $clientBlock
             . $body
-            . '<footer>Document No: ' . esc((string) $documentNumber) . ' | Revision No: ' . esc((string) $revisionNumber) . ' | Issue No: ' . esc((string) $issueNumber) . ' | Date: ' . esc((string) $documentDate) . '</footer>'
             . '</body></html>';
     }
 
@@ -2495,7 +2497,7 @@ class DocumentGeneratorService
                 (string) ($payload['process_label'] ?? 'Key audited processes') => $payload['haccp_studies'] ?? '',
                 'Audit Duration (Days)' => ($payload['audit_duration_days'] ?? '') . ' (Total)',
             ])],
-            ['Audit Dates and Durations', $this->auditProgramEventsTable($data['events'] ?? [])],
+            ['Three-Year Certification Cycle', $this->auditProgramEventsTable($data['events'] ?? [], $data['appointments'] ?? [])],
             ['Processes / Standard Clauses', $this->auditProgramCoverageTable($payload['coverage'] ?? [])],
             ['Audit Committee', $this->auditProgramMatrixTable($payload['committee'] ?? [], 'role')],
             ['Audit NC Summary by Stage', $this->auditProgramMatrixTable($payload['nc_summary'] ?? [], 'standard')],
@@ -2646,36 +2648,58 @@ class DocumentGeneratorService
         return array_values($rows);
     }
 
-    private function auditProgramEventsTable(array $events): string
+    private function auditProgramEventsTable(array $events, array $appointments): string
     {
         $labels = [
-            'initial_stage1' => 'Stage 1',
-            'initial_stage2' => 'Stage 2',
-            'surveillance1' => 'Surv. 1',
-            'surveillance2' => 'Surv. 2',
-            'recertification' => 'Recert.',
+            'initial_stage1' => 'Initial Stage 1',
+            'initial_stage2' => 'Initial Stage 2',
+            'surveillance1' => 'Surveillance 1',
+            'surveillance2' => 'Surveillance 2',
+            'recertification' => 'Recertification',
         ];
 
         if ($events === []) {
             return '<p class="muted">No audit events available.</p>';
         }
 
-        $html = '<table><thead><tr><th>Audit</th><th>Audit No.</th><th>Start Date</th><th>End Date</th><th>Window Start</th><th>Window End</th><th>Number of Days</th><th>Status</th></tr></thead><tbody>';
+        $html = '<table class="f42-table f42-cycle"><thead><tr><th>Audit Stage</th><th>Audit No.</th><th>Planned Dates</th><th>Audit Window</th><th>Duration</th><th>Responsible Auditor</th><th>Status</th></tr></thead><tbody>';
         foreach ($events as $event) {
             $type = (string) ($event['event_type'] ?? '');
+            $plannedDates = trim((string) ($event['planned_start_date'] ?? '') . ' to ' . (string) ($event['planned_end_date'] ?? ''), ' to');
+            $auditWindow = trim((string) ($event['audit_window_start'] ?? '') . ' to ' . (string) ($event['audit_window_end'] ?? ''), ' to');
+            $status = str_replace(' ', '&nbsp;', esc(ucwords(str_replace('_', ' ', (string) ($event['status'] ?? '')))));
             $html .= '<tr>'
                 . '<td>' . esc($labels[$type] ?? ucwords(str_replace('_', ' ', $type))) . '</td>'
                 . '<td>' . esc((string) ($event['audit_number'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($event['planned_start_date'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($event['planned_end_date'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($event['audit_window_start'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($event['audit_window_end'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($event['duration_days'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($event['status'] ?? '')) . '</td>'
+                . '<td>' . esc($plannedDates) . '</td>'
+                . '<td>' . esc($auditWindow) . '</td>'
+                . '<td class="center">' . esc((string) ($event['duration_days'] ?? '')) . ' day(s)</td>'
+                . '<td>' . esc($this->auditProgramResponsibleAuditor((string) ($event['audit_number'] ?? ''), $type, $appointments)) . '</td>'
+                . '<td class="center nowrap">' . $status . '</td>'
                 . '</tr>';
         }
 
         return $html . '</tbody></table>';
+    }
+
+    private function auditProgramResponsibleAuditor(string $auditNumber, string $eventType, array $appointments): string
+    {
+        $auditors = [];
+        foreach ($appointments as $appointment) {
+            if ((string) ($appointment['event_type'] ?? '') !== $eventType && (string) ($appointment['audit_number'] ?? '') !== $auditNumber) {
+                continue;
+            }
+
+            $name = trim((string) ($appointment['full_name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $role = ucwords(str_replace('_', ' ', (string) ($appointment['appointment_role'] ?? 'Auditor')));
+            $auditors[] = $name . ' (' . $role . ')';
+        }
+
+        return $auditors === [] ? 'Not assigned' : implode(', ', array_values(array_unique($auditors)));
     }
 
     private function auditProgramCoverageTable(array $rows): string
@@ -2684,17 +2708,17 @@ class DocumentGeneratorService
             return '<p class="muted">No clause coverage available.</p>';
         }
 
-        $html = '<table><thead><tr><th>Standard</th><th>Clause No.</th><th>Clause Title</th><th>Stage 1</th><th>Stage 2</th><th>Surv. 1</th><th>Surv. 2</th><th>Recert.</th></tr></thead><tbody>';
+        $html = '<table class="f42-table f42-coverage"><thead><tr><th>Standard</th><th>Clause / Process</th><th>Coverage Requirement</th><th>Stage 1</th><th>Stage 2</th><th>Surv. 1</th><th>Surv. 2</th><th>Recert.</th></tr></thead><tbody>';
         foreach ($rows as $row) {
             $html .= '<tr>'
                 . '<td>' . esc((string) ($row['standard'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($row['clause_number'] ?? '')) . '</td>'
+                . '<td class="center">' . esc((string) ($row['clause_number'] ?? '')) . '</td>'
                 . '<td>' . esc((string) ($row['clause_title'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($row['initial_stage1'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($row['initial_stage2'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($row['surveillance1'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($row['surveillance2'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($row['recertification'] ?? '')) . '</td>'
+                . '<td class="center">' . esc((string) ($row['initial_stage1'] ?? '')) . '</td>'
+                . '<td class="center">' . esc((string) ($row['initial_stage2'] ?? '')) . '</td>'
+                . '<td class="center">' . esc((string) ($row['surveillance1'] ?? '')) . '</td>'
+                . '<td class="center">' . esc((string) ($row['surveillance2'] ?? '')) . '</td>'
+                . '<td class="center">' . esc((string) ($row['recertification'] ?? '')) . '</td>'
                 . '</tr>';
         }
 
@@ -2707,15 +2731,15 @@ class DocumentGeneratorService
             return '<p class="muted">No records available.</p>';
         }
 
-        $html = '<table><thead><tr><th>' . esc(ucwords(str_replace('_', ' ', $labelKey))) . '</th><th>Stage 1</th><th>Stage 2</th><th>Surv. 1</th><th>Surv. 2</th><th>Recert.</th></tr></thead><tbody>';
+        $html = '<table class="f42-table f42-matrix"><thead><tr><th>' . esc(ucwords(str_replace('_', ' ', $labelKey))) . '</th><th>Stage 1</th><th>Stage 2</th><th>Surv. 1</th><th>Surv. 2</th><th>Recert.</th></tr></thead><tbody>';
         foreach ($rows as $row) {
             $html .= '<tr>'
                 . '<td>' . esc((string) ($row[$labelKey] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($row['initial_stage1'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($row['initial_stage2'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($row['surveillance1'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($row['surveillance2'] ?? '')) . '</td>'
-                . '<td>' . esc((string) ($row['recertification'] ?? '')) . '</td>'
+                . '<td class="center">' . esc((string) ($row['initial_stage1'] ?? '')) . '</td>'
+                . '<td class="center">' . esc((string) ($row['initial_stage2'] ?? '')) . '</td>'
+                . '<td class="center">' . esc((string) ($row['surveillance1'] ?? '')) . '</td>'
+                . '<td class="center">' . esc((string) ($row['surveillance2'] ?? '')) . '</td>'
+                . '<td class="center">' . esc((string) ($row['recertification'] ?? '')) . '</td>'
                 . '</tr>';
         }
 
@@ -4018,20 +4042,48 @@ class DocumentGeneratorService
     private function auditProgramCss(): string
     {
         return '
-            @page { margin: 36px 40px 92px; }
-            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10px; color: #1f2933; }
-            h2 { color: #0b3558; font-size: 12.8px; margin: 17px 0 8px; page-break-after: avoid; border-bottom: 1px solid #c8d7e3; padding-bottom: 5px; }
-            .f42-header { border: 0; padding: 0; margin-bottom: 14px; }
-            .f42-header table { border: 1.5px solid #0b3558; margin-bottom: 12px; }
-            .f42-header td { border: 1px solid #b8cad8; padding: 8px; vertical-align: middle; }
-            .f42-logo { width: 17%; text-align: center; color: #0b5f9e; font-weight: 700; background: #f4f8fb; }
+            @page { margin: 30px 34px 38px; }
+            body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 9.6px; color: #1f2933; }
+            h2 { color: #0b3558; font-size: 12.4px; margin: 16px 0 7px; page-break-after: avoid; border-bottom: 1.4px solid #d7a500; padding-bottom: 5px; }
+            table { page-break-inside: auto; border-collapse: collapse; width: 100%; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            th, td { vertical-align: top; }
+            .center { text-align: center; }
+            .nowrap { white-space: nowrap; }
+            .f42-header { border: 0; padding: 0; margin-bottom: 12px; }
+            .f42-header-table { border: 1.6px solid #0b3558; margin-bottom: 0; table-layout: fixed; }
+            .f42-header-table td { border: 1px solid #b8cad8; padding: 8px; vertical-align: middle; text-align: center; font-weight: 700; color: #123d70; }
+            .f42-logo { width: 17%; background: #f4f8fb; }
+            .f42-logo .pdf-logo { width: 82px; max-height: 48px; }
             .f42-logo-text { font-size: 24px; line-height: 1; }
-            .f42-title { width: 50%; text-align: center; font-size: 17px; font-weight: 700; color: #0a3765; }
-            .f42-control { margin-bottom: 0; }
-            .f42-control th { width: 48%; background: #eaf2f8; color: #0f2638; }
-            .f42-control th, .f42-control td { border: 1px solid #b8cad8; padding: 5px 6px; }
-            .client { background: #f8fafc; border: 1px solid #d6e1ea; padding: 10px; margin-bottom: 14px; }
-            footer { left: 40px; right: 40px; color: #607080; border-top: 1px solid #c8d7e3; }
+            .f42-title { width: 43%; font-size: 17px; line-height: 1.25; color: #0b3558; background: #ffffff; }
+            .f42-title div { margin-top: 6px; color: #607080; font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: .6px; }
+            .f42-control-band { width: 40%; padding: 0; background: #f7fafc; text-align: left; }
+            .f42-control-band div { border-bottom: 1px solid #c8d7e3; padding: 6px 8px; white-space: nowrap; }
+            .f42-control-band div:last-child { border-bottom: 0; }
+            .f42-control-band b { display: inline-block; width: 31mm; color: #0b3558; text-transform: uppercase; font-size: 8.6px; letter-spacing: .25px; }
+            .f42-control-band span { color: #123d70; font-size: 9.4px; }
+            .f42-client { background: #f8fafc; border: 1px solid #d6e1ea; padding: 0; margin-bottom: 13px; }
+            .f42-client th { width: 14%; background: #eaf2f8; color: #0f2638; border: 1px solid #c8d7e3; padding: 6px 7px; text-align: left; }
+            .f42-client td { border: 1px solid #d6e1ea; padding: 6px 7px; }
+            .f42-table { border: 1px solid #c4d2df; margin-bottom: 12px; table-layout: fixed; }
+            .f42-table th { background: #0b3558; color: #ffffff; border: 1px solid #0b3558; padding: 6px 6px; font-size: 8.6px; text-align: left; }
+            .f42-table td { border: 1px solid #d6e1ea; padding: 6px 6px; line-height: 1.32; }
+            .f42-table tbody tr:nth-child(even) td { background: #f7fafc; }
+            .f42-cycle th:nth-child(1) { width: 15%; }
+            .f42-cycle th:nth-child(2) { width: 17%; }
+            .f42-cycle th:nth-child(3) { width: 15%; }
+            .f42-cycle th:nth-child(4) { width: 15%; }
+            .f42-cycle th:nth-child(5) { width: 8%; text-align: center; }
+            .f42-cycle th:nth-child(6) { width: 20%; }
+            .f42-cycle th:nth-child(7) { width: 10%; text-align: center; }
+            .f42-coverage { font-size: 8.4px; }
+            .f42-coverage th:nth-child(1) { width: 13%; }
+            .f42-coverage th:nth-child(2) { width: 11%; text-align: center; }
+            .f42-coverage th:nth-child(3) { width: 40%; }
+            .f42-coverage th:nth-child(n+4) { width: 7.2%; text-align: center; }
+            .f42-matrix th:first-child { width: 36%; }
+            .f42-matrix th:not(:first-child) { text-align: center; }
         ';
     }
 
