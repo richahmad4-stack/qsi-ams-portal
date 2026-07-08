@@ -319,6 +319,8 @@ class DocumentGeneratorService
     {
         $qr = $this->qrDataUri((string) $certificate['qr_payload']);
         $background = $this->certificateBackgroundDataUri();
+        $approvedSignature = $this->certificateSignatureHtml('assets/img/qsi-signature-approved.png');
+        $printedSignature = $this->certificateSignatureHtml('assets/img/qsi-signature-printed.png');
         $standardCode = (string) ($certificate['standard_code'] ?? '');
         $certificateNumber = (string) ($certificate['certificate_number'] ?? '');
         $issueDate = $this->certificateDate((string) ($certificate['issue_date'] ?? ''));
@@ -352,8 +354,8 @@ class DocumentGeneratorService
             . '</tbody></table>'
             . '<div class="certificate-validity-note">This Certificate is valid upon the successful completion of periodic surveillance audits to maintain compliance with the relevant standards.</div>'
             . '<table class="certificate-signatures"><tbody><tr>'
-            . '<td><div class="signature-line"></div><div>Approved by</div></td>'
-            . '<td><div class="signature-line"></div><div>Printed by</div></td>'
+            . '<td><div class="signature-line">' . $approvedSignature . '</div><div>Approved by</div></td>'
+            . '<td><div class="signature-line">' . $printedSignature . '</div><div>Printed by</div></td>'
             . '</tr></tbody></table>'
             . '<table class="certificate-verification-table"><tbody><tr>'
             . '<td class="certificate-qr-cell"><img src="' . esc($qr, 'attr') . '" alt="Certificate QR"></td>'
@@ -512,10 +514,18 @@ class DocumentGeneratorService
 
         $signatures = $section->addTable(['cellMarginTop' => 30, 'cellMarginBottom' => 30]);
         $signatures->addRow(760);
+        $approvedSignaturePath = $this->publicAssetPath('assets/img/qsi-signature-approved.png');
+        $printedSignaturePath = $this->publicAssetPath('assets/img/qsi-signature-printed.png');
         $approved = $signatures->addCell(2550);
+        if ($approvedSignaturePath !== '') {
+            $approved->addImage($approvedSignaturePath, ['width' => 86, 'height' => 22, 'alignment' => Jc::CENTER]);
+        }
         $approved->addText('', [], ['borderBottomSize' => 6, 'borderBottomColor' => '1f2933']);
         $approved->addText('Approved by', ['size' => 8.8], ['alignment' => Jc::CENTER]);
         $printed = $signatures->addCell(2550);
+        if ($printedSignaturePath !== '') {
+            $printed->addImage($printedSignaturePath, ['width' => 86, 'height' => 22, 'alignment' => Jc::CENTER]);
+        }
         $printed->addText('', [], ['borderBottomSize' => 6, 'borderBottomColor' => '1f2933']);
         $printed->addText('Printed by', ['size' => 8.8], ['alignment' => Jc::CENTER]);
 
@@ -3392,6 +3402,15 @@ class DocumentGeneratorService
         return $this->assetDataUri('assets/img/qsi-certificate-template.jpeg');
     }
 
+    private function certificateSignatureHtml(string $relativePath): string
+    {
+        $signature = $this->assetDataUri($relativePath);
+
+        return $signature === ''
+            ? ''
+            : '<img class="certificate-signature-image" src="' . esc($signature, 'attr') . '" alt="Signature">';
+    }
+
     private function publicAssetPath(string $relativePath): string
     {
         $path = FCPATH . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
@@ -3503,7 +3522,8 @@ class DocumentGeneratorService
             .certificate-validity-note { font-size: 8.3pt; line-height: 1.26; font-style: italic; max-width: 134mm; margin-bottom: 4mm; }
             .certificate-signatures { width: 82mm; table-layout: fixed; border-collapse: collapse; margin: 0 0 4mm; }
             .certificate-signatures td { border: 0 !important; background: transparent !important; padding: 0 6mm 0 0; text-align: center; font-size: 8.6pt; vertical-align: top; }
-            .signature-line { height: 5mm; border-bottom: 0.25mm solid #1f2933; margin-bottom: 1.5mm; }
+            .signature-line { height: 8mm; border-bottom: 0.25mm solid #1f2933; margin-bottom: 1.4mm; text-align: center; }
+            .certificate-signature-image { max-width: 32mm; max-height: 7.4mm; display: inline-block; vertical-align: bottom; }
             .certificate-verification-table { width: 137mm; table-layout: fixed; border-collapse: collapse; margin-top: 0; }
             .certificate-verification-table td { border: 0 !important; background: transparent !important; padding: 0; vertical-align: top; }
             .certificate-qr-cell { width: 25mm; }

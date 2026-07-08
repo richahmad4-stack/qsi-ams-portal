@@ -52,6 +52,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Certificate issue now provides two controlled outputs from the same certificate record: a branded PDF for electronic issue and a branded Word DOCX for printing hard-copy certificates.
 - Certificate output no longer generates an artificial seal because hard-copy certificates use the physical embossed seal. The certificate lower area has been tightened so dates, signatures, QR code, and validity text do not overlap or clip.
 - Certificate lower section has been reworked into controlled blocks: a fixed-width date matrix, balanced approval/print signature row, and separate QR/verification row for both PDF and Word outputs.
+- Supplied signature images are now stored as controlled assets and rendered on the certificate approval/print signature lines in both PDF and Word certificate outputs.
 - Operations readiness has been added as a Super Admin dashboard for go-live status covering production environment, public URL/SSL, SMTP/email, reminder processor, schema exports, backup restore proof, website lead intake, and user administration readiness.
 - User Administration is now available in the portal: Super Admin/Admin can create users, edit profile/status, assign multiple roles, reset passwords, and require password change without database/seed edits.
 - Reminder processing foundation is now active through `php spark ams:process-reminders`, creating upcoming/overdue audit reminders and certificate-expiry reminders with dashboard notifications for responsible admin roles.
