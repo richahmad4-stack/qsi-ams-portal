@@ -830,7 +830,6 @@ class DocumentGeneratorService
         $application = $applicationData['application'] ?? [];
         $reviewer = $applicationData['reviewer'] ?? [];
         $answers = $applicationData['answers_by_section'] ?? [];
-        $qr = $this->qrDataUri(site_url('workflow/certification/' . ($application['client_id'] ?? 0) . '/application'));
         $sections = [[
             'Selected Standards',
             $this->recordTable($applicationData['selected_standards'] ?? [], ['standard_code']),
@@ -857,9 +856,8 @@ class DocumentGeneratorService
             'Reviewed By' => $reviewer['full_name'] ?? '',
             'Designation' => $reviewer['designation'] ?? 'Technical Manager',
             'Review Notes' => $application['cb_review_notes'] ?? '',
-            'Reviewed At' => $application['reviewed_at'] ?? '',
+            'Reviewed At' => $this->dateOnly($application['reviewed_at'] ?? ''),
         ])];
-        $sections[] = ['QR Code', '<div class="qr"><img src="' . esc($qr, 'attr') . '"><div>Application record QR</div></div>'];
 
         return $sections;
     }
@@ -883,10 +881,20 @@ class DocumentGeneratorService
             . '<tr><td>Issue / Issue Date</td><td>' . esc(($application['issue_number'] ?? '2') . ' / ' . ($application['issue_date'] ?? '')) . '</td></tr>'
             . '</table>'
             . '</header>'
-            . '<section class="client"><strong>Client:</strong> ' . esc($client['company']) . '<br><strong>Scope:</strong> ' . esc((string) ($client['scope'] ?? '')) . '<br><strong>Application:</strong> ' . esc($application['application_number'] ?? 'Not created') . ' | <strong>Status:</strong> ' . esc($application['status'] ?? 'draft') . ' | <strong>Submitted:</strong> ' . esc($application['submitted_at'] ?? '') . '</section>'
+            . '<section class="client"><strong>Client:</strong> ' . esc($client['company']) . '<br><strong>Scope:</strong> ' . esc((string) ($client['scope'] ?? '')) . '<br><strong>Application:</strong> ' . esc($application['application_number'] ?? 'Not created') . ' | <strong>Status:</strong> ' . esc($application['status'] ?? 'draft') . ' | <strong>Submitted:</strong> ' . esc($this->dateOnly($application['submitted_at'] ?? '')) . '</section>'
             . $body
-            . '<footer>Document No: ' . esc($application['document_number'] ?? 'F 25') . ' | Revision: ' . esc($application['revision_number'] ?? '1') . ' | Issue: ' . esc($application['issue_number'] ?? '2') . ' | Issue Date: ' . esc($application['issue_date'] ?? '') . '</footer>'
+            . '<footer class="f25-page-footer"><span class="page-number">Page </span></footer>'
             . '</body></html>';
+    }
+
+    private function dateOnly(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        return substr($value, 0, 10);
     }
 
     private function excludedCertificationApplicationSections(): array
@@ -3618,7 +3626,9 @@ class DocumentGeneratorService
             .f25-logo { width: 17%; text-align: center; color: #0b5f9e; font-weight: 700; background: #f4f8fb; }
             .f25-logo-text { font-size: 24px; line-height: 1; }
             .f25-title { width: 50%; text-align: center; font-size: 17px; font-weight: 700; color: #0a3765; }
-            footer { left: 40px; right: 40px; color: #607080; border-top: 1px solid #c8d7e3; }
+            footer.f25-page-footer { left: 40px; right: 40px; color: #607080; border-top: 1px solid #c8d7e3; text-align: center; }
+            footer.f25-page-footer span:first-child { width: auto; }
+            footer.f25-page-footer .page-number { width: auto; text-align: center; }
         ';
     }
 
