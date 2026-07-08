@@ -64,6 +64,16 @@ class WorkflowGateWiringTest extends TestCase
         self::assertFileDoesNotExist(__DIR__ . '/../../app/Controllers/Masters/LegacyImportController.php');
     }
 
+    public function testSidebarKeepsPersonnelAsSinglePeopleMaster(): void
+    {
+        $layout = file_get_contents(__DIR__ . '/../../app/Views/layouts/main.php') ?: '';
+
+        self::assertStringContainsString("'label' => 'Personnel'", $layout);
+        self::assertStringContainsString("site_url('masters/personnel')", $layout);
+        self::assertStringNotContainsString("'label' => 'Users & Roles'", $layout);
+        self::assertStringNotContainsString("site_url('admin/users')", $layout);
+    }
+
     public function testApplicationReviewPdfUsesPageFooterOnly(): void
     {
         $documentGenerator = file_get_contents(__DIR__ . '/../../app/Services/DocumentGeneratorService.php') ?: '';
