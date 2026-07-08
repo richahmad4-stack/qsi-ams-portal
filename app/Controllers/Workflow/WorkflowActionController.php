@@ -26,6 +26,7 @@ use App\Services\AuditLogger;
 use App\Services\AuditAiDraftService;
 use App\Services\AuditDurationService;
 use App\Services\AuditReportNarrativeService;
+use App\Services\CertificationApplicationDefaults;
 use App\Services\ClauseContentPoolService;
 use App\Services\SmartAuditContentEngine;
 use App\Services\NotificationService;
@@ -65,6 +66,7 @@ class WorkflowActionController extends BaseController
     private SmartAuditContentEngine $contentEngine;
     private WorkflowRoleService $workflowRoles;
     private NotificationService $notifications;
+    private CertificationApplicationDefaults $applicationDefaults;
     private BaseConnection $db;
 
     public function __construct()
@@ -95,6 +97,7 @@ class WorkflowActionController extends BaseController
         $this->contentPool = new ClauseContentPoolService();
         $this->contentEngine = new SmartAuditContentEngine($this->contentPool, $this->narratives);
         $this->notifications = new NotificationService();
+        $this->applicationDefaults = new CertificationApplicationDefaults();
         $this->db = Database::connect();
         $this->workflowRoles = new WorkflowRoleService($this->db);
     }
@@ -3299,7 +3302,7 @@ class WorkflowActionController extends BaseController
             $standards
         )));
 
-        $defaults = [
+        $defaults = array_merge([
             'application_id' => $application['application_number'] ?? '',
             'communication_language' => 'English',
             'client_type' => 'New Client',
@@ -3355,9 +3358,14 @@ class WorkflowActionController extends BaseController
             'no_offsite_work' => 'None',
             'application_status' => $review['recommendation'] ?? 'Accepted',
             'reviewer_comments' => $review['review_notes'] ?? 'I reviewed the application with the best of my knowledge and now it is submitting to Quality Manager for approval.',
-        ];
+        ], $this->applicationDefaults->reviewDefaults($client, $standards));
 
         $payload = array_merge($defaults, $stored);
+        foreach ($defaults as $key => $value) {
+            if (trim((string) ($payload[$key] ?? '')) === '' && trim((string) $value) !== '') {
+                $payload[$key] = $value;
+            }
+        }
         if ($standardText !== '') {
             $payload['standards_text'] = $standardText;
         }

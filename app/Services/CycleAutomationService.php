@@ -17,6 +17,7 @@ class CycleAutomationService
     private AuditDurationService $duration;
     private AuditLogger $logger;
     private SmartAuditContentEngine $contentEngine;
+    private CertificationApplicationDefaults $applicationDefaults;
 
     public function __construct(?BaseConnection $db = null)
     {
@@ -24,6 +25,7 @@ class CycleAutomationService
         $this->duration = new AuditDurationService();
         $this->logger = new AuditLogger();
         $this->contentEngine = new SmartAuditContentEngine();
+        $this->applicationDefaults = new CertificationApplicationDefaults();
     }
 
     public function preview(array $input, int $tenantId, int $userId): array
@@ -810,26 +812,36 @@ class CycleAutomationService
 
     private function createApplicationResponses(int $applicationId, int $userId, array $input, array $preview): void
     {
-        $lead = $preview['assignments']['lead_auditor']['full_name'] ?? '';
         $standards = implode(', ', array_column($preview['standards'], 'code'));
-        $preferredDates = 'Stage 1: ' . ($preview['events']['initial_stage1']['start'] ?? '')
-            . '; Stage 2: ' . ($preview['events']['initial_stage2']['start'] ?? '');
+        $client = $this->clientShape($input);
+        $answer = function (string $key, string $fallback = '') use ($client, $preview): string {
+            return $this->applicationDefaults->applicationAnswer($key, $client, $preview['standards']) ?? $fallback;
+        };
         $rows = [
             'Audit Preferences' => [
-                'Language of Audit' => 'English',
-                'Preferred Audit Dates' => $preferredDates,
-                'Preferred Auditor' => $lead,
+                'Language of Audit' => $answer('language_of_audit', 'English / Arabic'),
             ],
             'Background Information' => [
-                'Has previous contact been made with QSI personnel?' => 'No',
-                'If yes, state the person name and meeting/visit details' => 'Not applicable',
-                'Where did you hear about QSI?' => 'Client enquiry',
-                'Do you currently use any other QSI services?' => 'No',
+                'Has previous contact been made with QSI personnel?' => $answer('previous_qsi_contact', 'No'),
+                'If yes, state the person name and meeting/visit details' => $answer('qsi_contact_details', 'Not applicable'),
+                'Where did you hear about QSI?' => $answer('heard_about_qsi', 'SFDA list, website, social media'),
+                'Do you currently use any other QSI services?' => $answer('other_qsi_services', 'No'),
             ],
             'Certification Required' => [
                 'Integrated Management System' => count($preview['standards']) > 1 ? 'Yes - ' . $standards : 'No',
-                'Legal and Statutory Requirements' => 'Applicable legal, statutory, regulatory and customer requirements related to the certification scope will be verified during the audit.',
+                'Applicable Legal and Regulatory Requirement' => $answer('legal_statutory_requirements', 'Applicable legal, statutory, regulatory and customer requirements related to the certification scope will be verified during the audit.'),
+                'Risks associated with products, processes or activities' => $answer('product_process_risks', 'Operational and compliance risks related to the certification scope will be verified during the audit.'),
                 'Any incident / accident in the past?' => 'No incident reported at application stage',
+                '1a. Analysis of technical issues arising from the scope' => $answer('technical_issues'),
+                '1b. Safety condition requirements' => $answer('safety_requirements'),
+                '1c. Technological and Regulatory Context' => $answer('technological_regulatory_context'),
+            ],
+            'Scope / Processes' => [
+                'Scope of Certification' => $answer('scope_of_certification', $input['scope']),
+                'Products' => $answer('products', 'Products covered by the requested certification scope.'),
+                'Services' => $answer('services', 'Services covered by the requested certification scope.'),
+                'Processes' => $answer('processes', $this->defaultProcesses($preview['standards'])),
+                'Outsourced Processes' => $answer('outsourced_processes', 'No outsourced process declared at application stage.'),
             ],
             'Company / Organisation Details' => [
                 'Company Name' => $input['client_name'],
@@ -878,9 +890,11 @@ class CycleAutomationService
                 'Remote Locations' => 'Not applicable',
             ],
             'Management System Readiness' => [
-                'Management system implemented' => 'To be verified during Stage 1',
-                'Internal audit completed' => 'To be verified during Stage 1',
-                'Management review completed' => 'To be verified during Stage 1',
+                'Management System Status' => $answer('management_system_status', 'Mixed'),
+                'Implementation of the system completed?' => $answer('implementation_status', 'Yes'),
+                'Internal Audit conducted?' => $answer('internal_audit_conducted', 'Yes'),
+                'Management Review conducted?' => $answer('management_review_conducted', 'Yes'),
+                'Last management review meeting conducted?' => $answer('last_management_review_meeting_conducted', 'Yes'),
                 'Certification scope requested' => $input['scope'],
             ],
         ];
@@ -946,6 +960,7 @@ class CycleAutomationService
         $duration = $preview['duration'];
         $input = $preview['input'];
         $confirmed = $this->workflowPackComplete($input);
+        $reviewDefaults = $this->applicationDefaults->reviewDefaults($this->clientShape($input), $preview['standards']);
         $this->db->table('application_reviews')->insert([
             'client_id' => $clientId,
             'certification_application_id' => $applicationId,
@@ -966,7 +981,7 @@ class CycleAutomationService
             'review_notes' => $confirmed
                 ? $this->nonEmpty($input['application_review_notes'], 'Application review completed. Scope, competence, resources, impartiality and audit time were checked for the selected standards.')
                 : 'System prepared the application review. Technical Manager shall verify scope, competence, resources, impartiality, audit time and selected standards before approval.',
-            'review_payload' => json_encode([
+            'review_payload' => json_encode(array_merge([
                 'standards_text' => implode(', ', array_column($preview['standards'], 'code')),
                 'effective_employees' => $input['employee_count'],
                 'days_allotted' => number_format((float) $duration['total_days'], 2),
@@ -978,7 +993,7 @@ class CycleAutomationService
                 'calculation_basis' => $duration['basis'],
                 'application_review_notes' => $input['application_review_notes'],
                 'automation_mode' => $input['generation_mode'],
-            ], JSON_THROW_ON_ERROR),
+            ], $reviewDefaults), JSON_THROW_ON_ERROR),
             'status' => $confirmed ? 'qm_approved' : 'draft',
             'reviewed_at' => $confirmed ? $preview['timeline']['application_review'] . ' 14:00:00' : null,
             'technical_reviewer_name' => $preview['assignments']['technical_reviewer']['full_name'] ?? '',

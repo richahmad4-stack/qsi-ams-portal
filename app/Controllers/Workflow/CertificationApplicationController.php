@@ -10,6 +10,7 @@ use App\Models\ApplicationSelectedStandardModel;
 use App\Models\CertificationApplicationModel;
 use App\Models\ClientModel;
 use App\Services\AuditLogger;
+use App\Services\CertificationApplicationDefaults;
 use Config\Database;
 
 class CertificationApplicationController extends BaseController
@@ -21,6 +22,7 @@ class CertificationApplicationController extends BaseController
     private ApplicationAttachmentModel $attachments;
     private ClientModel $clients;
     private AuditLogger $auditLogger;
+    private CertificationApplicationDefaults $defaults;
 
     public function __construct()
     {
@@ -31,6 +33,7 @@ class CertificationApplicationController extends BaseController
         $this->attachments = new ApplicationAttachmentModel();
         $this->clients = new ClientModel();
         $this->auditLogger = new AuditLogger();
+        $this->defaults = new CertificationApplicationDefaults();
     }
 
     public function edit(int $clientId)
@@ -50,7 +53,7 @@ class CertificationApplicationController extends BaseController
             $selected = $this->selectedStandardRows((int) $application['id']);
         }
 
-        $questions = $this->syncApplicationQuestions((int) $application['id'], array_column($selected, 'standard_code'));
+        $questions = $this->syncApplicationQuestions((int) $application['id'], array_column($selected, 'standard_code'), $client);
 
         return view('workflow/application/form', [
             'title' => 'Certification Application Form',
@@ -84,7 +87,7 @@ class CertificationApplicationController extends BaseController
         $this->syncSelectedStandards((int) $application['id'], $selectedIds);
         $this->syncClientStandards($clientId, $selectedIds);
         $selected = $this->selectedStandardRows((int) $application['id']);
-        $questions = $this->syncApplicationQuestions((int) $application['id'], array_column($selected, 'standard_code'));
+        $questions = $this->syncApplicationQuestions((int) $application['id'], array_column($selected, 'standard_code'), $client);
         $postedAnswers = (array) $this->request->getPost('answers');
 
         foreach ($questions as $question) {
@@ -233,7 +236,7 @@ class CertificationApplicationController extends BaseController
         }
     }
 
-    private function syncApplicationQuestions(int $applicationId, array $standardCodes): array
+    private function syncApplicationQuestions(int $applicationId, array $standardCodes, array $client): array
     {
         $db = Database::connect();
         $selected = array_map('strtoupper', $standardCodes);
@@ -276,9 +279,13 @@ class CertificationApplicationController extends BaseController
                 ->first();
 
             if ($existing === null) {
-                $this->applicationQuestions->insert($payload);
+                $questionId = (int) $this->applicationQuestions->insert($payload);
+                $payload['id'] = $questionId;
+                $this->saveDefaultAnswerIfEmpty($applicationId, $payload, $client, $selected);
             } else {
                 $this->applicationQuestions->update((int) $existing['id'], $payload);
+                $payload['id'] = (int) $existing['id'];
+                $this->saveDefaultAnswerIfEmpty($applicationId, $payload, $client, $selected);
             }
         }
 
@@ -296,6 +303,29 @@ class CertificationApplicationController extends BaseController
             ->orderBy('section', 'ASC')
             ->orderBy('display_order', 'ASC')
             ->findAll();
+    }
+
+    private function saveDefaultAnswerIfEmpty(int $applicationId, array $question, array $client, array $selectedStandards): void
+    {
+        $default = $this->defaults->applicationAnswer((string) $question['question_key'], $client, array_map(
+            static fn (string $code): array => ['standard_code' => $code],
+            $selectedStandards
+        ));
+
+        if ($default === null || trim($default) === '') {
+            return;
+        }
+
+        $existing = $this->answers
+            ->where('application_id', $applicationId)
+            ->where('application_question_id', (int) $question['id'])
+            ->first();
+
+        if ($existing !== null && trim((string) ($existing['answer_text'] ?? '')) !== '') {
+            return;
+        }
+
+        $this->saveAnswer($applicationId, $question, $default);
     }
 
     private function excludeFromApplication(array $question): bool

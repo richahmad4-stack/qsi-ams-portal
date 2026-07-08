@@ -20,12 +20,14 @@ class DocumentGeneratorService
     private BaseConnection $db;
     private GeneratedDocumentModel $documents;
     private AuditReportNarrativeService $narratives;
+    private CertificationApplicationDefaults $applicationDefaults;
 
     public function __construct()
     {
         $this->db = Database::connect();
         $this->documents = new GeneratedDocumentModel();
         $this->narratives = new AuditReportNarrativeService();
+        $this->applicationDefaults = new CertificationApplicationDefaults();
     }
 
     public function generateClientDocument(int $tenantId, int $clientId, string $documentKey, int $userId): array
@@ -902,10 +904,24 @@ class DocumentGeneratorService
             || str_ends_with(strtoupper(trim($section)), 'SPECIFIC QUESTIONS');
     }
 
+    private function applicationReviewPayloadWithDefaults(array $client, array $standards, array $review): array
+    {
+        $payload = json_decode((string) ($review['review_payload'] ?? ''), true) ?: [];
+        $defaults = $this->applicationDefaults->reviewDefaults($client, $standards);
+
+        foreach ($defaults as $key => $value) {
+            if (trim((string) ($payload[$key] ?? '')) === '' && trim((string) $value) !== '') {
+                $payload[$key] = $value;
+            }
+        }
+
+        return $payload;
+    }
+
     private function applicationReviewSections(array $client, array $data): array
     {
         $review = $data['application_review'] ?? [];
-        $payload = json_decode((string) ($review['review_payload'] ?? ''), true) ?: [];
+        $payload = $this->applicationReviewPayloadWithDefaults($client, $data['standards'] ?? [], $review);
         $duration = (new AuditDurationService())->calculateApplicationReview($client, $data['standards'] ?? [], $payload);
         $standards = implode(', ', array_keys($duration['standard_days'] ?? []));
         $v = static function (string $key, string $fallback = '') use ($payload, $review): string {
@@ -1020,7 +1036,7 @@ class DocumentGeneratorService
     private function applicationReviewHtml(string $title, array $client, array $data): string
     {
         $review = $data['application_review'] ?? [];
-        $payload = json_decode((string) ($review['review_payload'] ?? ''), true) ?: [];
+        $payload = $this->applicationReviewPayloadWithDefaults($client, $data['standards'] ?? [], $review);
         $applicationData = $data['certification_application'] ?? [];
         $application = $applicationData['application'] ?? [];
         $duration = (new AuditDurationService())->calculateApplicationReview($client, $data['standards'] ?? [], $payload);
