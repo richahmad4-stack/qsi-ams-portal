@@ -163,6 +163,7 @@ $isOperationsUser = $hasAnyRole([
 $isAuditUser = $hasAnyRole(['auditor', 'lead_auditor']);
 $isReviewer = $hasAnyRole(['technical_reviewer']);
 $isDecisionMaker = $hasAnyRole(['certification_decision_maker']);
+$isComplianceAuditViewer = $hasAnyRole(['compliance_auditor']);
 $isFinanceUser = $hasAnyRole(['finance']) || can('finance', 'view');
 
 $visibleItems = static fn (array $items): array => array_values(array_filter($items, static fn (?array $item): bool => $item !== null && ($item['show'] ?? true)));
@@ -171,7 +172,7 @@ $nav = [
     'Core' => $visibleItems([
         ['label' => 'Dashboard', 'icon' => 'fa-chart-line', 'href' => site_url('dashboard'), 'match' => 'dashboard'],
         ['label' => 'Cycle Builder', 'icon' => 'fa-wand-magic-sparkles', 'href' => site_url('automation/cycle-generator'), 'match' => 'automation/cycle-generator', 'show' => $hasAnyRole(['super_admin', 'administrator']) && can('automation', 'view')],
-        ['label' => 'Workflow', 'icon' => 'fa-diagram-project', 'href' => site_url('workflow/certification'), 'match' => 'workflow/certification', 'show' => $isOperationsUser && can('clients', 'view')],
+        ['label' => 'Workflow', 'icon' => 'fa-diagram-project', 'href' => site_url('workflow/certification'), 'match' => 'workflow/certification', 'show' => ($isOperationsUser || $isComplianceAuditViewer) && can('clients', 'view')],
         ['label' => 'Clients', 'icon' => 'fa-building', 'href' => site_url('masters/clients'), 'match' => 'masters/clients', 'show' => $isOperationsUser && can('clients', 'view')],
         ['label' => 'My Audits', 'icon' => 'fa-clipboard-check', 'href' => site_url('dashboard/section/my_audits'), 'match' => 'dashboard/section/my_audits', 'show' => $isAuditUser],
         ['label' => 'My Reviews', 'icon' => 'fa-user-check', 'href' => site_url('dashboard/section/my_technical_reviews'), 'match' => 'dashboard/section/my_technical_reviews', 'show' => $isReviewer],

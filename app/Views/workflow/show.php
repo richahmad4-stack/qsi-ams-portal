@@ -56,6 +56,20 @@ $stateClasses = [
 ];
 $records = $workflow['records'];
 $responsible = $workflow['responsible'] ?? [];
+$currentRoles = (array) session()->get('role_codes');
+$isComplianceAuditViewer = in_array('compliance_auditor', $currentRoles, true);
+$canEditWorkflow = can('clients', 'edit')
+    || can('application_reviews', 'edit')
+    || can('proposals', 'edit')
+    || can('contracts', 'edit')
+    || can('audit_programs', 'edit')
+    || can('auditor_appointments', 'edit')
+    || can('audit_plans', 'edit')
+    || can('reports', 'edit')
+    || can('technical_reviews', 'edit')
+    || can('certification_decisions', 'edit')
+    || can('certificates', 'edit');
+$viewOnlyReports = $isComplianceAuditViewer && ! $canEditWorkflow;
 $nameText = static function ($value): string {
     if (is_array($value)) {
         if ($value === []) {
@@ -71,12 +85,21 @@ $nameText = static function ($value): string {
 
     return trim((string) $value) !== '' ? (string) $value : 'Not assigned';
 };
-$eventRoute = static function (?array $event, string $target) use ($client): ?string {
+$eventRoute = static function (?array $event, string $target) use ($client, $viewOnlyReports): ?string {
     if ($event === null) {
         return null;
     }
 
     $id = (int) $event['id'];
+    if ($viewOnlyReports) {
+        return match ($target) {
+            'report', 'ncr_capa', 'file' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/file'),
+            'plan' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/documents/audit_plan'),
+            'technical_review' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/documents/technical_review'),
+            'decision' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/documents/decision_report'),
+            default => null,
+        };
+    }
 
     return match ($target) {
         'appointment' => site_url('workflow/certification/' . $client['id'] . '/appointments?event_id=' . $id),
@@ -146,7 +169,7 @@ $actionButton = static function (string $label, string $icon, ?string $url, bool
 $eventDocumentUrl = static function (?array $event, string $documentKey) use ($client): ?string {
     return $event === null ? null : site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/documents/' . $documentKey);
 };
-$renderEventFileTable = static function (?array $event, string $emptyText, bool $enabled = true) use ($client, $actionButton, $eventDocumentUrl): void {
+$renderEventFileTable = static function (?array $event, string $emptyText, bool $enabled = true) use ($client, $actionButton, $eventDocumentUrl, $viewOnlyReports): void {
     if ($event === null) {
         echo '<div class="text-secondary">' . esc($emptyText) . '</div>';
         return;
@@ -159,16 +182,16 @@ $renderEventFileTable = static function (?array $event, string $emptyText, bool 
         . '<tr><th>Status</th><td>' . esc($event['status']) . '</td></tr>'
         . '</tbody></table>'
         . '<div class="d-flex flex-wrap justify-content-end gap-2">'
-        . $actionButton('Appointment', 'fa-user-check', site_url('workflow/certification/' . $client['id'] . '/appointments?event_id=' . $event['id']), $enabled)
-        . $actionButton('Plan', 'fa-list-check', site_url('workflow/certification/' . $client['id'] . '/audit-plan?event_id=' . $event['id']), $enabled)
-        . $actionButton('Report', 'fa-clipboard-list', site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/execute'), $enabled)
+        . ($viewOnlyReports ? '' : $actionButton('Appointment', 'fa-user-check', site_url('workflow/certification/' . $client['id'] . '/appointments?event_id=' . $event['id']), $enabled))
+        . ($viewOnlyReports ? '' : $actionButton('Plan', 'fa-list-check', site_url('workflow/certification/' . $client['id'] . '/audit-plan?event_id=' . $event['id']), $enabled))
+        . ($viewOnlyReports ? '' : $actionButton('Report', 'fa-clipboard-list', site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/execute'), $enabled))
         . $actionButton('File', 'fa-folder-open', site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/file'), $enabled)
         . $actionButton('Plan PDF', 'fa-file-pdf', $eventDocumentUrl($event, 'audit_plan'), $enabled, 'danger')
         . $actionButton('Report PDF', 'fa-file-pdf', $eventDocumentUrl($event, 'audit_report'), $enabled, 'danger')
         . $actionButton('NCR/CAPA PDF', 'fa-file-pdf', $eventDocumentUrl($event, 'ncr_capa'), $enabled, 'danger')
         . '</div>';
 };
-$renderExecutionTable = static function (array $executionEvents, string $emptyText) use ($client): void {
+$renderExecutionTable = static function (array $executionEvents, string $emptyText) use ($client, $viewOnlyReports): void {
     echo '<div class="table-responsive"><table class="table table-striped align-middle">'
         . '<thead><tr><th>Audit</th><th>Type</th><th>Planned dates</th><th>Status</th><th class="text-end">Action</th></tr></thead><tbody>';
 
@@ -180,8 +203,9 @@ $renderExecutionTable = static function (array $executionEvents, string $emptyTe
             . '<td>' . esc($auditEvent['status']) . '</td>'
             . '<td class="text-end">'
             . '<a class="btn btn-outline-secondary btn-sm" href="' . esc(site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $auditEvent['id'] . '/file'), 'attr') . '"><i class="fa-solid fa-folder-open me-1" aria-hidden="true"></i>File</a> '
-            . '<a class="btn btn-outline-primary btn-sm" href="' . esc(site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $auditEvent['id'] . '/execute'), 'attr') . '"><i class="fa-solid fa-clipboard-list me-1" aria-hidden="true"></i>Execute</a> '
+            . ($viewOnlyReports ? '' : '<a class="btn btn-outline-primary btn-sm" href="' . esc(site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $auditEvent['id'] . '/execute'), 'attr') . '"><i class="fa-solid fa-clipboard-list me-1" aria-hidden="true"></i>Execute</a> ')
             . '<a class="btn btn-outline-danger btn-sm" href="' . esc(site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $auditEvent['id'] . '/documents/audit_plan'), 'attr') . '"><i class="fa-solid fa-file-pdf me-1" aria-hidden="true"></i>Plan PDF</a>'
+            . ' <a class="btn btn-outline-danger btn-sm" href="' . esc(site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $auditEvent['id'] . '/documents/audit_report'), 'attr') . '"><i class="fa-solid fa-file-pdf me-1" aria-hidden="true"></i>Report PDF</a>'
             . '</td></tr>';
     }
 
@@ -219,6 +243,24 @@ $stepLinks = [
     'certificates' => site_url('workflow/certification/' . $client['id'] . '/certificates'),
     'feedback' => site_url('workflow/certification/' . $client['id'] . '/feedback'),
 ];
+if ($viewOnlyReports) {
+    foreach ([
+        'application',
+        'tm_application_review',
+        'qm_application_approval',
+        'proposal',
+        'contract',
+        'audit_program',
+        'auditor_appointment',
+        'tm_file_review',
+        'certification_decision',
+        'gm_final_approval',
+        'certificates',
+        'feedback',
+    ] as $nonReportStep) {
+        $stepLinks[$nonReportStep] = null;
+    }
+}
 $stepStates = [];
 foreach ($workflow['steps'] as $step) {
     $stepStates[$step['key']] = $step['state'];
@@ -230,10 +272,12 @@ foreach ($workflow['steps'] as $step) {
         <i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i>
         Workflow register
     </a>
-    <a href="<?= site_url('masters/clients/' . $client['id']) ?>" class="btn btn-outline-primary btn-sm">
-        <i class="fa-solid fa-building me-1" aria-hidden="true"></i>
-        Client details
-    </a>
+    <?php if (! $viewOnlyReports): ?>
+        <a href="<?= site_url('masters/clients/' . $client['id']) ?>" class="btn btn-outline-primary btn-sm">
+            <i class="fa-solid fa-building me-1" aria-hidden="true"></i>
+            Client details
+        </a>
+    <?php endif; ?>
 </div>
 
 <div class="row g-3 mb-3">
@@ -316,6 +360,18 @@ foreach ($workflow['steps'] as $step) {
     <div class="workflow-subsection">
         <div class="workflow-subsection-title">Certification Audit Actions</div>
         <div class="text-secondary small mb-3">Only initial certification records. Stage 1 and Stage 2 plans/reports are opened separately.</div>
+        <?php if ($viewOnlyReports): ?>
+            <div class="alert alert-info py-2 small">Compliance audit viewer access: cycle status is visible, and report/file/PDF outputs are available without editing rights.</div>
+            <div class="d-flex flex-wrap gap-2">
+                <?= $actionButton('Stage 1 file', 'fa-folder-open', $eventRoute($stage1, 'file')) ?>
+                <?= $actionButton('Stage 2 file', 'fa-folder-open', $eventRoute($stage2, 'file')) ?>
+                <?= $actionButton('Stage 1 report PDF', 'fa-file-pdf', $eventDocumentUrl($stage1, 'audit_report'), true, 'danger') ?>
+                <?= $actionButton('Stage 2 report PDF', 'fa-file-pdf', $eventDocumentUrl($stage2, 'audit_report'), true, 'danger') ?>
+                <?= $actionButton('Certification NCR/CAPA PDF', 'fa-file-pdf', $eventDocumentUrl($stage2 ?? $stage1, 'ncr_capa'), true, 'danger') ?>
+                <?= $actionButton('Technical review PDF', 'fa-file-pdf', $eventDocumentUrl($stage2 ?? $stage1, 'technical_review'), true, 'danger') ?>
+                <?= $actionButton('Decision PDF', 'fa-file-pdf', $eventDocumentUrl($stage2 ?? $stage1, 'decision_report'), true, 'danger') ?>
+            </div>
+        <?php else: ?>
         <div class="d-flex flex-wrap gap-2">
             <?= $actionButton('Application review', 'fa-clipboard-check', site_url('workflow/certification/' . $client['id'] . '/review')) ?>
             <?= $actionButton('Proposal', 'fa-file-invoice-dollar', site_url('workflow/certification/' . $client['id'] . '/proposal')) ?>
@@ -333,6 +389,7 @@ foreach ($workflow['steps'] as $step) {
             <?= $actionButton('Certificates', 'fa-certificate', site_url('workflow/certification/' . $client['id'] . '/certificates')) ?>
             <?= $actionButton('Feedback', 'fa-comment-dots', site_url('workflow/certification/' . $client['id'] . '/feedback')) ?>
         </div>
+        <?php endif; ?>
     </div>
 
     <div class="workflow-subsection">
@@ -359,6 +416,7 @@ foreach ($workflow['steps'] as $step) {
         </div>
     </div>
 
+    <?php if (! $viewOnlyReports): ?>
     <div class="workflow-subsection">
         <div class="workflow-subsection-title">Certification Audit File Tabs</div>
         <ul class="nav nav-tabs" role="tablist">
@@ -463,6 +521,7 @@ foreach ($workflow['steps'] as $step) {
             </div>
         </div>
     </div>
+    <?php endif; ?>
 
     <div class="workflow-subsection">
         <div class="workflow-subsection-title">Certification Audit Execution</div>
@@ -547,12 +606,14 @@ foreach ($workflow['steps'] as $step) {
                 <span class="badge <?= esc($statusClasses[1]) ?>"><?= esc($surveillanceSection['status']) ?></span>
             </div>
             <div class="d-flex flex-wrap gap-2">
-                <?= $actionButton('Auditor appointment', 'fa-user-check', $eventRoute($surveillanceEvent, 'appointment'), $surveillanceSection['clickable']) ?>
-                <?= $actionButton('Audit plan', 'fa-list-check', $eventRoute($surveillanceEvent, 'plan'), $surveillanceSection['clickable']) ?>
-                <?= $actionButton('Audit report', 'fa-clipboard-list', $eventRoute($surveillanceEvent, 'report'), $surveillanceSection['clickable']) ?>
-                <?= $actionButton('NCR / CAPA', 'fa-screwdriver-wrench', $eventRoute($surveillanceEvent, 'ncr_capa'), $surveillanceSection['clickable']) ?>
-                <?= $actionButton('Technical review', 'fa-user-shield', $eventRoute($surveillanceEvent, 'technical_review'), $surveillanceSection['clickable']) ?>
-                <?= $actionButton('Decision making', 'fa-stamp', $eventRoute($surveillanceEvent, 'decision'), $surveillanceSection['clickable']) ?>
+                <?php if (! $viewOnlyReports): ?>
+                    <?= $actionButton('Auditor appointment', 'fa-user-check', $eventRoute($surveillanceEvent, 'appointment'), $surveillanceSection['clickable']) ?>
+                    <?= $actionButton('Audit plan', 'fa-list-check', $eventRoute($surveillanceEvent, 'plan'), $surveillanceSection['clickable']) ?>
+                    <?= $actionButton('Audit report', 'fa-clipboard-list', $eventRoute($surveillanceEvent, 'report'), $surveillanceSection['clickable']) ?>
+                    <?= $actionButton('NCR / CAPA', 'fa-screwdriver-wrench', $eventRoute($surveillanceEvent, 'ncr_capa'), $surveillanceSection['clickable']) ?>
+                    <?= $actionButton('Technical review', 'fa-user-shield', $eventRoute($surveillanceEvent, 'technical_review'), $surveillanceSection['clickable']) ?>
+                    <?= $actionButton('Decision making', 'fa-stamp', $eventRoute($surveillanceEvent, 'decision'), $surveillanceSection['clickable']) ?>
+                <?php endif; ?>
                 <?= $actionButton('Full file', 'fa-folder-open', $eventRoute($surveillanceEvent, 'file'), $surveillanceSection['clickable']) ?>
             </div>
         </div>
@@ -598,42 +659,50 @@ foreach ($workflow['steps'] as $step) {
                 </div>
                 <div class="tab-pane fade" id="<?= esc($surveillanceSection['tabPrefix']) ?>-appointment" role="tabpanel">
                     <div class="d-flex flex-wrap justify-content-end gap-2 mb-2">
-                        <?= $actionButton('View / Edit', 'fa-user-check', $eventRoute($surveillanceEvent, 'appointment'), $surveillanceSection['clickable']) ?>
+                        <?php if (! $viewOnlyReports): ?>
+                            <?= $actionButton('View / Edit', 'fa-user-check', $eventRoute($surveillanceEvent, 'appointment'), $surveillanceSection['clickable']) ?>
+                        <?php endif; ?>
                         <?= $actionButton('PDF', 'fa-file-pdf', $eventDocumentUrl($surveillanceEvent, 'auditor_appointment'), $surveillanceSection['clickable'], 'danger') ?>
                     </div>
                     <div class="text-secondary">Auditor appointment, competence, impartiality and conflict checks for this surveillance stage.</div>
                 </div>
                 <div class="tab-pane fade" id="<?= esc($surveillanceSection['tabPrefix']) ?>-plan" role="tabpanel">
                     <div class="d-flex flex-wrap justify-content-end gap-2 mb-2">
-                        <?= $actionButton('View / Edit', 'fa-list-check', $eventRoute($surveillanceEvent, 'plan'), $surveillanceSection['clickable']) ?>
+                        <?php if (! $viewOnlyReports): ?>
+                            <?= $actionButton('View / Edit', 'fa-list-check', $eventRoute($surveillanceEvent, 'plan'), $surveillanceSection['clickable']) ?>
+                        <?php endif; ?>
                         <?= $actionButton('PDF', 'fa-file-pdf', $eventDocumentUrl($surveillanceEvent, 'audit_plan'), $surveillanceSection['clickable'], 'danger') ?>
                     </div>
                     <div class="text-secondary">Separate surveillance audit plan with process, timing, auditor role and auditor name.</div>
                 </div>
                 <div class="tab-pane fade" id="<?= esc($surveillanceSection['tabPrefix']) ?>-report" role="tabpanel">
                     <div class="d-flex flex-wrap justify-content-end gap-2 mb-2">
-                        <?= $actionButton('Execute / View', 'fa-clipboard-list', $eventRoute($surveillanceEvent, 'report'), $surveillanceSection['clickable']) ?>
+                        <?= $actionButton($viewOnlyReports ? 'View file' : 'Execute / View', $viewOnlyReports ? 'fa-folder-open' : 'fa-clipboard-list', $viewOnlyReports ? $eventRoute($surveillanceEvent, 'file') : $eventRoute($surveillanceEvent, 'report'), $surveillanceSection['clickable']) ?>
                         <?= $actionButton('PDF', 'fa-file-pdf', $eventDocumentUrl($surveillanceEvent, 'audit_report'), $surveillanceSection['clickable'], 'danger') ?>
                     </div>
                     <div class="text-secondary">Separate surveillance checklist, conformity notes, NCR decisions and report submission date.</div>
                 </div>
                 <div class="tab-pane fade" id="<?= esc($surveillanceSection['tabPrefix']) ?>-capa" role="tabpanel">
                     <div class="d-flex flex-wrap justify-content-end gap-2 mb-2">
-                        <?= $actionButton('View / Edit', 'fa-screwdriver-wrench', $eventRoute($surveillanceEvent, 'ncr_capa'), $surveillanceSection['clickable']) ?>
+                        <?= $actionButton($viewOnlyReports ? 'View file' : 'View / Edit', $viewOnlyReports ? 'fa-folder-open' : 'fa-screwdriver-wrench', $viewOnlyReports ? $eventRoute($surveillanceEvent, 'file') : $eventRoute($surveillanceEvent, 'ncr_capa'), $surveillanceSection['clickable']) ?>
                         <?= $actionButton('PDF', 'fa-file-pdf', $eventDocumentUrl($surveillanceEvent, 'ncr_capa'), $surveillanceSection['clickable'], 'danger') ?>
                     </div>
                     <div class="text-secondary">Separate surveillance NCR, correction, root cause, corrective action, evidence and closure records.</div>
                 </div>
                 <div class="tab-pane fade" id="<?= esc($surveillanceSection['tabPrefix']) ?>-review" role="tabpanel">
                     <div class="d-flex flex-wrap justify-content-end gap-2 mb-2">
-                        <?= $actionButton('View / Edit', 'fa-user-shield', $eventRoute($surveillanceEvent, 'technical_review'), $surveillanceSection['clickable']) ?>
+                        <?php if (! $viewOnlyReports): ?>
+                            <?= $actionButton('View / Edit', 'fa-user-shield', $eventRoute($surveillanceEvent, 'technical_review'), $surveillanceSection['clickable']) ?>
+                        <?php endif; ?>
                         <?= $actionButton('PDF', 'fa-file-pdf', $eventDocumentUrl($surveillanceEvent, 'technical_review'), $surveillanceSection['clickable'], 'danger') ?>
                     </div>
                     <div class="text-secondary">Technical Manager review for this surveillance audit file only.</div>
                 </div>
                 <div class="tab-pane fade" id="<?= esc($surveillanceSection['tabPrefix']) ?>-decision" role="tabpanel">
                     <div class="d-flex flex-wrap justify-content-end gap-2 mb-2">
-                        <?= $actionButton('View / Edit', 'fa-stamp', $eventRoute($surveillanceEvent, 'decision'), $surveillanceSection['clickable']) ?>
+                        <?php if (! $viewOnlyReports): ?>
+                            <?= $actionButton('View / Edit', 'fa-stamp', $eventRoute($surveillanceEvent, 'decision'), $surveillanceSection['clickable']) ?>
+                        <?php endif; ?>
                         <?= $actionButton('PDF', 'fa-file-pdf', $eventDocumentUrl($surveillanceEvent, 'decision_report'), $surveillanceSection['clickable'], 'danger') ?>
                     </div>
                     <div class="text-secondary">Maintain certification decision for this surveillance audit stage.</div>
@@ -654,10 +723,17 @@ foreach ($workflow['steps'] as $step) {
             <div class="panel-title mb-1">Recertification / Expiry Information</div>
             <div class="text-secondary small">Certification cycle expiry and recertification planning.</div>
         </div>
-        <a class="btn btn-outline-primary btn-sm" href="<?= $recertification === null ? site_url('workflow/certification/' . $client['id'] . '/audit-program') : site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $recertification['id'] . '/file') ?>">
-            <i class="fa-solid fa-folder-open me-1" aria-hidden="true"></i>
-            Open
-        </a>
+        <?php if ($recertification === null && $viewOnlyReports): ?>
+            <button class="btn btn-outline-secondary btn-sm" type="button" disabled>
+                <i class="fa-solid fa-folder-open me-1" aria-hidden="true"></i>
+                Open
+            </button>
+        <?php else: ?>
+            <a class="btn btn-outline-primary btn-sm" href="<?= $recertification === null ? site_url('workflow/certification/' . $client['id'] . '/audit-program') : site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $recertification['id'] . '/file') ?>">
+                <i class="fa-solid fa-folder-open me-1" aria-hidden="true"></i>
+                Open
+            </a>
+        <?php endif; ?>
     </div>
     <div class="workflow-section-meta">
         <div>

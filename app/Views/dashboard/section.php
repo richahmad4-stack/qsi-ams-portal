@@ -1,6 +1,7 @@
 <?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
+<?php $hideEditActions = in_array('compliance_auditor', (array) session()->get('role_codes'), true); ?>
 <section class="panel">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div>
@@ -42,7 +43,7 @@
                                 View
                             </a>
                         <?php endif; ?>
-                        <?php if (! empty($row['edit'])): ?>
+                        <?php if (! $hideEditActions && ! empty($row['edit'])): ?>
                             <a class="btn btn-outline-secondary btn-sm" href="<?= esc($row['edit']) ?>">
                                 <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
                                 Edit
