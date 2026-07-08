@@ -3907,12 +3907,21 @@ class DocumentGeneratorService
     {
         return '
             @page { margin: 36px 40px 62px; }
+            body { color: #1f2933; }
+            h2 { color: #0b3558; border-bottom: 1.4px solid #d7a500; padding-bottom: 5px; }
             .f25-header { border: 0; padding: 0; margin-bottom: 14px; }
             .f25-header table { border: 1.5px solid #0b3558; margin-bottom: 14px; }
             .f25-header td { border: 1px solid #b8cad8; padding: 8px; vertical-align: middle; }
             .f25-logo { width: 17%; text-align: center; color: #0b5f9e; font-weight: 700; background: #f4f8fb; }
             .f25-logo-text { font-size: 24px; line-height: 1; }
-            .f25-title { width: 50%; text-align: center; font-size: 17px; font-weight: 700; color: #0a3765; }
+            .f25-title { width: 50%; text-align: center; font-size: 17px; font-weight: 700; color: #0b3558; }
+            .f25-header td:not(.f25-logo):not(.f25-title):nth-child(3),
+            .f25-header tr:not(:first-child) td:first-child { background: #f7fafc; color: #0b3558; font-weight: 700; }
+            .f25-header td:last-child { color: #123d70; font-weight: 700; }
+            .client { background: #f8fafc; border-color: #d6e1ea; }
+            th { background: #eaf2f8; color: #0f2638; border-color: #b8cad8; }
+            td { border-color: #d6e1ea; color: #243442; }
+            tbody tr:nth-child(even) td { background: #f7fafc; }
             footer.f25-page-footer { left: 40px; right: 40px; color: #607080; border-top: 1px solid #c8d7e3; text-align: center; }
             footer.f25-page-footer span:first-child { width: auto; }
             footer.f25-page-footer .page-number { width: auto; text-align: center; }
@@ -4085,19 +4094,24 @@ class DocumentGeneratorService
         return '
             @page { margin: 36px 40px 62px; }
             body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10px; color: #1f2933; }
-            h2 { color: #0b3558; font-size: 12.8px; margin: 17px 0 8px; page-break-after: avoid; border-bottom: 1px solid #c8d7e3; padding-bottom: 5px; }
+            h2 { color: #0b3558; font-size: 12.8px; margin: 17px 0 8px; page-break-after: avoid; border-bottom: 1.4px solid #d7a500; padding-bottom: 5px; }
             table { page-break-inside: auto; }
             tr { page-break-inside: avoid; page-break-after: auto; }
             .f28-header table { border: 1.5px solid #0b3558; margin-bottom: 18px; }
             .f28-header td { border: 1px solid #b8cad8; padding: 8px; vertical-align: middle; }
             .f28-logo { width: 18%; text-align: center; color: #0b5f9e; font-weight: 700; font-size: 13px; background: #f4f8fb; }
             .f28-logo-text { font-size: 28px; line-height: 1; }
-            .f28-title { width: 54%; text-align: center; font-size: 18px; font-weight: 700; line-height: 1.15; }
+            .f28-title { width: 54%; text-align: center; font-size: 18px; font-weight: 700; line-height: 1.15; color: #0b3558; }
             .f28-cert { background: #eaf2f8; text-align: center; color: #0b3558; font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+            .f28-header td:not(.f28-logo):not(.f28-title):nth-child(3),
+            .f28-header tr:not(:first-child) td:first-child { background: #f7fafc; color: #0b3558; font-weight: 700; }
+            .f28-header td:last-child { color: #123d70; font-weight: 700; }
             .f28-table th { width: 40%; background: #eaf2f8; color: #0f2638; border: 1px solid #b8cad8; padding: 7px 8px; font-weight: 700; }
-            .f28-table td { width: 60%; border: 1px solid #b8cad8; padding: 7px 8px; font-weight: 600; }
+            .f28-table td { width: 60%; border: 1px solid #d6e1ea; padding: 7px 8px; font-weight: 600; color: #243442; }
+            .f28-table tbody tr:nth-child(even) td { background: #f7fafc; }
             .f28-man-days th, .f28-man-days td { border: 1px solid #b8cad8; padding: 6px; text-align: center; }
             .f28-man-days th { background: #eaf2f8; color: #0f2638; }
+            .f28-man-days tbody tr:nth-child(even) td { background: #f7fafc; }
             .f28-note { font-size: 10px; margin-top: 18px; }
             footer.f28-page-footer { position: fixed; left: 40px; right: 40px; bottom: 16px; border-top: 1px solid #c8d7e3; padding-top: 6px; color: #607080; font-size: 8.6px; text-align: center; }
             footer.f28-page-footer span:first-child { width: auto; }

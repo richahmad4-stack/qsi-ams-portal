@@ -70,6 +70,7 @@ class WorkflowGateWiringTest extends TestCase
 
         self::assertStringContainsString('footer class="f28-page-footer"', $documentGenerator);
         self::assertStringContainsString('<span class="page-number">Page </span>', $documentGenerator);
+        self::assertStringContainsString('border-bottom: 1.4px solid #d7a500', $documentGenerator);
         self::assertStringNotContainsString('<footer>Document No: \' . esc($review[', $documentGenerator);
     }
 
