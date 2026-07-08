@@ -793,10 +793,41 @@ class DocumentGeneratorService
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->commercialDocumentCss() . '</style></head><body>'
             . $cover
             . '<main class="commercial-body">'
+            . $this->commercialBodyHeaderHtml('Certification Proposal', [
+                'Proposal No.' => (string) ($proposal['proposal_number'] ?? 'Not created'),
+                'Proposal Date' => (string) ($proposal['proposal_date'] ?? substr((string) ($proposal['created_at'] ?? ''), 0, 10)),
+                'Valid Until' => (string) ($proposal['valid_until'] ?? ''),
+                'Status' => (string) ($proposal['status'] ?? ''),
+            ])
             . '<section class="client"><table><tr><th>Client</th><td>' . esc($client['company']) . '</td></tr><tr><th>Scope</th><td>' . nl2br(esc((string) ($client['scope'] ?? ''))) . '</td></tr></table></section>'
             . $body
             . '</main>'
             . '</body></html>';
+    }
+
+    private function commercialBodyHeaderHtml(string $documentTitle, array $controlRows): string
+    {
+        $rows = array_slice(array_filter($controlRows, static fn ($value): bool => trim((string) $value) !== ''), 0, 4, true);
+        $fillerIndex = 1;
+        while (count($rows) < 4) {
+            $rows[str_repeat(' ', $fillerIndex)] = '';
+            $fillerIndex++;
+        }
+
+        $html = '<header class="commercial-doc-header"><table><tbody>';
+        $first = true;
+        foreach ($rows as $label => $value) {
+            $html .= '<tr>';
+            if ($first) {
+                $html .= '<td class="commercial-doc-logo" rowspan="4">' . $this->logoHtml('pdf-logo') . '</td>'
+                    . '<td class="commercial-doc-title" rowspan="4">' . esc($documentTitle) . '<div>QSI certification document</div></td>';
+                $first = false;
+            }
+
+            $html .= '<td class="commercial-doc-label">' . esc((string) $label) . '</td><td class="commercial-doc-value">' . esc((string) $value) . '</td></tr>';
+        }
+
+        return $html . '</tbody></table></header>';
     }
 
     private function commercialCoverHtml(string $documentType, array $client, array $payload, array $meta): string
@@ -1656,6 +1687,12 @@ class DocumentGeneratorService
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->contractCss() . $this->commercialDocumentCss() . '</style></head><body>'
             . $cover
             . '<main class="commercial-body">'
+            . $this->commercialBodyHeaderHtml('Certification Contract', [
+                'Document No.' => (string) $documentNumber,
+                'Revision No.' => (string) $revisionNumber,
+                'Issue No.' => (string) $issueNumber,
+                'Date' => (string) $documentDate,
+            ])
             . $clientBlock
             . $body
             . '</main>'
@@ -3810,7 +3847,7 @@ class DocumentGeneratorService
             .client { background: #f8fafc; border: 1px solid #d6e1ea; padding: 0; margin-bottom: 16px; page-break-inside: avoid; }
             .client table { margin-bottom: 0; }
             .client th { width: 18%; color: #0b3558; background: #eaf2f8; }
-            h2 { font-size: 12.8px; margin: 18px 0 8px; color: #0b3558; page-break-after: avoid; border-bottom: 1px solid #c8d7e3; padding-bottom: 5px; font-weight: 700; }
+            h2 { font-size: 12.8px; margin: 18px 0 8px; color: #0b3558; page-break-after: avoid; border-bottom: 1.4px solid #d7a500; padding-bottom: 5px; font-weight: 700; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 14px; table-layout: fixed; }
             thead { display: table-header-group; }
             tr { page-break-inside: avoid; page-break-after: auto; }
@@ -3933,7 +3970,7 @@ class DocumentGeneratorService
         return '
             @page { margin: 36px 36px 120px; }
             body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10px; color: #1f2933; }
-            h2 { color: #0b3558; font-size: 13px; margin: 18px 0 8px; page-break-after: avoid; border-bottom: 1px solid #c8d7e3; padding-bottom: 5px; }
+            h2 { color: #0b3558; font-size: 13px; margin: 18px 0 8px; page-break-after: avoid; border-bottom: 1.4px solid #d7a500; padding-bottom: 5px; }
             h3 { color: #0b3558; font-size: 11.5px; margin: 14px 0 8px; page-break-after: avoid; }
             p { line-height: 1.35; margin: 7px 0 12px; }
             .f30-header { border: 0; padding: 0; margin-bottom: 18px; }
@@ -3959,7 +3996,7 @@ class DocumentGeneratorService
         return '
             @page { margin: 32px 30px 88px; }
             body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 9.4px; color: #1f2933; }
-            h2 { color: #0b3558; font-size: 12.6px; margin: 15px 0 7px; page-break-after: avoid; border-bottom: 1px solid #c8d7e3; padding-bottom: 4px; }
+            h2 { color: #0b3558; font-size: 12.6px; margin: 15px 0 7px; page-break-after: avoid; border-bottom: 1.4px solid #d7a500; padding-bottom: 4px; }
             p { line-height: 1.35; margin: 6px 0 10px; }
             .f31-header { border: 0; padding: 0; margin-bottom: 12px; }
             .f31-header table { border: 1.5px solid #0b3558; margin-bottom: 0; }
@@ -3989,7 +4026,7 @@ class DocumentGeneratorService
         return '
             @page { margin: 36px 40px 88px; }
             body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10px; color: #1f2933; }
-            h2 { color: #0b3558; font-size: 12.8px; margin: 17px 0 8px; page-break-after: avoid; border-bottom: 1px solid #c8d7e3; padding-bottom: 5px; }
+            h2 { color: #0b3558; font-size: 12.8px; margin: 17px 0 8px; page-break-after: avoid; border-bottom: 1.4px solid #d7a500; padding-bottom: 5px; }
             .f27-header { border: 0; padding: 0; margin-bottom: 14px; }
             .f27-header table { border: 1.5px solid #0b3558; margin-bottom: 12px; }
             .f27-header td { border: 1px solid #b8cad8; padding: 8px; vertical-align: middle; }
@@ -4040,6 +4077,19 @@ class DocumentGeneratorService
             .commercial-body { page-break-before: auto; }
             .commercial-body h2:first-child { margin-top: 0; }
             .commercial-body .client { margin-bottom: 18px; }
+            .commercial-doc-header { border: 0; padding: 0; margin: 0 0 16px; page-break-inside: avoid; }
+            .commercial-doc-header table { border: 1.6px solid #0b3558; margin-bottom: 0; table-layout: fixed; }
+            .commercial-doc-header td { border: 1px solid #b8cad8; padding: 8px 9px; vertical-align: middle; color: #123d70; }
+            .commercial-doc-logo { width: 18%; background: #f4f8fb; text-align: center; }
+            .commercial-doc-logo .pdf-logo { width: 90px; max-height: 52px; }
+            .commercial-doc-title { width: 46%; text-align: center; font-size: 17px; line-height: 1.28; color: #0b3558; background: #ffffff; font-weight: 700; }
+            .commercial-doc-title div { margin-top: 7px; color: #607080; font-family: DejaVu Serif, serif; font-size: 8.6px; font-weight: 700; text-transform: uppercase; letter-spacing: .85px; }
+            .commercial-doc-label { width: 16%; background: #f7fafc; color: #0b3558; font-size: 8.8px; font-weight: 700; text-align: left; white-space: nowrap; }
+            .commercial-doc-value { width: 20%; background: #ffffff; color: #123d70; font-size: 9.2px; font-weight: 700; text-align: left; white-space: nowrap; }
+            .commercial-body h2 { border-bottom: 1.4px solid #d7a500; }
+            .commercial-body th { background: #eaf2f8; color: #0f2638; border-color: #b8cad8; }
+            .commercial-body td { border-color: #d6e1ea; color: #243442; }
+            .commercial-body tbody tr:nth-child(even) td { background: #f7fafc; }
             .commercial-body .commercial-contact td { font-size: 10.4px; }
         ';
     }

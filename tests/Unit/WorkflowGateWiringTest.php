@@ -89,6 +89,8 @@ class WorkflowGateWiringTest extends TestCase
         self::assertStringContainsString('commercialAcceptanceTable', $documentGenerator);
         self::assertStringContainsString('commercialImportantNoteHtml', $documentGenerator);
         self::assertStringContainsString('commercialCoverHtml', $documentGenerator);
+        self::assertStringContainsString('commercialBodyHeaderHtml', $documentGenerator);
+        self::assertStringContainsString('commercial-doc-header', $documentGenerator);
         self::assertStringContainsString('qsi-cover-city.png', $documentGenerator);
         self::assertStringContainsString('cover-badges', $documentGenerator);
         self::assertStringContainsString('qsi-cover-badge-certification.png', $documentGenerator);
