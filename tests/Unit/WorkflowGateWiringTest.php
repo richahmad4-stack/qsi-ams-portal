@@ -126,4 +126,16 @@ class WorkflowGateWiringTest extends TestCase
         self::assertStringNotContainsString('class="f30-cert">QSI - CERT', $documentGenerator);
         self::assertStringNotContainsString('<footer>Document No: F 30_app', $documentGenerator);
     }
+
+    public function testAuditPlanPdfUsesOfficialFormHeader(): void
+    {
+        $documentGenerator = file_get_contents(__DIR__ . '/../../app/Services/DocumentGeneratorService.php') ?: '';
+
+        self::assertStringContainsString('f31-control-label', $documentGenerator);
+        self::assertStringContainsString('f31-control-value', $documentGenerator);
+        self::assertStringContainsString('AUDIT PLAN<span>', $documentGenerator);
+        self::assertStringContainsString('<div>QSI certification document</div>', $documentGenerator);
+        self::assertStringNotContainsString('<td><table class="f31-control">', $documentGenerator);
+        self::assertStringNotContainsString('<footer>Document No: \' . esc((string) $documentNumber)', $documentGenerator);
+    }
 }

@@ -1958,21 +1958,19 @@ class DocumentGeneratorService
                 'Lunch Break' => '12:30 to 13:30 unless otherwise agreed with the client.',
             ]);
 
-        $header = '<header class="f31-header"><table><tr>'
-            . '<td class="f31-logo">' . $this->logoHtml('pdf-logo') . '</td>'
-            . '<td class="f31-title">AUDIT PLAN<br><span>' . esc($stageLabel) . '</span></td>'
-            . '<td><table class="f31-control">'
-            . '<tr><th>Document No.</th><td>' . esc((string) $documentNumber) . '</td></tr>'
-            . '<tr><th>Revision No.</th><td>' . esc((string) $revisionNumber) . '</td></tr>'
-            . '<tr><th>Issue No.</th><td>' . esc((string) $issueNumber) . '</td></tr>'
-            . '<tr><th>Date</th><td>' . esc((string) $documentDate) . '</td></tr>'
-            . '</table></td></tr></table></header>';
+        $header = '<header class="f31-header"><table><tbody>'
+            . '<tr><td class="f31-logo" rowspan="4">' . $this->logoHtml('pdf-logo') . '</td>'
+            . '<td class="f31-title" rowspan="4">AUDIT PLAN<span>' . esc($stageLabel) . '</span><div>QSI certification document</div></td>'
+            . '<td class="f31-control-label">Document No.</td><td class="f31-control-value">' . esc((string) $documentNumber) . '</td></tr>'
+            . '<tr><td class="f31-control-label">Revision No.</td><td class="f31-control-value">' . esc((string) $revisionNumber) . '</td></tr>'
+            . '<tr><td class="f31-control-label">Issue No.</td><td class="f31-control-value">' . esc((string) $issueNumber) . '</td></tr>'
+            . '<tr><td class="f31-control-label">Date</td><td class="f31-control-value">' . esc((string) $documentDate) . '</td></tr>'
+            . '</tbody></table></header>';
 
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->auditPlanCss() . '</style></head><body>'
             . $header
             . '<section class="client"><strong>Client:</strong> ' . esc((string) ($client['company'] ?? '')) . '<br><strong>Scope:</strong> ' . esc((string) ($client['scope'] ?? '')) . '<br><strong>Audit:</strong> ' . esc($stageLabel) . ' &nbsp; <strong>Audit No.:</strong> ' . esc((string) ($event['audit_number'] ?? '')) . '</section>'
             . $body
-            . '<footer>Document No: ' . esc((string) $documentNumber) . ' | Revision No: ' . esc((string) $revisionNumber) . ' | Issue No: ' . esc((string) $issueNumber) . ' | Date: ' . esc((string) $documentDate) . '</footer>'
             . '</body></html>';
     }
 
@@ -3993,20 +3991,21 @@ class DocumentGeneratorService
     private function auditPlanCss(): string
     {
         return '
-            @page { margin: 32px 30px 88px; }
+            @page { margin: 32px 30px 42px; }
             body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 9.4px; color: #1f2933; }
             h2 { color: #0b3558; font-size: 12.6px; margin: 15px 0 7px; page-break-after: avoid; border-bottom: 1.4px solid #d7a500; padding-bottom: 4px; }
             p { line-height: 1.35; margin: 6px 0 10px; }
             .f31-header { border: 0; padding: 0; margin-bottom: 12px; }
-            .f31-header table { border: 1.5px solid #0b3558; margin-bottom: 0; }
-            .f31-header td { border: 1px solid #b8cad8; padding: 7px; vertical-align: middle; }
+            .f31-header table { border: 1.6px solid #0b3558; margin-bottom: 0; table-layout: fixed; }
+            .f31-header td { border: 1px solid #b8cad8; padding: 8px 9px; vertical-align: middle; color: #123d70; }
             .f31-logo { width: 18%; text-align: center; color: #0b5f9e; font-weight: 700; background: #f4f8fb; }
-            .f31-logo-text { font-size: 28px; line-height: 1; }
-            .f31-title { width: 49%; text-align: center; font-size: 18px; font-weight: 700; color: #0a3765; line-height: 1.25; }
-            .f31-title span { font-size: 13px; color: #1f497d; }
-            .f31-control { margin-bottom: 0; }
-            .f31-control th { width: 52%; background: #eaf2f8; color: #0f2638; border: 1px solid #b8cad8; padding: 5px 6px; }
-            .f31-control td { width: 48%; border: 1px solid #b8cad8; padding: 5px 6px; color: #0b3558; }
+            .f31-logo .pdf-logo { width: 90px; max-height: 52px; }
+            .f31-logo-text { font-size: 24px; line-height: 1; }
+            .f31-title { width: 54%; text-align: center; font-size: 17px; font-weight: 700; color: #0b3558; line-height: 1.28; background: #ffffff; }
+            .f31-title span { display: block; margin-top: 4px; font-size: 12.5px; color: #123d70; }
+            .f31-title div { margin-top: 7px; color: #607080; font-family: DejaVu Serif, serif; font-size: 8.6px; font-weight: 700; text-transform: uppercase; letter-spacing: .85px; }
+            .f31-control-label { width: 15%; background: #f7fafc; color: #0b3558; font-size: 8.8px; font-weight: 700; text-align: left; white-space: nowrap; }
+            .f31-control-value { width: 13%; background: #ffffff; color: #123d70; font-size: 9.2px; font-weight: 700; text-align: left; white-space: nowrap; }
             .client { background: #f8fafc; border: 1px solid #d6e1ea; padding: 8px; margin-bottom: 12px; }
             .f31-table th { width: 32%; background: #eaf2f8; color: #0f2638; border: 1px solid #b8cad8; padding: 6px 7px; font-weight: 700; }
             .f31-table td { width: 68%; border: 1px solid #b8cad8; padding: 6px 7px; }
@@ -4016,7 +4015,6 @@ class DocumentGeneratorService
             .f31-grid tr { page-break-inside: avoid; page-break-after: auto; }
             .f31-timetable th, .f31-timetable td { font-size: 8.8px; }
             .f31-note { color: #334155; }
-            footer { position: fixed; left: 30px; right: 30px; bottom: 16px; border-top: 1px solid #c8d7e3; padding-top: 6px; color: #607080; font-size: 8.4px; }
         ';
     }
 
