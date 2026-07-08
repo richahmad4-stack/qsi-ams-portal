@@ -52,6 +52,30 @@ class DemoWorkflowSeeder extends Seeder
     {
         return [
             [
+                'company' => 'Demo HACCP Catering Kitchen LLC',
+                'contact' => 'Mariam Al Harbi',
+                'email' => 'mariam.haccp@demo-qsi.test',
+                'phone' => '+966 11 502 9170',
+                'city' => 'Riyadh',
+                'address' => 'Kitchen Complex 7, Riyadh',
+                'scope' => 'Preparation and delivery of chilled and hot meals for hospitals, offices and industrial camps.',
+                'employees' => 64,
+                'sites' => 2,
+                'risk' => 'medium',
+                'standards' => ['HACCP'],
+                'food' => 'E',
+                'medical' => null,
+                'iaf' => '03',
+                'nace' => '56',
+                'processes' => ['Receiving and storage', 'Hot kitchen', 'Cold kitchen', 'Dispatch and transport', 'Cleaning and sanitation'],
+                'base' => '2024-10-04',
+                'fees' => [8200, 4100, 4100],
+                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 3, 'surveillance1' => 0, 'surveillance2' => 2],
+            ],
+        ];
+
+        return [
+            [
                 'company' => 'Demo Riyadh Precision Components LLC',
                 'contact' => 'Saad Al Jaber',
                 'email' => 'saad.jaber@demo-qsi.test',
