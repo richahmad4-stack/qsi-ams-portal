@@ -91,6 +91,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('masters/clients/new', 'Masters\ClientController::new', ['filter' => 'permission:clients,create']);
     $routes->post('masters/clients', 'Masters\ClientController::create', ['filter' => 'permission:clients,create']);
     $routes->get('masters/clients/(:num)/edit', 'Masters\ClientController::edit/$1', ['filter' => 'permission:clients,edit']);
+    $routes->get('masters/clients/(:num)/logo', 'Masters\ClientController::logo/$1', ['filter' => 'permission:clients,view']);
     $routes->get('masters/clients/(:num)', 'Masters\ClientController::show/$1', ['filter' => 'permission:clients,view']);
     $routes->post('masters/clients/(:num)', 'Masters\ClientController::update/$1', ['filter' => 'permission:clients,edit']);
     $routes->post('masters/clients/(:num)/delete', 'Masters\ClientController::delete/$1', ['filter' => 'permission:clients,delete']);

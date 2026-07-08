@@ -669,6 +669,7 @@ CREATE TABLE `clients` (
   `email` varchar(190) DEFAULT NULL,
   `phone` varchar(50) DEFAULT NULL,
   `website` varchar(220) DEFAULT NULL,
+  `client_logo_path` varchar(500) DEFAULT NULL,
   `scope` text DEFAULT NULL,
   `employee_count` int(10) unsigned DEFAULT NULL,
   `permanent_employees` int(10) unsigned DEFAULT NULL,

@@ -81,7 +81,7 @@ class DocumentGeneratorService
     private function certificateRecord(int $tenantId, int $certificateId): array
     {
         $certificate = $this->db->table('certificates')
-            ->select('certificates.*, clients.company, clients.legal_name, clients.address, clients.city, clients.country, standards.code AS standard_code, standards.name AS standard_name')
+            ->select('certificates.*, clients.company, clients.legal_name, clients.address, clients.city, clients.country, clients.client_logo_path, standards.code AS standard_code, standards.name AS standard_name')
             ->join('clients', 'clients.id = certificates.client_id')
             ->join('standards', 'standards.id = certificates.standard_id')
             ->where('certificates.tenant_id', $tenantId)
@@ -321,6 +321,7 @@ class DocumentGeneratorService
         $background = $this->certificateBackgroundDataUri();
         $approvedSignature = $this->certificateSignatureHtml('assets/img/qsi-signature-approved.png');
         $printedSignature = $this->certificateSignatureHtml('assets/img/qsi-signature-printed.png');
+        $clientLogo = $this->clientCertificateLogoHtml((string) ($certificate['client_logo_path'] ?? ''));
         $standardCode = (string) ($certificate['standard_code'] ?? '');
         $certificateNumber = (string) ($certificate['certificate_number'] ?? '');
         $companyName = (string) ($certificate['legal_name'] ?: $certificate['company']);
@@ -341,6 +342,7 @@ class DocumentGeneratorService
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->certificateCss() . '</style></head><body>'
             . '<div class="certificate-page"' . ($background === '' ? '' : ' style="background-image: url(' . esc($background, 'attr') . ');"') . '>'
             . '<div class="certificate-content">'
+            . $clientLogo
             . '<div class="certificate-intro">This is to certify the ' . esc($this->certificateSystemName($standardCode)) . ' of</div>'
             . '<div class="certificate-company' . esc($companyClass, 'attr') . '">' . esc($companyName) . '</div>'
             . '<div class="certificate-address">' . esc($address) . '</div>'
@@ -436,6 +438,7 @@ class DocumentGeneratorService
             (string) ($certificate['city'] ?? ''),
             (string) ($certificate['country'] ?? ''),
         ], static fn (string $value): bool => trim($value) !== '')));
+        $clientLogoPath = $this->writableUploadPath((string) ($certificate['client_logo_path'] ?? ''));
 
         $phpWord = new PhpWord();
         $phpWord->setDefaultFontName('Aptos');
@@ -463,6 +466,20 @@ class DocumentGeneratorService
                 'posVerticalRel' => Image::POSITION_RELATIVE_TO_PAGE,
                 'marginLeft' => 0,
                 'marginTop' => 0,
+            ]);
+        }
+
+        if ($clientLogoPath !== '') {
+            $section->addImage($clientLogoPath, [
+                'width' => Converter::cmToPixel(2.6),
+                'height' => Converter::cmToPixel(1.55),
+                'wrappingStyle' => Image::WRAPPING_STYLE_INFRONT,
+                'positioning' => Image::POSITION_ABSOLUTE,
+                'posHorizontal' => Image::POSITION_HORIZONTAL_RIGHT,
+                'posHorizontalRel' => Image::POSITION_RELATIVE_TO_MARGIN,
+                'posVertical' => Image::POSITION_VERTICAL_TOP,
+                'posVerticalRel' => Image::POSITION_RELATIVE_TO_PAGE,
+                'marginTop' => Converter::cmToPixel(3.8),
             ]);
         }
 
@@ -3415,6 +3432,16 @@ class DocumentGeneratorService
             : '<img class="certificate-signature-image" src="' . esc($signature, 'attr') . '" alt="Signature">';
     }
 
+    private function clientCertificateLogoHtml(string $relativePath): string
+    {
+        $path = $this->writableUploadPath($relativePath);
+        $logo = $path === '' ? '' : $this->pathDataUri($path);
+
+        return $logo === ''
+            ? ''
+            : '<div class="certificate-client-logo"><img src="' . esc($logo, 'attr') . '" alt="Client logo"></div>';
+    }
+
     private function publicAssetPath(string $relativePath): string
     {
         $path = FCPATH . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
@@ -3430,6 +3457,28 @@ class DocumentGeneratorService
             return '';
         }
 
+        return $this->pathDataUri($path);
+    }
+
+    private function writableUploadPath(string $relativePath): string
+    {
+        $relativePath = trim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath));
+        if ($relativePath === '' || ! str_starts_with($relativePath, 'uploads' . DIRECTORY_SEPARATOR . 'client-logos' . DIRECTORY_SEPARATOR)) {
+            return '';
+        }
+
+        $path = realpath(WRITEPATH . $relativePath);
+        $base = realpath(WRITEPATH . 'uploads' . DIRECTORY_SEPARATOR . 'client-logos');
+
+        if ($path === false || $base === false || ! str_starts_with($path, $base) || ! is_file($path)) {
+            return '';
+        }
+
+        return $path;
+    }
+
+    private function pathDataUri(string $path): string
+    {
         $contents = file_get_contents($path);
         if ($contents === false) {
             return '';
@@ -3506,6 +3555,8 @@ class DocumentGeneratorService
             body { margin: 0; padding: 0; font-family: DejaVu Sans, Arial, sans-serif; color: #111827; background: #fff; }
             .certificate-page { position: relative; width: 210mm; height: 297mm; background-repeat: no-repeat; background-position: 0 0; background-size: 210mm 297mm; overflow: hidden; }
             .certificate-content { position: absolute; left: 56mm; right: 17mm; top: 27mm; bottom: 0; text-align: left; }
+            .certificate-client-logo { position: absolute; right: 0; top: 9mm; width: 30mm; height: 17mm; text-align: right; }
+            .certificate-client-logo img { max-width: 30mm; max-height: 17mm; object-fit: contain; }
             .certificate-intro { font-size: 11.2pt; margin-bottom: 10mm; }
             .certificate-company { font-size: 22pt; line-height: 1.12; font-weight: 700; max-width: 125mm; margin-bottom: 3mm; }
             .certificate-company.company-medium { font-size: 19.5pt; line-height: 1.1; }

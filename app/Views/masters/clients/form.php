@@ -8,7 +8,7 @@ $statuses = ['enquiry', 'application_review', 'proposal', 'contracted', 'planned
 $risks = ['', 'low', 'medium', 'high'];
 ?>
 
-<form method="post" action="<?= esc($action) ?>">
+<form method="post" action="<?= esc($action) ?>" enctype="multipart/form-data">
     <?= csrf_field() ?>
 
     <section class="panel mb-3">
@@ -75,6 +75,16 @@ $risks = ['', 'low', 'medium', 'high'];
             <div class="col-md-4">
                 <label class="form-label" for="website">Website</label>
                 <input id="website" name="website" class="form-control" value="<?= esc($value('website')) ?>" maxlength="220">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="client_logo">Client logo for certificate</label>
+                <input id="client_logo" name="client_logo" type="file" accept="image/png,image/jpeg" class="form-control">
+                <div class="form-text">Optional PNG or JPG, up to 2 MB.</div>
+                <?php if (! empty($client['id']) && ! empty($client['client_logo_path'])): ?>
+                    <div class="mt-2">
+                        <img src="<?= site_url('masters/clients/' . $client['id'] . '/logo') ?>" alt="Current client logo" style="max-width: 140px; max-height: 54px; object-fit: contain;">
+                    </div>
+                <?php endif; ?>
             </div>
             <div class="col-md-4">
                 <label class="form-label" for="number_of_sites">Number of sites</label>

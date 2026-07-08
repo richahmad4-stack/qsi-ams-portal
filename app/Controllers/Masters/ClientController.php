@@ -73,11 +73,20 @@ class ClientController extends BaseController
         $data['tenant_id'] = (int) session()->get('tenant_id');
         $data['created_by'] = (int) session()->get('user_id');
 
+        if (! $this->validateLogoUpload()) {
+            return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
+        }
+
         if (! $this->validate($this->rules())) {
             return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
         }
 
         $id = (int) $this->clients->insert($data);
+        $logoPath = $this->saveClientLogo($id);
+        if ($logoPath !== null) {
+            $this->clients->update($id, ['client_logo_path' => $logoPath]);
+            $data['client_logo_path'] = $logoPath;
+        }
         $this->syncRequestedStandards($id);
         $this->auditLogger->record('create', 'clients', 'clients', $id, null, $data);
 
@@ -146,11 +155,19 @@ class ClientController extends BaseController
             return redirect()->to('/masters/clients')->with('error', 'Client not found.');
         }
 
+        if (! $this->validateLogoUpload()) {
+            return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
+        }
+
         if (! $this->validate($this->rules())) {
             return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
         }
 
         $data = $this->clientPayload();
+        $logoPath = $this->saveClientLogo($id);
+        if ($logoPath !== null) {
+            $data['client_logo_path'] = $logoPath;
+        }
         $this->clients->update($id, $data);
         $this->syncRequestedStandards($id);
         $this->auditLogger->record('update', 'clients', 'clients', $id, $client, $data);
@@ -170,6 +187,28 @@ class ClientController extends BaseController
         $this->auditLogger->record('delete', 'clients', 'clients', $id, $client, null);
 
         return redirect()->to('/masters/clients')->with('success', 'Client deleted.');
+    }
+
+    public function logo(int $id)
+    {
+        $client = $this->findTenantClient($id);
+
+        if ($client === null) {
+            return $this->response->setStatusCode(404);
+        }
+
+        $path = $this->clientLogoAbsolutePath((string) ($client['client_logo_path'] ?? ''));
+        if ($path === '') {
+            return $this->response->setStatusCode(404);
+        }
+
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $mime = $extension === 'png' ? 'image/png' : 'image/jpeg';
+
+        return $this->response
+            ->setHeader('Cache-Control', 'private, max-age=3600')
+            ->setContentType($mime)
+            ->setBody((string) file_get_contents($path));
     }
 
     public function addStandard(int $id)
@@ -375,6 +414,64 @@ class ClientController extends BaseController
         ];
     }
 
+    private function validateLogoUpload(): bool
+    {
+        $file = $this->request->getFile('client_logo');
+
+        if ($file === null || $file->getError() === UPLOAD_ERR_NO_FILE) {
+            return true;
+        }
+
+        return $this->validate([
+            'client_logo' => [
+                'label' => 'Client logo',
+                'rules' => 'max_size[client_logo,2048]|is_image[client_logo]|mime_in[client_logo,image/png,image/jpeg]',
+            ],
+        ]);
+    }
+
+    private function saveClientLogo(int $clientId): ?string
+    {
+        $file = $this->request->getFile('client_logo');
+
+        if ($file === null || $file->getError() === UPLOAD_ERR_NO_FILE || ! $file->isValid() || $file->hasMoved()) {
+            return null;
+        }
+
+        $tenantId = (int) session()->get('tenant_id');
+        $directory = WRITEPATH . 'uploads' . DIRECTORY_SEPARATOR . 'client-logos' . DIRECTORY_SEPARATOR . 'tenant_' . $tenantId;
+        if (! is_dir($directory)) {
+            mkdir($directory, 0775, true);
+        }
+
+        $extension = strtolower($file->guessExtension() ?: $file->getExtension() ?: 'png');
+        if (! in_array($extension, ['png', 'jpg', 'jpeg'], true)) {
+            $extension = 'png';
+        }
+
+        $filename = 'client_' . $clientId . '_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)) . '.' . $extension;
+        $file->move($directory, $filename, true);
+
+        return 'uploads/client-logos/tenant_' . $tenantId . '/' . $filename;
+    }
+
+    private function clientLogoAbsolutePath(string $relativePath): string
+    {
+        $relativePath = trim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath));
+        if ($relativePath === '' || ! str_starts_with($relativePath, 'uploads' . DIRECTORY_SEPARATOR . 'client-logos' . DIRECTORY_SEPARATOR)) {
+            return '';
+        }
+
+        $path = realpath(WRITEPATH . $relativePath);
+        $base = realpath(WRITEPATH . 'uploads' . DIRECTORY_SEPARATOR . 'client-logos');
+
+        if ($path === false || $base === false || ! str_starts_with($path, $base) || ! is_file($path)) {
+            return '';
+        }
+
+        return $path;
+    }
+
     private function activeStandards(): array
     {
         return (new StandardModel())->where('active', 1)->orderBy('code', 'ASC')->findAll();
@@ -463,6 +560,7 @@ class ClientController extends BaseController
             'email' => '',
             'phone' => '',
             'website' => '',
+            'client_logo_path' => '',
             'scope' => '',
             'employee_count' => '',
             'permanent_employees' => '',

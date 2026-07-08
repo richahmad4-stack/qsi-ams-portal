@@ -295,6 +295,7 @@ CREATE TABLE IF NOT EXISTS clients (
     email VARCHAR(190) NULL,
     phone VARCHAR(50) NULL,
     website VARCHAR(220) NULL,
+    client_logo_path VARCHAR(500) NULL,
     scope TEXT NULL,
     employee_count INT UNSIGNED NULL,
     permanent_employees INT UNSIGNED NULL,

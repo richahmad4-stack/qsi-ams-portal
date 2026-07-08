@@ -30,6 +30,14 @@
             <div class="text-secondary small">Sites</div>
             <div class="fw-semibold"><?= esc((string) $client['number_of_sites']) ?></div>
         </div>
+        <div class="col-md-3">
+            <div class="text-secondary small">Certificate logo</div>
+            <?php if (! empty($client['client_logo_path'])): ?>
+                <img src="<?= site_url('masters/clients/' . $client['id'] . '/logo') ?>" alt="Client logo" style="max-width: 130px; max-height: 46px; object-fit: contain;">
+            <?php else: ?>
+                <div class="fw-semibold">Not uploaded</div>
+            <?php endif; ?>
+        </div>
     </div>
 </section>
 

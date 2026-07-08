@@ -22,6 +22,7 @@ class ClientModel extends Model
         'email',
         'phone',
         'website',
+        'client_logo_path',
         'scope',
         'employee_count',
         'permanent_employees',
