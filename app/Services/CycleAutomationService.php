@@ -831,6 +831,7 @@ class CycleAutomationService
                 'Integrated Management System' => count($preview['standards']) > 1 ? 'Yes - ' . $standards : 'No',
                 'Applicable Legal and Regulatory Requirement' => $answer('legal_statutory_requirements', 'Applicable legal, statutory, regulatory and customer requirements related to the certification scope will be verified during the audit.'),
                 'Risks associated with products, processes or activities' => $answer('product_process_risks', 'Operational and compliance risks related to the certification scope will be verified during the audit.'),
+                'Number of HACCP Studies / Plans' => $answer('haccp_plans_processes', '1'),
                 'Any incident / accident in the past?' => 'No incident reported at application stage',
                 '1a. Analysis of technical issues arising from the scope' => $answer('technical_issues'),
                 '1b. Safety condition requirements' => $answer('safety_requirements'),

@@ -30,6 +30,7 @@ class CertificationApplicationDefaults
             'services' => $this->servicesFromScope($client),
             'processes' => $this->processesFromScope($client),
             'outsourced_processes' => $this->outsourcedProcesses($client),
+            'haccp_plans_processes' => (string) $this->haccpStudyCount($client),
         ];
 
         if (array_key_exists($questionKey, $common)) {
@@ -66,6 +67,7 @@ class CertificationApplicationDefaults
             'safety_requirements' => self::HACCP_SAFETY_REQUIREMENTS,
             'technological_regulatory_context' => self::HACCP_TECHNOLOGICAL_CONTEXT,
             'outsourced_activity_details' => $this->outsourcedProcesses($client),
+            'haccp_plans_processes' => (string) $this->haccpStudyCount($client),
         ];
     }
 
@@ -142,6 +144,26 @@ class CertificationApplicationDefaults
         }
 
         return 'No outsourced process declared at application stage; to be verified during application review and audit planning.';
+    }
+
+    private function haccpStudyCount(array $client): int
+    {
+        $scope = strtolower((string) ($client['scope'] ?? ''));
+        $count = 1;
+
+        if (str_contains($scope, 'chilled') && str_contains($scope, 'hot')) {
+            $count = 2;
+        }
+
+        if (str_contains($scope, 'multiple') || str_contains($scope, 'various')) {
+            $count = max($count, 2);
+        }
+
+        if (preg_match_all('/\band\b|[,;\/]/', $scope) > 3) {
+            $count = max($count, 2);
+        }
+
+        return $count;
     }
 
     private function containsAny(string $text, array $needles): bool

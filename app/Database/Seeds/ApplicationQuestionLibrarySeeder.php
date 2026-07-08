@@ -141,6 +141,7 @@ class ApplicationQuestionLibrarySeeder extends Seeder
             $this->q('internal_audit_conducted', 'Internal Audit conducted?', 'select', $s, 'Management System Readiness', 0, $this->yesNoRules()),
             $this->q('last_management_review_meeting_conducted', 'Last management review meeting conducted?', 'select', $s, 'Management System Readiness', 0, $this->yesNoRules()),
             $this->q('product_process_risks', 'Risks associated with products, processes or activities', 'textarea', ['HACCP'], 'Certification Required'),
+            $this->q('haccp_plans_processes', 'Number of HACCP Studies / Plans', 'number', ['HACCP'], 'Certification Required'),
             $this->q('technical_issues', '1a. Analysis of technical issues arising from the scope', 'textarea', ['HACCP'], 'Certification Required'),
             $this->q('safety_requirements', '1b. Safety condition requirements', 'textarea', ['HACCP'], 'Certification Required'),
             $this->q('technological_regulatory_context', '1c. Technological and Regulatory Context', 'textarea', ['HACCP'], 'Certification Required'),
