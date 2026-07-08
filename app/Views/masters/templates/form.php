@@ -27,6 +27,22 @@
                 <?php endforeach; ?>
             </select>
         </div>
+        <div class="col-md-3">
+            <label class="form-label" for="document_number">Document No.</label>
+            <input class="form-control" id="document_number" name="document_number" value="<?= esc(old('document_number', $template['document_number'] ?? '')) ?>">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="revision_number">Revision No.</label>
+            <input class="form-control" id="revision_number" name="revision_number" value="<?= esc(old('revision_number', $template['revision_number'] ?? '')) ?>">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="issue_number">Issue No.</label>
+            <input class="form-control" id="issue_number" name="issue_number" value="<?= esc(old('issue_number', $template['issue_number'] ?? '')) ?>">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="document_date">Document Date</label>
+            <input class="form-control" id="document_date" name="document_date" type="date" value="<?= esc(old('document_date', $template['document_date'] ?? '')) ?>">
+        </div>
         <div class="col-12">
             <label class="form-label" for="body_html">Body HTML</label>
             <textarea class="form-control font-monospace" id="body_html" name="body_html" rows="16" required><?= esc(old('body_html', $version['body_html'] ?? '<h2>{{document_title}}</h2><p>{{client_name}}</p>')) ?></textarea>

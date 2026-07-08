@@ -301,17 +301,17 @@ class DocumentGeneratorService
             default => [['Summary', 'Document type is not configured yet.']],
         };
 
-        return $this->baseHtml($documentKey, $title, $client, $sections);
+        return $this->baseHtml($documentKey, $title, $client, $sections, $data);
     }
 
-    private function baseHtml(string $documentKey, string $title, array $client, array $sections): string
+    private function baseHtml(string $documentKey, string $title, array $client, array $sections, array $data = []): string
     {
         $body = '';
         foreach ($sections as [$heading, $content]) {
             $body .= '<h2>' . esc($heading) . '</h2>' . $content;
         }
 
-        $control = $this->standardDocumentControl($documentKey);
+        $control = $this->standardDocumentControl($documentKey, $data + ['client' => $client]);
         $subtitle = $control['subtitle'] ?? 'QSI certification document';
 
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . '</style></head><body>'
@@ -328,18 +328,62 @@ class DocumentGeneratorService
             . '</body></html>';
     }
 
-    private function standardDocumentControl(string $documentKey): array
+    private function standardDocumentControl(string $documentKey, array $data = []): array
     {
-        $documents = [
-            'audit_report' => ['number' => 'F 32', 'revision' => '2', 'issue' => '2', 'date' => '15.05.2022'],
-            'ncr_capa' => ['number' => 'F 33', 'revision' => '2', 'issue' => '2', 'date' => '15.05.2022'],
-            'technical_review' => ['number' => 'F 34', 'revision' => '2', 'issue' => '2', 'date' => '15.05.2022'],
-            'decision_report' => ['number' => 'F 35', 'revision' => '2', 'issue' => '2', 'date' => '15.05.2022'],
-            'feedback' => ['number' => 'F 36', 'revision' => '2', 'issue' => '2', 'date' => '15.05.2022'],
+        $fallbacks = [
+            'auditor_appointment' => ['number' => 'F 30_app', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15'],
+            'audit_plan' => ['number' => 'F 31', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15'],
+            'audit_report' => ['number' => 'F 32', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15'],
+            'ncr_capa' => ['number' => 'F 33', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15'],
+            'technical_review' => ['number' => 'F 34', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15'],
+            'decision_report' => ['number' => 'F 35', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15'],
+            'feedback' => ['number' => 'F 36', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15'],
         ];
+        $key = $this->documentTemplateKey($documentKey, $data);
+        $fallback = $fallbacks[$documentKey] ?? ['number' => 'AMS', 'revision' => '1', 'issue' => '1', 'date' => date('Y-m-d')];
+        $template = $this->db->table('document_templates')
+            ->where('tenant_id', (int) ($data['client']['tenant_id'] ?? session()->get('tenant_id') ?? 1))
+            ->where('template_key', $key)
+            ->get(1)
+            ->getRowArray();
 
-        return ($documents[$documentKey] ?? ['number' => 'AMS', 'revision' => '1', 'issue' => '1', 'date' => date('Y-m-d')])
-            + ['subtitle' => 'QSI certification document'];
+        return [
+            'template_key' => $key,
+            'number' => trim((string) ($template['document_number'] ?? '')) ?: $fallback['number'],
+            'revision' => trim((string) ($template['revision_number'] ?? '')) ?: $fallback['revision'],
+            'issue' => trim((string) ($template['issue_number'] ?? '')) ?: $fallback['issue'],
+            'date' => $this->displayDocumentDate((string) ($template['document_date'] ?? $fallback['date'])),
+            'subtitle' => 'QSI certification document',
+        ];
+    }
+
+    private function documentTemplateKey(string $documentKey, array $data = []): string
+    {
+        if ($documentKey !== 'audit_report') {
+            return $documentKey;
+        }
+
+        $eventType = (string) ($data['event']['event_type'] ?? ($data['events'][0]['event_type'] ?? ''));
+
+        return match ($eventType) {
+            'initial_stage1' => 'stage1_report',
+            'initial_stage2' => 'stage2_report',
+            'surveillance1', 'surveillance2' => 'surveillance_report',
+            'recertification' => 'recertification_report',
+            default => 'stage2_report',
+        };
+    }
+
+    private function displayDocumentDate(string $date): string
+    {
+        $date = trim($date);
+        if ($date === '') {
+            return '';
+        }
+
+        $timestamp = strtotime($date);
+
+        return $timestamp === false ? $date : date('d.m.Y', $timestamp);
     }
 
     private function certificateHtml(array $certificate): string
@@ -1410,6 +1454,7 @@ class DocumentGeneratorService
         $auditorStatus = $this->appointmentAuditorStatus($appointments);
         $clientStatus = in_array((string) ($contract['status'] ?? ''), ['signed', 'approved', 'accepted'], true) ? 'Confirmed' : 'Pending';
         $planning = $this->auditPlanningSummary($event, $appointments);
+        $control = $this->standardDocumentControl('auditor_appointment', $data + ['client' => $client]);
 
         $body = '<h2>1. Audit Overview</h2>'
             . '<p>Based on the internal procedures, the Certification Body has found all prerequisites fulfilled for the audit beginning including order confirmation by the client. With respect to these fulfilled conditions, the Certification Body is appointing:</p>'
@@ -1467,10 +1512,10 @@ class DocumentGeneratorService
             . '<header class="f30-header"><table><tbody>'
             . '<tr><td class="f30-logo" rowspan="4">' . $this->logoHtml('pdf-logo') . '</td>'
             . '<td class="f30-title" rowspan="4">AUDITOR APPOINTMENT<div>QSI certification document</div></td>'
-            . '<td class="f30-control-label">Document No.</td><td class="f30-control-value">F 30_app</td></tr>'
-            . '<tr><td class="f30-control-label">Revision No.</td><td class="f30-control-value">2</td></tr>'
-            . '<tr><td class="f30-control-label">Issue No.</td><td class="f30-control-value">2</td></tr>'
-            . '<tr><td class="f30-control-label">Date</td><td class="f30-control-value">15.05.2022</td></tr>'
+            . '<td class="f30-control-label">Document No.</td><td class="f30-control-value">' . esc((string) $control['number']) . '</td></tr>'
+            . '<tr><td class="f30-control-label">Revision No.</td><td class="f30-control-value">' . esc((string) $control['revision']) . '</td></tr>'
+            . '<tr><td class="f30-control-label">Issue No.</td><td class="f30-control-value">' . esc((string) $control['issue']) . '</td></tr>'
+            . '<tr><td class="f30-control-label">Date</td><td class="f30-control-value">' . esc((string) $control['date']) . '</td></tr>'
             . '</tbody></table></header>'
             . $body
             . '</body></html>';
@@ -1930,10 +1975,11 @@ class DocumentGeneratorService
         $plan = $data['audit_plan'] ?? [];
         $program = $data['program'] ?? [];
         $stageLabel = $this->auditEventLabel((string) ($event['event_type'] ?? ''));
-        $documentNumber = $plan['document_number'] ?? 'F 31';
-        $revisionNumber = $plan['revision_number'] ?? '2';
-        $issueNumber = $plan['issue_number'] ?? '2';
-        $documentDate = $plan['document_date'] ?? '15.05.2022';
+        $control = $this->standardDocumentControl('audit_plan', $data + ['client' => $client]);
+        $documentNumber = $plan['document_number'] ?? $control['number'];
+        $revisionNumber = $plan['revision_number'] ?? $control['revision'];
+        $issueNumber = $plan['issue_number'] ?? $control['issue'];
+        $documentDate = $this->displayDocumentDate((string) ($plan['document_date'] ?? $control['date']));
         $planning = $this->auditPlanningSummary($event, $data['appointments'] ?? []);
         $rows = $this->auditPlanRowsForDocument($data, $planning);
 

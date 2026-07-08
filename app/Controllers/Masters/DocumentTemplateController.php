@@ -65,6 +65,10 @@ class DocumentTemplateController extends BaseController
         if (! $this->validate([
             'name' => 'required|max_length[180]',
             'status' => 'required|max_length[40]',
+            'document_number' => 'permit_empty|max_length[40]',
+            'revision_number' => 'permit_empty|max_length[20]',
+            'issue_number' => 'permit_empty|max_length[20]',
+            'document_date' => 'permit_empty|valid_date[Y-m-d]',
             'body_html' => 'required',
         ])) {
             return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
@@ -73,6 +77,10 @@ class DocumentTemplateController extends BaseController
         $templatePayload = [
             'name' => (string) $this->request->getPost('name'),
             'status' => (string) $this->request->getPost('status'),
+            'document_number' => $this->nullableText('document_number'),
+            'revision_number' => $this->nullableText('revision_number'),
+            'issue_number' => $this->nullableText('issue_number'),
+            'document_date' => $this->nullableText('document_date'),
         ];
         $this->templates->update($id, $templatePayload);
 

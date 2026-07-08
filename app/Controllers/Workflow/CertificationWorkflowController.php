@@ -50,7 +50,25 @@ class CertificationWorkflowController extends BaseController
             'pageSubtitle' => 'Certification workflow status',
             'client' => $client,
             'workflow' => $this->workflow->buildForClient($tenantId, $clientId),
+            'documentControls' => $this->documentControls($tenantId),
         ]);
+    }
+
+    private function documentControls(int $tenantId): array
+    {
+        $rows = Database::connect()->table('document_templates')
+            ->select('id, template_key, name, document_number, revision_number, issue_number, document_date')
+            ->where('tenant_id', $tenantId)
+            ->orderBy('name', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        $controls = [];
+        foreach ($rows as $row) {
+            $controls[(string) $row['template_key']] = $row;
+        }
+
+        return $controls;
     }
 
     private function ensureClientAuditChecklists(int $tenantId, int $clientId, array $client): void

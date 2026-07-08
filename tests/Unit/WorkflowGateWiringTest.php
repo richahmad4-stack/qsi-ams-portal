@@ -159,9 +159,27 @@ class WorkflowGateWiringTest extends TestCase
 
         self::assertStringContainsString('control-label', $documentGenerator);
         self::assertStringContainsString('control-value', $documentGenerator);
-        self::assertStringContainsString('standardDocumentControl($documentKey)', $documentGenerator);
+        self::assertStringContainsString('standardDocumentControl($documentKey, $data', $documentGenerator);
         self::assertStringNotContainsString('Controlled certification body record', $documentGenerator);
         self::assertStringNotContainsString('Prepared on \' . esc(date(', $documentGenerator);
         self::assertStringNotContainsString('Controlled document prepared by QSI AMS', $documentGenerator);
+    }
+
+    public function testWorkflowShowsDocumentControlRegister(): void
+    {
+        $workflow = file_get_contents(__DIR__ . '/../../app/Views/workflow/show.php') ?: '';
+        $templateForm = file_get_contents(__DIR__ . '/../../app/Views/masters/templates/form.php') ?: '';
+        $templateModel = file_get_contents(__DIR__ . '/../../app/Models/DocumentTemplateModel.php') ?: '';
+        $documentGenerator = file_get_contents(__DIR__ . '/../../app/Services/DocumentGeneratorService.php') ?: '';
+
+        self::assertStringContainsString('Document No.', $workflow);
+        self::assertStringContainsString('Revision', $workflow);
+        self::assertStringContainsString('Issue', $workflow);
+        self::assertStringContainsString('renderDocumentControlRegister', $workflow);
+        self::assertStringContainsString('technical_review_report', $workflow);
+        self::assertStringContainsString('document_number', $templateForm);
+        self::assertStringContainsString('document_number', $templateModel);
+        self::assertStringContainsString('documentTemplateKey', $documentGenerator);
+        self::assertStringContainsString('standardDocumentControl', $documentGenerator);
     }
 }

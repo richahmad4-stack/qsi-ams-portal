@@ -10,6 +10,10 @@
                 <th>Name</th>
                 <th>Key</th>
                 <th>Type</th>
+                <th>Document No.</th>
+                <th>Revision</th>
+                <th>Issue</th>
+                <th>Date</th>
                 <th>Version</th>
                 <th>Status</th>
                 <th class="text-end">Action</th>
@@ -21,6 +25,10 @@
                     <td><?= esc($template['name']) ?></td>
                     <td><?= esc($template['template_key']) ?></td>
                     <td><?= esc($template['document_type']) ?></td>
+                    <td><?= esc($template['document_number'] ?? '') ?></td>
+                    <td><?= esc($template['revision_number'] ?? '') ?></td>
+                    <td><?= esc($template['issue_number'] ?? '') ?></td>
+                    <td><?= esc($template['document_date'] ?? '') ?></td>
                     <td><?= esc($template['active_version'] ?? 'None') ?></td>
                     <td><?= esc($template['status']) ?></td>
                     <td class="text-end">

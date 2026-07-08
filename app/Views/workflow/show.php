@@ -56,6 +56,7 @@ $stateClasses = [
 ];
 $records = $workflow['records'];
 $responsible = $workflow['responsible'] ?? [];
+$documentControls = $documentControls ?? [];
 $currentRoles = (array) session()->get('role_codes');
 $isComplianceAuditViewer = in_array('compliance_auditor', $currentRoles, true);
 $canEditWorkflow = can('clients', 'edit')
@@ -165,6 +166,52 @@ $actionButton = static function (string $label, string $icon, ?string $url, bool
 
     return '<a class="btn btn-outline-' . esc($style) . ' btn-sm" href="' . esc($url, 'attr') . '">'
         . '<i class="fa-solid ' . esc($icon) . ' me-1" aria-hidden="true"></i>' . esc($label) . '</a>';
+};
+$formatControlDate = static function (?string $date): string {
+    $date = trim((string) $date);
+    if ($date === '') {
+        return '';
+    }
+
+    $timestamp = strtotime($date);
+
+    return $timestamp === false ? $date : date('d.m.Y', $timestamp);
+};
+$docControl = static function (string $templateKey, array $record = [], array $fallback = []) use ($documentControls, $formatControlDate): array {
+    $template = $documentControls[$templateKey] ?? [];
+    $number = trim((string) ($record['document_number'] ?? '')) ?: (trim((string) ($template['document_number'] ?? '')) ?: (string) ($fallback['number'] ?? ''));
+    $revision = trim((string) ($record['revision_number'] ?? '')) ?: (trim((string) ($template['revision_number'] ?? '')) ?: (string) ($fallback['revision'] ?? ''));
+    $issue = trim((string) ($record['issue_number'] ?? '')) ?: (trim((string) ($template['issue_number'] ?? '')) ?: (string) ($fallback['issue'] ?? ''));
+    $date = trim((string) ($record['document_date'] ?? '')) ?: (trim((string) ($record['issue_date'] ?? '')) ?: (trim((string) ($template['document_date'] ?? '')) ?: (string) ($fallback['date'] ?? '')));
+
+    return [
+        'template_id' => $template['id'] ?? null,
+        'number' => $number,
+        'revision' => $revision,
+        'issue' => $issue,
+        'date' => $formatControlDate($date),
+    ];
+};
+$renderDocumentControlRegister = static function (array $rows) use ($docControl): void {
+    echo '<div class="table-responsive mt-3"><table class="table table-sm align-middle">'
+        . '<thead><tr><th>Document</th><th>Document No.</th><th>Revision</th><th>Issue</th><th>Date</th><th class="text-end">Control</th></tr></thead><tbody>';
+
+    foreach ($rows as $row) {
+        $control = $docControl($row['key'], $row['record'] ?? [], $row['fallback'] ?? []);
+        echo '<tr><td>' . esc($row['label']) . '</td>'
+            . '<td>' . esc($control['number']) . '</td>'
+            . '<td>' . esc($control['revision']) . '</td>'
+            . '<td>' . esc($control['issue']) . '</td>'
+            . '<td>' . esc($control['date']) . '</td><td class="text-end">';
+        if (! empty($control['template_id']) && can('document_templates', 'edit')) {
+            echo '<a class="btn btn-outline-secondary btn-sm" href="' . esc(site_url('masters/templates/' . $control['template_id'] . '/edit'), 'attr') . '">Edit</a>';
+        } else {
+            echo '<span class="text-secondary small">Template</span>';
+        }
+        echo '</td></tr>';
+    }
+
+    echo '</tbody></table></div>';
 };
 $eventDocumentUrl = static function (?array $event, string $documentKey) use ($client): ?string {
     return $event === null ? null : site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/documents/' . $documentKey);
@@ -414,6 +461,21 @@ foreach ($workflow['steps'] as $step) {
             <?= $actionButton('Technical review PDF', 'fa-file-pdf', $eventDocumentUrl($stage2 ?? $stage1, 'technical_review'), true, 'danger') ?>
             <?= $actionButton('Decision PDF', 'fa-file-pdf', $eventDocumentUrl($stage2 ?? $stage1, 'decision_report'), true, 'danger') ?>
         </div>
+        <?php $renderDocumentControlRegister([
+            ['label' => 'Certification Application', 'key' => 'certification_application', 'fallback' => ['number' => 'F 25', 'revision' => '1', 'issue' => '2', 'date' => '2024-11-01']],
+            ['label' => 'Application Review', 'key' => 'application_review', 'record' => $records['application_review'] ?? [], 'fallback' => ['number' => 'F 28', 'revision' => '4', 'issue' => '2', 'date' => '2025-02-01']],
+            ['label' => 'Proposal', 'key' => 'proposal', 'record' => $records['proposal'] ?? [], 'fallback' => ['number' => 'F 26', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+            ['label' => 'Contract', 'key' => 'contract_agreement', 'record' => $records['contract'] ?? [], 'fallback' => ['number' => 'F 27', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+            ['label' => 'Audit Program', 'key' => 'audit_program', 'record' => $records['audit_program'] ?? [], 'fallback' => ['number' => 'F 42', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+            ['label' => 'Auditor Appointment', 'key' => 'auditor_appointment', 'fallback' => ['number' => 'F 30_app', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+            ['label' => 'Stage 1 / Stage 2 Audit Plan', 'key' => 'audit_plan', 'fallback' => ['number' => 'F 31', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+            ['label' => 'Stage 1 Audit Report', 'key' => 'stage1_report', 'fallback' => ['number' => 'F 32', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+            ['label' => 'Stage 2 Audit Report', 'key' => 'stage2_report', 'fallback' => ['number' => 'F 32', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+            ['label' => 'NCR / CAPA', 'key' => 'ncr_capa', 'fallback' => ['number' => 'F 33', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+            ['label' => 'Technical Review', 'key' => 'technical_review_report', 'fallback' => ['number' => 'F 34', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+            ['label' => 'Decision Report', 'key' => 'decision_report', 'fallback' => ['number' => 'F 35', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+            ['label' => 'Feedback', 'key' => 'feedback', 'fallback' => ['number' => 'F 36', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+        ]); ?>
     </div>
 
     <?php if (! $viewOnlyReports): ?>
@@ -629,6 +691,14 @@ foreach ($workflow['steps'] as $step) {
                 <?= $actionButton('Technical review PDF', 'fa-file-pdf', $eventDocumentUrl($surveillanceEvent, 'technical_review'), $surveillanceSection['clickable'], 'danger') ?>
                 <?= $actionButton('Decision PDF', 'fa-file-pdf', $eventDocumentUrl($surveillanceEvent, 'decision_report'), $surveillanceSection['clickable'], 'danger') ?>
             </div>
+            <?php $renderDocumentControlRegister([
+                ['label' => $surveillanceSection['prefix'] . ' Auditor Appointment', 'key' => 'auditor_appointment', 'fallback' => ['number' => 'F 30_app', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+                ['label' => $surveillanceSection['prefix'] . ' Audit Plan', 'key' => 'audit_plan', 'fallback' => ['number' => 'F 31', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+                ['label' => $surveillanceSection['prefix'] . ' Audit Report', 'key' => 'surveillance_report', 'fallback' => ['number' => 'F 32', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+                ['label' => $surveillanceSection['prefix'] . ' NCR / CAPA', 'key' => 'ncr_capa', 'fallback' => ['number' => 'F 33', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+                ['label' => $surveillanceSection['prefix'] . ' Technical Review', 'key' => 'technical_review_report', 'fallback' => ['number' => 'F 34', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+                ['label' => $surveillanceSection['prefix'] . ' Decision Report', 'key' => 'decision_report', 'fallback' => ['number' => 'F 35', 'revision' => '2', 'issue' => '2', 'date' => '2022-05-15']],
+            ]); ?>
         </div>
 
         <div class="workflow-subsection">
