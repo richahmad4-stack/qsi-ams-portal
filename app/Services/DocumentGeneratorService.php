@@ -345,14 +345,17 @@ class DocumentGeneratorService
             . '<div class="certificate-description">' . nl2br(esc($this->certificateStandardDescription($standardCode))) . '</div>'
             . '<div class="certificate-applicable">applicable to</div>'
             . '<div class="certificate-scope' . esc($scopeClass, 'attr') . '">' . nl2br(esc($scope)) . '</div>'
-            . '<table class="certificate-dates"><tbody>'
+            . '<table class="certificate-dates"><colgroup><col class="date-label"><col class="date-value"><col class="date-label"><col class="date-value"></colgroup><tbody>'
             . '<tr><th>Initial Certification Date:</th><td>' . esc($initialDate) . '</td><th>Certification Date:</th><td>' . esc($issueDate) . '</td></tr>'
             . '<tr><th>Surveillance 1 Date:</th><td>' . esc($surveillance1) . '</td><th>Surveillance 2 Date:</th><td>' . esc($surveillance2) . '</td></tr>'
             . '<tr><th>Valid Till:</th><td>' . esc($expiryDate) . '</td><th>Certificate Number:</th><td>' . esc($certificateNumber) . '</td></tr>'
             . '</tbody></table>'
             . '<div class="certificate-validity-note">This Certificate is valid upon the successful completion of periodic surveillance audits to maintain compliance with the relevant standards.</div>'
-            . '<table class="certificate-bottom"><tbody><tr>'
-            . '<td class="certificate-signature-cell"><div class="certificate-signature"><div class="signature-line"></div><div>Approved by</div></div><div class="certificate-signature"><div class="signature-line"></div><div>Printed by</div></div></td>'
+            . '<table class="certificate-signatures"><tbody><tr>'
+            . '<td><div class="signature-line"></div><div>Approved by</div></td>'
+            . '<td><div class="signature-line"></div><div>Printed by</div></td>'
+            . '</tr></tbody></table>'
+            . '<table class="certificate-verification-table"><tbody><tr>'
             . '<td class="certificate-qr-cell"><img src="' . esc($qr, 'attr') . '" alt="Certificate QR"></td>'
             . '<td class="certificate-verification-text"><div class="certificate-validity">Validity code: <strong>' . esc($certificateNumber) . '</strong></div>'
             . '<div class="certificate-verify">Check validity of the certificate using this code on <strong>certificate.qsicert.ca</strong><br>Or email us at <strong>info@qsi-cert.com</strong><br>QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia</div></td>'
@@ -508,23 +511,26 @@ class DocumentGeneratorService
         );
 
         $signatures = $section->addTable(['cellMarginTop' => 30, 'cellMarginBottom' => 30]);
-        $signatures->addRow(950);
-        $approved = $signatures->addCell(2100);
+        $signatures->addRow(760);
+        $approved = $signatures->addCell(2550);
         $approved->addText('', [], ['borderBottomSize' => 6, 'borderBottomColor' => '1f2933']);
-        $approved->addText('Approved by', ['size' => 9], ['alignment' => Jc::CENTER]);
-        $printed = $signatures->addCell(2100);
+        $approved->addText('Approved by', ['size' => 8.8], ['alignment' => Jc::CENTER]);
+        $printed = $signatures->addCell(2550);
         $printed->addText('', [], ['borderBottomSize' => 6, 'borderBottomColor' => '1f2933']);
-        $printed->addText('Printed by', ['size' => 9], ['alignment' => Jc::CENTER]);
-        $qrCell = $signatures->addCell(2500);
+        $printed->addText('Printed by', ['size' => 8.8], ['alignment' => Jc::CENTER]);
+
+        $verification = $section->addTable(['cellMarginTop' => 15, 'cellMarginBottom' => 15]);
+        $verification->addRow();
+        $qrCell = $verification->addCell(1500);
         $qrPath = $this->qrPngPath((string) ($certificate['qr_payload'] ?? $certificateNumber));
         if ($qrPath !== '') {
-            $qrCell->addImage($qrPath, ['width' => 78, 'height' => 78, 'alignment' => Jc::RIGHT]);
+            $qrCell->addImage($qrPath, ['width' => 68, 'height' => 68]);
         }
-
-        $section->addText('Validity code: ' . $certificateNumber, ['size' => 12, 'bold' => true, 'color' => '1c6d8a']);
-        $section->addText('Check validity of the certificate using this code on certificate.qsicert.ca', ['size' => 8]);
-        $section->addText('Or email us at info@qsi-cert.com', ['size' => 8]);
-        $section->addText('QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia', ['size' => 8]);
+        $verifyCell = $verification->addCell(6200);
+        $verifyCell->addText('Validity code: ' . $certificateNumber, ['size' => 9.4, 'bold' => true, 'color' => '1c6d8a']);
+        $verifyCell->addText('Check validity of the certificate using this code on certificate.qsicert.ca', ['size' => 7.6]);
+        $verifyCell->addText('Or email us at info@qsi-cert.com', ['size' => 7.6]);
+        $verifyCell->addText('QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia', ['size' => 7.6]);
 
         $directory = WRITEPATH . 'uploads' . DIRECTORY_SEPARATOR . 'documents' . DIRECTORY_SEPARATOR . 'tenant_' . $tenantId . DIRECTORY_SEPARATOR . 'client_' . $clientId;
         if (! is_dir($directory)) {
@@ -3487,23 +3493,25 @@ class DocumentGeneratorService
             .certificate-scope { font-size: 14.5pt; line-height: 1.14; font-weight: 700; max-width: 134mm; margin-bottom: 5mm; }
             .certificate-scope.scope-medium { font-size: 12.6pt; line-height: 1.12; }
             .certificate-scope.scope-long { font-size: 11.2pt; line-height: 1.1; }
-            .certificate-dates { width: 137mm; table-layout: fixed; margin: 0 0 4mm; border-collapse: collapse; border-top: 0.35mm solid #1f2933; border-bottom: 0.35mm solid #1f2933; }
-            .certificate-dates th, .certificate-dates td { border: 0; padding: 0.9mm 1mm; font-size: 8.1pt; color: #111827; background: transparent !important; line-height: 1.14; vertical-align: middle; }
+            .certificate-dates { width: 137mm; table-layout: fixed; margin: 0 0 3.5mm; border-collapse: collapse; border-top: 0.35mm solid #1f2933; border-bottom: 0.35mm solid #1f2933; }
+            .certificate-dates .date-label { width: 40mm; }
+            .certificate-dates .date-value { width: 28.5mm; }
+            .certificate-dates th, .certificate-dates td { border: 0; padding: 0.85mm 1mm; font-size: 7.9pt; color: #111827; background: transparent !important; line-height: 1.12; vertical-align: middle; }
             .certificate-dates tbody tr:nth-child(even) td { background: transparent !important; }
-            .certificate-dates th { width: 35mm; font-weight: 700; text-align: left; }
-            .certificate-dates td { width: 31mm; text-align: right; }
-            .certificate-validity-note { font-size: 8.6pt; line-height: 1.28; font-style: italic; max-width: 134mm; margin-bottom: 5mm; }
-            .certificate-bottom { width: 137mm; table-layout: fixed; border-collapse: collapse; margin-top: 2mm; }
-            .certificate-bottom td { border: 0 !important; background: transparent !important; padding: 0; vertical-align: top; }
-            .certificate-signature-cell { width: 47mm; }
-            .certificate-signature { display: block; width: 37mm; margin: 0 0 3mm; text-align: center; font-size: 8.8pt; }
+            .certificate-dates th { font-weight: 700; text-align: left; white-space: nowrap; }
+            .certificate-dates td { text-align: right; white-space: nowrap; }
+            .certificate-validity-note { font-size: 8.3pt; line-height: 1.26; font-style: italic; max-width: 134mm; margin-bottom: 4mm; }
+            .certificate-signatures { width: 82mm; table-layout: fixed; border-collapse: collapse; margin: 0 0 4mm; }
+            .certificate-signatures td { border: 0 !important; background: transparent !important; padding: 0 6mm 0 0; text-align: center; font-size: 8.6pt; vertical-align: top; }
             .signature-line { height: 5mm; border-bottom: 0.25mm solid #1f2933; margin-bottom: 1.5mm; }
+            .certificate-verification-table { width: 137mm; table-layout: fixed; border-collapse: collapse; margin-top: 0; }
+            .certificate-verification-table td { border: 0 !important; background: transparent !important; padding: 0; vertical-align: top; }
             .certificate-qr-cell { width: 25mm; }
             .certificate-qr-cell img { width: 22mm; height: 22mm; }
-            .certificate-verification-text { width: 65mm; padding-left: 3mm !important; padding-top: 1mm !important; }
-            .certificate-validity { font-size: 9.2pt; margin-bottom: 1.5mm; white-space: nowrap; }
-            .certificate-validity strong { color: #1c6d8a; font-size: 9.8pt; }
-            .certificate-verify { font-size: 7.4pt; line-height: 1.18; color: #1f2933; }
+            .certificate-verification-text { width: 112mm; padding-left: 5mm !important; padding-top: 1mm !important; }
+            .certificate-validity { font-size: 9pt; margin-bottom: 1.4mm; white-space: nowrap; }
+            .certificate-validity strong { color: #1c6d8a; font-size: 9.7pt; }
+            .certificate-verify { font-size: 7.3pt; line-height: 1.2; color: #1f2933; }
         ';
     }
 
