@@ -138,4 +138,20 @@ class WorkflowGateWiringTest extends TestCase
         self::assertStringNotContainsString('<td><table class="f31-control">', $documentGenerator);
         self::assertStringNotContainsString('<footer>Document No: \' . esc((string) $documentNumber)', $documentGenerator);
     }
+
+    public function testAuditFileReportsUseOfficialFormHeaderWithoutPreparedFooter(): void
+    {
+        $documentGenerator = file_get_contents(__DIR__ . '/../../app/Services/DocumentGeneratorService.php') ?: '';
+
+        foreach (['F 32', 'F 33', 'F 34', 'F 35'] as $documentNumber) {
+            self::assertStringContainsString("'number' => '" . $documentNumber . "'", $documentGenerator);
+        }
+
+        self::assertStringContainsString('control-label', $documentGenerator);
+        self::assertStringContainsString('control-value', $documentGenerator);
+        self::assertStringContainsString('standardDocumentControl($documentKey)', $documentGenerator);
+        self::assertStringNotContainsString('Controlled certification body record', $documentGenerator);
+        self::assertStringNotContainsString('Prepared on \' . esc(date(', $documentGenerator);
+        self::assertStringNotContainsString('Controlled document prepared by QSI AMS', $documentGenerator);
+    }
 }

@@ -301,26 +301,45 @@ class DocumentGeneratorService
             default => [['Summary', 'Document type is not configured yet.']],
         };
 
-        return $this->baseHtml($title, $client, $sections);
+        return $this->baseHtml($documentKey, $title, $client, $sections);
     }
 
-    private function baseHtml(string $title, array $client, array $sections): string
+    private function baseHtml(string $documentKey, string $title, array $client, array $sections): string
     {
         $body = '';
         foreach ($sections as [$heading, $content]) {
             $body .= '<h2>' . esc($heading) . '</h2>' . $content;
         }
 
+        $control = $this->standardDocumentControl($documentKey);
+        $subtitle = $control['subtitle'] ?? 'QSI certification document';
+
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . '</style></head><body>'
-            . '<header class="document-header"><table><tr>'
-            . '<td class="brand-cell">' . $this->logoHtml('brand-logo') . '<div class="brand-subtitle">Audit Management System</div></td>'
-            . '<td class="title-cell"><div class="doc-title">' . esc($title) . '</div><div class="doc-subtitle">Controlled certification body record</div></td>'
-            . '<td class="meta-cell">Prepared<br><strong>' . esc(date('Y-m-d')) . '</strong></td>'
-            . '</tr></table></header>'
+            . '<header class="document-header"><table><tbody>'
+            . '<tr><td class="brand-cell" rowspan="4">' . $this->logoHtml('pdf-logo') . '</td>'
+            . '<td class="title-cell" rowspan="4"><div class="doc-title">' . esc($title) . '</div><div class="doc-subtitle">' . esc($subtitle) . '</div></td>'
+            . '<td class="control-label">Document No.</td><td class="control-value">' . esc((string) ($control['number'] ?? 'AMS')) . '</td></tr>'
+            . '<tr><td class="control-label">Revision No.</td><td class="control-value">' . esc((string) ($control['revision'] ?? '1')) . '</td></tr>'
+            . '<tr><td class="control-label">Issue No.</td><td class="control-value">' . esc((string) ($control['issue'] ?? '1')) . '</td></tr>'
+            . '<tr><td class="control-label">Date</td><td class="control-value">' . esc((string) ($control['date'] ?? date('Y-m-d'))) . '</td></tr>'
+            . '</tbody></table></header>'
             . '<section class="client"><table><tr><th>Client</th><td>' . esc($client['company']) . '</td></tr><tr><th>Scope</th><td>' . nl2br(esc((string) ($client['scope'] ?? ''))) . '</td></tr></table></section>'
             . $body
-            . '<footer><span>Prepared on ' . esc(date('Y-m-d H:i')) . ' | Controlled document prepared by QSI AMS</span><span class="page-number">Page </span></footer>'
             . '</body></html>';
+    }
+
+    private function standardDocumentControl(string $documentKey): array
+    {
+        $documents = [
+            'audit_report' => ['number' => 'F 32', 'revision' => '2', 'issue' => '2', 'date' => '15.05.2022'],
+            'ncr_capa' => ['number' => 'F 33', 'revision' => '2', 'issue' => '2', 'date' => '15.05.2022'],
+            'technical_review' => ['number' => 'F 34', 'revision' => '2', 'issue' => '2', 'date' => '15.05.2022'],
+            'decision_report' => ['number' => 'F 35', 'revision' => '2', 'issue' => '2', 'date' => '15.05.2022'],
+            'feedback' => ['number' => 'F 36', 'revision' => '2', 'issue' => '2', 'date' => '15.05.2022'],
+        ];
+
+        return ($documents[$documentKey] ?? ['number' => 'AMS', 'revision' => '1', 'issue' => '1', 'date' => date('Y-m-d')])
+            + ['subtitle' => 'QSI certification document'];
     }
 
     private function certificateHtml(array $certificate): string
@@ -3824,22 +3843,21 @@ class DocumentGeneratorService
     private function css(): string
     {
         return '
-            @page { margin: 38px 42px 78px; }
+            @page { margin: 38px 42px 46px; }
             * { box-sizing: border-box; }
             body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10px; color: #1f2933; line-height: 1.48; background: #fff; }
-            .document-header { border: 0; padding: 0; margin-bottom: 18px; page-break-inside: avoid; }
-            .document-header table { width: 100%; border-collapse: collapse; margin-bottom: 0; table-layout: fixed; }
-            .document-header td { border: 0; padding: 10px 12px; vertical-align: middle; }
-            .brand-cell { width: 25%; background: #0b3558; color: #fff; }
-            .brand-mark { font-size: 20px; line-height: 1; font-weight: 700; letter-spacing: .4px; }
+            .document-header { border: 0; padding: 0; margin-bottom: 16px; page-break-inside: avoid; }
+            .document-header table { width: 100%; border-collapse: collapse; margin-bottom: 0; table-layout: fixed; border: 1.6px solid #0b3558; }
+            .document-header td { border: 1px solid #b8cad8; padding: 8px 9px; vertical-align: middle; color: #123d70; }
+            .brand-cell { width: 18%; text-align: center; color: #0b5f9e; font-weight: 700; background: #f4f8fb; }
+            .brand-mark { font-size: 24px; line-height: 1; font-weight: 700; letter-spacing: .4px; }
             .brand-logo { display: block; width: 94px; max-height: 48px; object-fit: contain; background: #fff; padding: 4px; border-radius: 2px; }
             .pdf-logo { display: block; max-width: 108px; max-height: 54px; margin: 0 auto; object-fit: contain; }
-            .brand-subtitle { margin-top: 5px; font-size: 8.5px; color: #dce8f2; }
-            .title-cell { width: 56%; background: #f4f8fb; border-top: 1px solid #c8d7e3; border-bottom: 1px solid #c8d7e3; }
-            .doc-title { font-size: 15px; font-weight: 700; color: #0b3558; line-height: 1.28; }
-            .doc-subtitle { margin-top: 5px; color: #64748b; font-size: 8.8px; letter-spacing: .2px; text-transform: uppercase; }
-            .meta-cell { width: 19%; background: #ffffff; color: #475569; font-size: 8.8px; text-align: right; border: 1px solid #c8d7e3 !important; }
-            .meta-cell strong { color: #0b3558; font-size: 10px; }
+            .title-cell { width: 54%; text-align: center; background: #ffffff; }
+            .doc-title { font-size: 14.5px; font-weight: 700; color: #0b3558; line-height: 1.32; }
+            .doc-subtitle { margin-top: 7px; color: #607080; font-family: DejaVu Serif, serif; font-size: 8.6px; font-weight: 700; letter-spacing: .85px; text-transform: uppercase; }
+            .control-label { width: 15%; background: #f7fafc; color: #0b3558; font-size: 8.8px; font-weight: 700; text-align: left; white-space: nowrap; }
+            .control-value { width: 13%; background: #ffffff; color: #123d70; font-size: 9.2px; font-weight: 700; text-align: left; white-space: nowrap; }
             .client { background: #f8fafc; border: 1px solid #d6e1ea; padding: 0; margin-bottom: 16px; page-break-inside: avoid; }
             .client table { margin-bottom: 0; }
             .client th { width: 18%; color: #0b3558; background: #eaf2f8; }

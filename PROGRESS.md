@@ -71,6 +71,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Proposal and Contract PDFs now keep the cover page clean and start the official QSI document-control header on page 2, using the same navy, pale blue-gray and gold accent scheme as the rest of the controlled document family.
 - Auditor Appointment PDFs now use the same clean official-form header instead of the old nested document-control table and large QSI-CERT band.
 - Audit Plan PDFs now use the same clean official-form F31 header and no redundant document-control footer line.
+- Audit Report, NCR/CAPA, Technical Review, and Decision PDFs now use the same official-form QSI header with document-control cells and no old prepared-date footer.
 - HACCP client applications now include a normal application question for `Number of HACCP Studies / Plans`, visible only for HACCP files and linked to application review audit-duration inputs.
 - Application Review now uses the saved client application HACCP Studies/Plans count as the source of truth, preventing stale review payload values from showing a different count.
 - Operations readiness has been added as a Super Admin dashboard for go-live status covering production environment, public URL/SSL, SMTP/email, reminder processor, schema exports, backup restore proof, website lead intake, and user administration readiness.
