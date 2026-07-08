@@ -2435,16 +2435,12 @@ class DocumentGeneratorService
         }
 
         $header = '<header class="f42-header"><table class="f42-header-table"><tbody>'
-            . '<tr>'
-            . '<td class="f42-logo">' . $this->logoHtml('pdf-logo') . '</td>'
-            . '<td class="f42-title">' . esc($title) . '<div>Three-year certification audit programme</div></td>'
-            . '<td class="f42-control-band">'
-            . '<div><b>Document No.</b><span>' . esc((string) $documentNumber) . '</span></div>'
-            . '<div><b>Revision No.</b><span>' . esc((string) $revisionNumber) . '</span></div>'
-            . '<div><b>Issue No.</b><span>' . esc((string) $issueNumber) . '</span></div>'
-            . '<div><b>Date</b><span>' . esc((string) $documentDate) . '</span></div>'
-            . '</td>'
-            . '</tr>'
+            . '<tr><td class="f42-logo" rowspan="4">' . $this->logoHtml('pdf-logo') . '</td>'
+            . '<td class="f42-title" rowspan="4">' . esc($title) . '<div>Three-year certification audit programme</div></td>'
+            . '<td class="f42-control-label">Document No.</td><td class="f42-control-value">' . esc((string) $documentNumber) . '</td></tr>'
+            . '<tr><td class="f42-control-label">Revision No.</td><td class="f42-control-value">' . esc((string) $revisionNumber) . '</td></tr>'
+            . '<tr><td class="f42-control-label">Issue No.</td><td class="f42-control-value">' . esc((string) $issueNumber) . '</td></tr>'
+            . '<tr><td class="f42-control-label">Date</td><td class="f42-control-value">' . esc((string) $documentDate) . '</td></tr>'
             . '</tbody></table></header>';
 
         $clientBlock = '<section class="client f42-client"><table><tbody>'
@@ -4052,17 +4048,14 @@ class DocumentGeneratorService
             .nowrap { white-space: nowrap; }
             .f42-header { border: 0; padding: 0; margin-bottom: 12px; }
             .f42-header-table { border: 1.6px solid #0b3558; margin-bottom: 0; table-layout: fixed; }
-            .f42-header-table td { border: 1px solid #b8cad8; padding: 8px; vertical-align: middle; text-align: center; font-weight: 700; color: #123d70; }
-            .f42-logo { width: 17%; background: #f4f8fb; }
-            .f42-logo .pdf-logo { width: 82px; max-height: 48px; }
+            .f42-header-table td { border: 1px solid #b8cad8; padding: 8px 9px; vertical-align: middle; color: #123d70; }
+            .f42-logo { width: 18%; background: #f4f8fb; text-align: center; }
+            .f42-logo .pdf-logo { width: 90px; max-height: 52px; }
             .f42-logo-text { font-size: 24px; line-height: 1; }
-            .f42-title { width: 43%; font-size: 17px; line-height: 1.25; color: #0b3558; background: #ffffff; }
-            .f42-title div { margin-top: 6px; color: #607080; font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: .6px; }
-            .f42-control-band { width: 40%; padding: 0; background: #f7fafc; text-align: left; }
-            .f42-control-band div { border-bottom: 1px solid #c8d7e3; padding: 6px 8px; white-space: nowrap; }
-            .f42-control-band div:last-child { border-bottom: 0; }
-            .f42-control-band b { display: inline-block; width: 31mm; color: #0b3558; text-transform: uppercase; font-size: 8.6px; letter-spacing: .25px; }
-            .f42-control-band span { color: #123d70; font-size: 9.4px; }
+            .f42-title { width: 54%; text-align: center; font-size: 17px; line-height: 1.28; color: #0b3558; background: #ffffff; font-weight: 700; }
+            .f42-title div { margin-top: 7px; color: #607080; font-family: DejaVu Serif, serif; font-size: 8.6px; font-weight: 700; text-transform: uppercase; letter-spacing: .85px; }
+            .f42-control-label { width: 15%; background: #f7fafc; color: #0b3558; font-size: 8.8px; font-weight: 700; text-align: left; white-space: nowrap; }
+            .f42-control-value { width: 13%; background: #ffffff; color: #123d70; font-size: 9.2px; font-weight: 700; text-align: left; white-space: nowrap; }
             .f42-client { background: #f8fafc; border: 1px solid #d6e1ea; padding: 0; margin-bottom: 13px; }
             .f42-client th { width: 14%; background: #eaf2f8; color: #0f2638; border: 1px solid #c8d7e3; padding: 6px 7px; text-align: left; }
             .f42-client td { border: 1px solid #d6e1ea; padding: 6px 7px; }

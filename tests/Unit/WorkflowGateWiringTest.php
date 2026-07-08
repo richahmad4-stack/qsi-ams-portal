@@ -102,7 +102,8 @@ class WorkflowGateWiringTest extends TestCase
     {
         $documentGenerator = file_get_contents(__DIR__ . '/../../app/Services/DocumentGeneratorService.php') ?: '';
 
-        self::assertStringContainsString('f42-control-band', $documentGenerator);
+        self::assertStringContainsString('f42-control-label', $documentGenerator);
+        self::assertStringContainsString('f42-control-value', $documentGenerator);
         self::assertStringContainsString('Three-Year Certification Cycle', $documentGenerator);
         self::assertStringContainsString('Responsible Auditor', $documentGenerator);
         self::assertStringContainsString('auditProgramResponsibleAuditor', $documentGenerator);
