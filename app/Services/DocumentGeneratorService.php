@@ -323,6 +323,8 @@ class DocumentGeneratorService
         $printedSignature = $this->certificateSignatureHtml('assets/img/qsi-signature-printed.png');
         $standardCode = (string) ($certificate['standard_code'] ?? '');
         $certificateNumber = (string) ($certificate['certificate_number'] ?? '');
+        $companyName = (string) ($certificate['legal_name'] ?: $certificate['company']);
+        $companyClass = strlen($companyName) > 45 ? ' company-long' : (strlen($companyName) > 32 ? ' company-medium' : '');
         $issueDate = $this->certificateDate((string) ($certificate['issue_date'] ?? ''));
         $initialDate = $this->certificateDate((string) ($certificate['initial_certification_date'] ?? $certificate['issue_date'] ?? ''));
         $surveillance1 = $this->certificateCycleDate((string) ($certificate['issue_date'] ?? ''), '+1 year');
@@ -340,7 +342,7 @@ class DocumentGeneratorService
             . '<div class="certificate-page"' . ($background === '' ? '' : ' style="background-image: url(' . esc($background, 'attr') . ');"') . '>'
             . '<div class="certificate-content">'
             . '<div class="certificate-intro">This is to certify the ' . esc($this->certificateSystemName($standardCode)) . ' of</div>'
-            . '<div class="certificate-company">' . esc((string) ($certificate['legal_name'] ?: $certificate['company'])) . '</div>'
+            . '<div class="certificate-company' . esc($companyClass, 'attr') . '">' . esc($companyName) . '</div>'
             . '<div class="certificate-address">' . esc($address) . '</div>'
             . '<div class="certificate-compliance">has been assessed and found to be in compliance with the ' . esc(str_contains(strtoupper($standardCode), 'HACCP') ? 'document' : 'Standard') . '</div>'
             . '<div class="certificate-standard">' . esc($standardCode) . '</div>'
@@ -422,6 +424,8 @@ class DocumentGeneratorService
     {
         $standardCode = (string) ($certificate['standard_code'] ?? '');
         $certificateNumber = (string) ($certificate['certificate_number'] ?? '');
+        $companyName = (string) ($certificate['legal_name'] ?: $certificate['company']);
+        $companyFontSize = strlen($companyName) > 45 ? 17.5 : (strlen($companyName) > 32 ? 19.5 : 22);
         $issueDate = $this->certificateDate((string) ($certificate['issue_date'] ?? ''));
         $initialDate = $this->certificateDate((string) ($certificate['initial_certification_date'] ?? $certificate['issue_date'] ?? ''));
         $surveillance1 = $this->certificateCycleDate((string) ($certificate['issue_date'] ?? ''), '+1 year');
@@ -468,8 +472,8 @@ class DocumentGeneratorService
             ['spaceAfter' => Converter::pointToTwip(22)]
         );
         $section->addText(
-            (string) ($certificate['legal_name'] ?: $certificate['company']),
-            ['size' => 22, 'bold' => true],
+            $companyName,
+            ['size' => $companyFontSize, 'bold' => true],
             ['spaceAfter' => Converter::pointToTwip(4)]
         );
         $section->addText($address, ['size' => 9], ['spaceAfter' => Converter::pointToTwip(24)]);
@@ -516,15 +520,15 @@ class DocumentGeneratorService
         $signatures->addRow(760);
         $approvedSignaturePath = $this->publicAssetPath('assets/img/qsi-signature-approved.png');
         $printedSignaturePath = $this->publicAssetPath('assets/img/qsi-signature-printed.png');
-        $approved = $signatures->addCell(2550);
+        $approved = $signatures->addCell(2850);
         if ($approvedSignaturePath !== '') {
-            $approved->addImage($approvedSignaturePath, ['width' => 86, 'height' => 22, 'alignment' => Jc::CENTER]);
+            $approved->addImage($approvedSignaturePath, ['width' => 112, 'height' => 30, 'alignment' => Jc::CENTER]);
         }
         $approved->addText('', [], ['borderBottomSize' => 6, 'borderBottomColor' => '1f2933']);
         $approved->addText('Approved by', ['size' => 8.8], ['alignment' => Jc::CENTER]);
-        $printed = $signatures->addCell(2550);
+        $printed = $signatures->addCell(2850);
         if ($printedSignaturePath !== '') {
-            $printed->addImage($printedSignaturePath, ['width' => 86, 'height' => 22, 'alignment' => Jc::CENTER]);
+            $printed->addImage($printedSignaturePath, ['width' => 112, 'height' => 30, 'alignment' => Jc::CENTER]);
         }
         $printed->addText('', [], ['borderBottomSize' => 6, 'borderBottomColor' => '1f2933']);
         $printed->addText('Printed by', ['size' => 8.8], ['alignment' => Jc::CENTER]);
@@ -3503,7 +3507,9 @@ class DocumentGeneratorService
             .certificate-page { position: relative; width: 210mm; height: 297mm; background-repeat: no-repeat; background-position: 0 0; background-size: 210mm 297mm; overflow: hidden; }
             .certificate-content { position: absolute; left: 56mm; right: 17mm; top: 27mm; bottom: 0; text-align: left; }
             .certificate-intro { font-size: 11.2pt; margin-bottom: 10mm; }
-            .certificate-company { font-size: 23pt; line-height: 1.16; font-weight: 700; max-width: 125mm; margin-bottom: 3mm; }
+            .certificate-company { font-size: 22pt; line-height: 1.12; font-weight: 700; max-width: 125mm; margin-bottom: 3mm; }
+            .certificate-company.company-medium { font-size: 19.5pt; line-height: 1.1; }
+            .certificate-company.company-long { font-size: 17.2pt; line-height: 1.08; }
             .certificate-address { font-size: 9.3pt; line-height: 1.22; max-width: 112mm; margin-bottom: 10mm; }
             .certificate-compliance { font-size: 11.2pt; margin-bottom: 8mm; }
             .certificate-standard { font-size: 29pt; line-height: 1; margin-bottom: 5mm; font-weight: 400; }
@@ -3520,10 +3526,10 @@ class DocumentGeneratorService
             .certificate-dates th { font-weight: 700; text-align: left; white-space: nowrap; }
             .certificate-dates td { text-align: right; white-space: nowrap; }
             .certificate-validity-note { font-size: 8.3pt; line-height: 1.26; font-style: italic; max-width: 134mm; margin-bottom: 4mm; }
-            .certificate-signatures { width: 82mm; table-layout: fixed; border-collapse: collapse; margin: 0 0 4mm; }
+            .certificate-signatures { width: 90mm; table-layout: fixed; border-collapse: collapse; margin: 0 0 4mm; }
             .certificate-signatures td { border: 0 !important; background: transparent !important; padding: 0 6mm 0 0; text-align: center; font-size: 8.6pt; vertical-align: top; }
-            .signature-line { height: 8mm; border-bottom: 0.25mm solid #1f2933; margin-bottom: 1.4mm; text-align: center; }
-            .certificate-signature-image { max-width: 32mm; max-height: 7.4mm; display: inline-block; vertical-align: bottom; }
+            .signature-line { height: 11mm; border-bottom: 0.25mm solid #1f2933; margin-bottom: 1.2mm; text-align: center; }
+            .certificate-signature-image { max-width: 39mm; max-height: 10.5mm; display: inline-block; vertical-align: bottom; }
             .certificate-verification-table { width: 137mm; table-layout: fixed; border-collapse: collapse; margin-top: 0; }
             .certificate-verification-table td { border: 0 !important; background: transparent !important; padding: 0; vertical-align: top; }
             .certificate-qr-cell { width: 25mm; }
