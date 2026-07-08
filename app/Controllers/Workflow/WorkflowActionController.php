@@ -28,6 +28,7 @@ use App\Services\AuditDurationService;
 use App\Services\AuditReportNarrativeService;
 use App\Services\CertificationApplicationDefaults;
 use App\Services\ClauseContentPoolService;
+use App\Services\CommercialTermsService;
 use App\Services\SmartAuditContentEngine;
 use App\Services\NotificationService;
 use App\Services\WorkflowRoleService;
@@ -67,6 +68,7 @@ class WorkflowActionController extends BaseController
     private WorkflowRoleService $workflowRoles;
     private NotificationService $notifications;
     private CertificationApplicationDefaults $applicationDefaults;
+    private CommercialTermsService $commercialTerms;
     private BaseConnection $db;
 
     public function __construct()
@@ -98,6 +100,7 @@ class WorkflowActionController extends BaseController
         $this->contentEngine = new SmartAuditContentEngine($this->contentPool, $this->narratives);
         $this->notifications = new NotificationService();
         $this->applicationDefaults = new CertificationApplicationDefaults();
+        $this->commercialTerms = new CommercialTermsService();
         $this->db = Database::connect();
         $this->workflowRoles = new WorkflowRoleService($this->db);
     }
@@ -286,7 +289,7 @@ class WorkflowActionController extends BaseController
             'vat_amount' => $vatAmount,
             'grand_total' => round($subtotal + $vatAmount, 2),
             'currency' => strtoupper((string) $this->request->getPost('currency')),
-            'proposal_payload' => json_encode($this->proposalPayloadFromRequest(), JSON_THROW_ON_ERROR),
+            'proposal_payload' => json_encode($this->commercialTerms->applyControlledText($this->proposalPayloadFromRequest()), JSON_THROW_ON_ERROR),
             'created_by' => (int) session()->get('user_id'),
             'approved_by' => in_array($status, ['accepted', 'approved'], true) ? (int) session()->get('user_id') : null,
             'approved_at' => in_array($status, ['accepted', 'approved'], true) ? date('Y-m-d H:i:s') : null,
@@ -367,7 +370,7 @@ class WorkflowActionController extends BaseController
             'status' => (string) $this->request->getPost('status'),
             'signed_at' => $this->dateTimeOrNull('signed_at'),
             'signed_by_name' => $this->nullableText('signed_by_name'),
-            'contract_payload' => json_encode($this->contractPayloadFromRequest(), JSON_THROW_ON_ERROR),
+            'contract_payload' => json_encode($this->commercialTerms->applyControlledText($this->contractPayloadFromRequest()), JSON_THROW_ON_ERROR),
             'qsi_signatory_name' => $this->nullableText('qsi_signatory_name'),
             'qsi_signatory_date' => $this->dateOrNull('qsi_signatory_date'),
             'client_signatory_name' => $this->nullableText('client_signatory_name'),
@@ -3492,7 +3495,7 @@ class WorkflowActionController extends BaseController
         $duration = $this->durationService->calculateApplicationReview($client, $standards, $reviewPayload);
         $standardsText = implode(', ', array_keys($duration['standard_days'] ?? []));
 
-        return $this->mergeNonEmptyPayload([
+        return $this->commercialTerms->applyControlledText($this->mergeNonEmptyPayload([
             'legal_documentation' => '-',
             'management_representative' => $client['contact_person'] ?? '',
             'phone_fax' => trim((string) ($client['phone'] ?? '')),
@@ -3507,7 +3510,7 @@ class WorkflowActionController extends BaseController
             'surveillance1_days' => number_format((float) ($reviewPayload['surveillance1_days'] ?? $duration['surveillance1_days'] ?? 1.00), 2, '.', ''),
             'surveillance2_days' => number_format((float) ($reviewPayload['surveillance2_days'] ?? $duration['surveillance2_days'] ?? 1.00), 2, '.', ''),
             'recertification_days' => number_format((float) ($reviewPayload['recertification_days'] ?? $duration['recertification_days'] ?? $duration['stage2_days']), 2, '.', ''),
-            'certification_process_obligations' => $this->defaultCertificationProcessText(),
+            'certification_process_obligations' => $this->commercialTerms->text('certification_process_obligations'),
             'payment_terms' => "Certification Audit Fee:\n50% payable upon signing the contract.\n50% payable after receiving the draft copy of the certificate.\n\nSurveillance Audit Fee:\n100% payable one month in advance of the scheduled audit.\n\nAdditional Fees:\nAll additional fees must be paid in advance.",
             'certification_audit_includes' => "Audit planning and preparation.\nReview of management system documentation.\nExecution of the audit, including audit reporting and related documentation.\nIssuance of the certificate, including one copy in English.",
             'surveillance_audit_includes' => "Audit planning and preparation.\nReview of management system documentation.\nConducting the audit, drafting the audit report, and related documentation.\nReissuing the certificate if required due to certification changes.",
@@ -3515,14 +3518,14 @@ class WorkflowActionController extends BaseController
             'certificate_reissue_fee' => '150 USD',
             'extraordinary_audit_1_fee' => '850 USD',
             'extraordinary_audit_2_fee' => '925 USD',
-            'vat_invoice_terms' => "VAT will be applied according to applicable regulations. Invoices may be sent electronically by email.\nIf the client discontinues certification during the certification cycle, the remaining cycle balance must be settled before cancellation.",
-            'stage1_activity' => 'Stage 1 focuses on reviewing documentation, internal audit, management review, site conditions and readiness for Stage 2.',
-            'stage2_activity' => 'Stage 2 evaluates implementation and effectiveness of the management system and verifies compliance with applicable standard requirements.',
-            'certificate_issuance' => 'A Certificate of Registration valid for three years will be issued after successful audit completion and certification decision.',
-            'surveillance_activity' => 'Surveillance audits review changes, internal audit, management review, objectives, operational control, legal compliance, previous findings and use of certification marks.',
+            'vat_invoice_terms' => $this->commercialTerms->text('vat_invoice_terms'),
+            'stage1_activity' => $this->commercialTerms->text('stage1_activity'),
+            'stage2_activity' => $this->commercialTerms->text('stage2_activity'),
+            'certificate_issuance' => $this->commercialTerms->text('certificate_issuance'),
+            'surveillance_activity' => $this->commercialTerms->text('surveillance_activity'),
             'audit_time_reference' => 'Audit time is calculated using MD-style rules aligned with ISO/IEC 17021-1 and applicable IAF mandatory documents, considering effective personnel, standards, risk, shifts, sites and reductions.',
             'additional_services' => '',
-        ], $stored);
+        ], $stored));
     }
 
     private function mergeNonEmptyPayload(array $defaults, array $stored): array
@@ -3577,7 +3580,7 @@ class WorkflowActionController extends BaseController
         $proposalPayload = json_decode((string) ($proposal['proposal_payload'] ?? ''), true) ?: [];
         $stored = json_decode((string) ($contract['contract_payload'] ?? ''), true) ?: [];
 
-        return array_merge([
+        return $this->commercialTerms->applyControlledText(array_merge([
             'legal_documentation' => $proposalPayload['legal_documentation'] ?? '-',
             'management_representative' => $proposalPayload['management_representative'] ?? ($client['contact_person'] ?? ''),
             'phone_fax' => $proposalPayload['phone_fax'] ?? ($client['phone'] ?? ''),
@@ -3591,7 +3594,7 @@ class WorkflowActionController extends BaseController
             'surveillance1_days' => $proposalPayload['surveillance1_days'] ?? '',
             'surveillance2_days' => $proposalPayload['surveillance2_days'] ?? '',
             'recertification_days' => $proposalPayload['recertification_days'] ?? '',
-            'certification_process_obligations' => $proposalPayload['certification_process_obligations'] ?? $this->defaultCertificationProcessText(),
+            'certification_process_obligations' => $proposalPayload['certification_process_obligations'] ?? $this->commercialTerms->text('certification_process_obligations'),
             'payment_terms' => $proposalPayload['payment_terms'] ?? '',
             'certification_audit_includes' => $proposalPayload['certification_audit_includes'] ?? '',
             'surveillance_audit_includes' => $proposalPayload['surveillance_audit_includes'] ?? '',
@@ -3605,9 +3608,9 @@ class WorkflowActionController extends BaseController
             'certificate_issuance' => $proposalPayload['certificate_issuance'] ?? '',
             'surveillance_activity' => $proposalPayload['surveillance_activity'] ?? '',
             'audit_time_reference' => $proposalPayload['audit_time_reference'] ?? '',
-            'important_note' => 'By signing this agreement, the Client confirms acceptance of the certification agreement, rules for certification, business conditions, and the requirement to provide necessary information for the certification process. Changes during the certification period may require contract amendment.',
+            'important_note' => $this->commercialTerms->text('important_note'),
             'contact_line' => 'QSI_CERT TEAM +966569009021 info@qsi-cert.com',
-        ], $stored);
+        ], $stored));
     }
 
     private function contractPayloadFromRequest(): array

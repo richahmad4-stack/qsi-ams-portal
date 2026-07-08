@@ -21,6 +21,7 @@ class DocumentGeneratorService
     private GeneratedDocumentModel $documents;
     private AuditReportNarrativeService $narratives;
     private CertificationApplicationDefaults $applicationDefaults;
+    private CommercialTermsService $commercialTerms;
 
     public function __construct()
     {
@@ -28,6 +29,7 @@ class DocumentGeneratorService
         $this->documents = new GeneratedDocumentModel();
         $this->narratives = new AuditReportNarrativeService();
         $this->applicationDefaults = new CertificationApplicationDefaults();
+        $this->commercialTerms = new CommercialTermsService();
     }
 
     public function generateClientDocument(int $tenantId, int $clientId, string $documentKey, int $userId): array
@@ -815,12 +817,11 @@ class DocumentGeneratorService
         return '<section class="commercial-cover">'
             . '<div class="cover-accent"></div>'
             . '<div class="cover-logo">' . $this->logoHtml('cover-logo-img') . '</div>'
-            . '<div class="cover-document">Controlled Certification Body Document</div>'
             . '<h1>' . esc($documentType) . '</h1>'
             . '<div class="cover-rule"></div>'
             . '<div class="cover-label">Prepared for</div>'
             . '<div class="cover-client">' . esc((string) ($client['company'] ?? '')) . '</div>'
-            . '<div class="cover-scope">' . nl2br(esc((string) ($client['scope'] ?? ''))) . '</div>'
+            . '<div class="cover-scope"><div class="cover-scope-label">Certification scope</div><div>' . nl2br(esc((string) ($client['scope'] ?? ''))) . '</div></div>'
             . '<table class="cover-meta"><tbody>' . $metaRows . '</tbody></table>'
             . '<div class="cover-issued">Prepared ' . esc(date('Y-m-d')) . '</div>'
             . '</section>';
@@ -1683,86 +1684,17 @@ class DocumentGeneratorService
 
     private function commercialPayloadWithControlledText(array $payload): array
     {
-        foreach ([
-            'certification_process_obligations',
-            'vat_invoice_terms',
-            'stage1_activity',
-            'stage2_activity',
-            'certificate_issuance',
-            'surveillance_activity',
-            'important_note',
-        ] as $key) {
-            if ($this->shouldUseOfficialCommercialText($key, (string) ($payload[$key] ?? ''))) {
-                $payload[$key] = $this->officialCommercialText($key);
-            }
-        }
-
-        if ($this->shouldUseOfficialCommercialText('contact_line', (string) ($payload['contact_line'] ?? ''))) {
-            $payload['contact_line'] = 'QSI_CERT TEAM +966569009021 info@qsi-cert.com';
-        }
-
-        return $payload;
+        return $this->commercialTerms->applyControlledText($payload);
     }
 
     private function shouldUseOfficialCommercialText(string $key, string $value): bool
     {
-        $value = trim($value);
-        if ($value === '') {
-            return true;
-        }
-
-        $oldSystemPrefixes = [
-            'certification_process_obligations' => [
-                'QSI-Cert delivers certification services',
-            ],
-            'vat_invoice_terms' => [
-                'VAT will be applied according to applicable regulations.',
-            ],
-            'stage1_activity' => [
-                'Stage 1 verifies documentation',
-                'Stage 1 focuses on reviewing documentation',
-            ],
-            'stage2_activity' => [
-                'Stage 2 verifies implementation',
-                'Stage 2 evaluates implementation',
-            ],
-            'certificate_issuance' => [
-                'Certificate issue is subject',
-                'A Certificate of Registration valid for three years',
-            ],
-            'surveillance_activity' => [
-                'Surveillance audits verify continued conformity',
-                'Surveillance audits review changes',
-            ],
-            'important_note' => [
-                'By signing this agreement, the Client confirms acceptance',
-            ],
-            'contact_line' => [
-                'QSI_CERT TEAM',
-            ],
-        ];
-
-        foreach ($oldSystemPrefixes[$key] ?? [] as $prefix) {
-            if (str_starts_with($value, $prefix)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->commercialTerms->shouldUseOfficialText($key, $value);
     }
 
     private function officialCommercialText(string $key): string
     {
-        return match ($key) {
-            'certification_process_obligations' => "At QSI-Cert, we adhere to accreditation requirements and the applicable standards to ensure compliance within the scope of certification. Compliance is verified through regular follow-up audits, which are essential for maintaining the validity of the certification. The certificate's validity is retained only when follow-up audits are successfully completed.\n\nQSI-Cert ensures due diligence in training and managing its auditors, with a strong emphasis on confidentiality and privacy. Measures are in place to safeguard all data and documentation collected during audits. Experienced auditors with relevant expertise are appointed to evaluate critical facts and assess their significance and impact on the certified organization.\n\nThe certification process involves a thorough review of your management system documentation and an on-site audit conducted at your registered office and relevant premises. If compliance with all applicable requirements is confirmed during the audit, QSI-Cert will issue certificates of international validity for the defined certification period.\n\nCertified organizations will have the right to use QSI-Cert's certification logo on promotional materials and printed documents, as per the guidelines specified in Business Condition (F36).\n\nQSI-Cert is committed to upholding the highest standards in its certification services, ensuring trust, transparency, and professional integrity.\n\nThe certified client agrees to the following requirements in relation to Unannounced Visits conducted by IAS as per AC477 or SAAC requirements:\n\nAccess to Site and Records\nThe certified client shall permit IAS assessors full access to the facility, including all areas relevant to the certified scope, as well as access to the management system documentation and all associated records during unannounced visits.\n\nAvailability of Last Audit Report\nThe certified client shall maintain and make readily available a copy of the most recent audit report issued by the certification body for review by IAS assessors upon request.\n\nEvidence of Certification Process\nThe certified client shall maintain and provide demonstrable evidence of effective implementation of the certification process, including but not limited to management review records, internal audit reports, previous audit reports, corrective actions and closure of nonconformities, and any other records required to demonstrate ongoing compliance with certification requirements.",
-            'vat_invoice_terms' => "In accordance with the country's VAT regulations, VAT (%) will be applicable and payable by any taxable person to whom the services are provided. The audit price is the final price, inclusive of VAT. The taxable person and their business registration number must be recognized and registered in the respective country. Invoices will be sent electronically via email.\n\nIf the client decides to discontinue the certification during the certification cycle, the balance amount for the remaining contract (cycle) must be paid prior to cancellation.",
-            'stage1_activity' => "The Stage 1 audit focuses on reviewing and evaluating the organization's documentation, internal audit processes, and management review procedures. It also includes an assessment of the organization's location and site-specific conditions to determine its readiness for Stage 2. During this audit, QSI's audit team will assess the organization's understanding of the key requirements of the applicable standard, specifically regarding the performance of significant processes, objectives, and operations within the management system. The team will gather necessary information on the scope of the management system, processes, locations, and any related statutory and regulatory compliance requirements.",
-            'stage2_activity' => "Upon successful completion of Stage 1, the Stage 2 audit will evaluate the implementation and effectiveness of the organization's management system. This audit will focus on gathering evidence to verify the organization's compliance with all requirements of the applicable management system standard. The performance monitoring system, including key objectives, targets, and the organization's compliance with legal and other applicable requirements, will also be reviewed. The Stage 2 audit must be completed within 90 days from the end date of Stage 1. If this period lapses, the Stage 1 audit will need to be repeated.",
-            'certificate_issuance' => 'A Certificate of Registration with a validity of three (3) years will be issued upon the successful completion of both Stage 1 and Stage 2 audits.',
-            'surveillance_activity' => "During surveillance audits, QSI's audit team will assess any changes to the organization's management system, internal audit consistency, management review procedures, achievement of objectives, operational control, and ongoing compliance with legal and other applicable requirements. The team will also review the organization's response to audit findings from previous audits and verify adherence to the rules for using certification marks.\n\nThe first surveillance audit following initial certification must occur within 12 months from the certification decision date unless otherwise required by the specific certification scheme.",
-            'important_note' => "By signing this agreement, you confirm your acceptance of the terms and conditions outlined in the following annexures:\n- F_27 Annexure 01 - Certification Agreement\n- F_27 Annexure 02 - Rules for Certification\n\nAdditionally, by signing this offer, the Client commits to providing all necessary information for the certification process. Should any changes occur during the certification period - such as modifications to the number of employees, branch offices, or significant alterations in the scope of certification - this offer must be updated via an amendment to the contract.\n\nBy signing this offer, you also acknowledge and accept the Business Conditions for subsequent Follow-up/Surveillance audits of the certified management system, as detailed in the attached Business Conditions (F_27).\n\nFor any clarification regarding the terms of this offer, please feel free to contact us at:",
-            default => '',
-        };
+        return $this->commercialTerms->text($key);
     }
 
     private function commercialAcceptanceTable(string $qsiName, string $qsiDate, string $clientName, string $clientDate, bool $confirmed): string
@@ -4016,21 +3948,21 @@ class DocumentGeneratorService
             @page:first { margin: 0; }
             body { font-size: 10.2px; margin: 0; }
             .commercial-cover { page-break-after: always; width: 210mm; height: 297mm; position: relative; padding: 0; background: #ffffff; overflow: hidden; }
-            .commercial-cover:before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 29mm; background: #0b3558; z-index: 0; }
-            .commercial-cover:after { content: ""; position: absolute; right: -48mm; top: -30mm; width: 116mm; height: 116mm; border: 15mm solid #eaf2f8; border-radius: 50%; z-index: 0; }
-            .cover-accent { position: absolute; left: 29mm; top: 0; right: 0; height: 5mm; background: #d7a500; z-index: 1; }
-            .cover-logo { position: absolute; z-index: 2; left: 42mm; top: 28mm; }
-            .cover-logo-img { display: block; width: 46mm; max-height: 24mm; object-fit: contain; }
-            .cover-document { position: absolute; z-index: 2; left: 42mm; top: 66mm; color: #d71920; font-weight: 800; letter-spacing: 2.2px; text-transform: uppercase; font-size: 9.5px; }
-            .commercial-cover h1 { position: absolute; z-index: 2; left: 42mm; top: 82mm; width: 128mm; color: #0b3558; font-size: 35px; line-height: 1.08; margin: 0; font-weight: 800; }
-            .cover-rule { position: absolute; z-index: 2; left: 42mm; top: 111mm; width: 55mm; height: 2px; background: #d7a500; }
-            .cover-label { position: absolute; z-index: 2; left: 42mm; top: 130mm; color: #64748b; text-transform: uppercase; letter-spacing: .9px; font-size: 9px; }
-            .cover-client { position: absolute; z-index: 2; left: 42mm; top: 140mm; width: 130mm; color: #0b3558; font-size: 24px; font-weight: 800; line-height: 1.18; }
-            .cover-scope { position: absolute; z-index: 2; left: 42mm; top: 164mm; width: 130mm; color: #243442; font-size: 10.4px; line-height: 1.5; }
-            .cover-meta { position: absolute; z-index: 2; left: 42mm; bottom: 42mm; width: 96mm; table-layout: fixed; margin: 0; }
+            .commercial-cover:before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 15mm; background: #0b3558; z-index: 0; }
+            .commercial-cover:after { content: ""; position: absolute; right: -44mm; top: -34mm; width: 118mm; height: 118mm; border: 12mm solid #eef5fa; border-radius: 50%; z-index: 0; }
+            .cover-accent { position: absolute; left: 15mm; top: 0; width: 78mm; height: 1.6mm; background: #d7a500; z-index: 1; }
+            .cover-logo { position: absolute; z-index: 2; left: 30mm; top: 24mm; }
+            .cover-logo-img { display: block; width: 44mm; max-height: 23mm; object-fit: contain; }
+            .commercial-cover h1 { position: absolute; z-index: 2; left: 30mm; top: 61mm; width: 140mm; color: #0b3558; font-size: 35px; line-height: 1.08; margin: 0; font-weight: 800; }
+            .cover-rule { position: absolute; z-index: 2; left: 30mm; top: 91mm; width: 46mm; height: 1.6px; background: #d7a500; }
+            .cover-label { position: absolute; z-index: 2; left: 30mm; top: 108mm; color: #64748b; text-transform: uppercase; letter-spacing: .9px; font-size: 8.8px; }
+            .cover-client { position: absolute; z-index: 2; left: 30mm; top: 119mm; width: 145mm; color: #0b3558; font-size: 24px; font-weight: 800; line-height: 1.18; }
+            .cover-scope { position: absolute; z-index: 2; left: 30mm; top: 148mm; width: 145mm; background: #f6f9fc; border-left: 3px solid #d7a500; padding: 12px 14px; color: #243442; font-size: 10.5px; line-height: 1.5; }
+            .cover-scope-label { margin-bottom: 5px; color: #64748b; text-transform: uppercase; letter-spacing: .8px; font-size: 8.3px; font-weight: 800; }
+            .cover-meta { position: absolute; z-index: 2; left: 30mm; top: 208mm; width: 106mm; table-layout: fixed; margin: 0; }
             .cover-meta th { width: 40%; background: #0b3558; color: #fff; border-color: #0b3558; padding: 7px 9px; }
             .cover-meta td { background: #fff; border-color: #b8cad8; padding: 7px 9px; font-weight: 700; color: #123d70; }
-            .cover-issued { position: absolute; z-index: 2; right: 22mm; bottom: 24mm; color: #64748b; font-size: 9px; }
+            .cover-issued { position: absolute; z-index: 2; right: 28mm; top: 231mm; color: #64748b; font-size: 9px; }
             .commercial-body { page-break-before: auto; }
             .commercial-body h2:first-child { margin-top: 0; }
             .commercial-body .client { margin-bottom: 18px; }

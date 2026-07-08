@@ -76,15 +76,20 @@ class WorkflowGateWiringTest extends TestCase
     public function testProposalAndContractUseControlledCommercialClosingBlocks(): void
     {
         $documentGenerator = file_get_contents(__DIR__ . '/../../app/Services/DocumentGeneratorService.php') ?: '';
+        $controller = file_get_contents(__DIR__ . '/../../app/Controllers/Workflow/WorkflowActionController.php') ?: '';
+        $commercialTerms = file_get_contents(__DIR__ . '/../../app/Services/CommercialTermsService.php') ?: '';
 
-        self::assertStringContainsString('At QSI-Cert, we adhere to accreditation requirements', $documentGenerator);
-        self::assertStringContainsString('VAT (%) will be applicable', $documentGenerator);
-        self::assertStringContainsString('The Stage 1 audit focuses on reviewing and evaluating', $documentGenerator);
-        self::assertStringContainsString('The Stage 2 audit must be completed within 90 days', $documentGenerator);
+        self::assertStringContainsString('At QSI-Cert, we adhere to accreditation requirements', $commercialTerms);
+        self::assertStringContainsString('VAT (%) will be applicable', $commercialTerms);
+        self::assertStringContainsString('The Stage 1 audit focuses on reviewing and evaluating', $commercialTerms);
+        self::assertStringContainsString('The Stage 2 audit must be completed within 90 days', $commercialTerms);
+        self::assertStringContainsString('commercialTerms->applyControlledText', $documentGenerator);
+        self::assertStringContainsString('commercialTerms->applyControlledText', $controller);
         self::assertStringContainsString('commercialAcceptanceTable', $documentGenerator);
         self::assertStringContainsString('commercialImportantNoteHtml', $documentGenerator);
         self::assertStringContainsString('commercialCoverHtml', $documentGenerator);
         self::assertStringContainsString('qsi-stamp-ksa.png', $documentGenerator);
         self::assertStringContainsString('commercialObligationsHtml', $documentGenerator);
+        self::assertStringNotContainsString('Controlled Certification Body Document', $documentGenerator);
     }
 }
