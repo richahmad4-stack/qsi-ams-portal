@@ -3369,12 +3369,35 @@ class WorkflowActionController extends BaseController
         if ($standardText !== '') {
             $payload['standards_text'] = $standardText;
         }
+        $applicationHaccpPlans = $this->applicationAnswerByKey((int) ($application['id'] ?? 0), 'haccp_plans_processes');
+        if ($applicationHaccpPlans !== null) {
+            $payload['haccp_plans_processes'] = $applicationHaccpPlans;
+        }
         $payload = $this->applyDurationToReviewPayload(
             $payload,
             $this->durationService->calculateApplicationReview($client, $standards, $payload)
         );
 
         return $payload;
+    }
+
+    private function applicationAnswerByKey(int $applicationId, string $questionKey): ?string
+    {
+        if ($applicationId <= 0 || ! $this->db->tableExists('application_answers')) {
+            return null;
+        }
+
+        $row = $this->db->table('application_answers')
+            ->select('application_answers.answer_text')
+            ->join('application_questions', 'application_questions.id = application_answers.application_question_id')
+            ->where('application_answers.application_id', $applicationId)
+            ->where('application_questions.question_key', $questionKey)
+            ->get(1)
+            ->getRowArray();
+
+        $answer = trim((string) ($row['answer_text'] ?? ''));
+
+        return $answer === '' ? null : $answer;
     }
 
     private function applyDurationToReviewPayload(array $payload, array $duration): array

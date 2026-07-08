@@ -922,8 +922,33 @@ class DocumentGeneratorService
                 $payload[$key] = $value;
             }
         }
+        $applicationHaccpPlans = $this->latestApplicationAnswerByKey((int) ($review['client_id'] ?? $client['id'] ?? 0), 'haccp_plans_processes');
+        if ($applicationHaccpPlans !== null) {
+            $payload['haccp_plans_processes'] = $applicationHaccpPlans;
+        }
 
         return $payload;
+    }
+
+    private function latestApplicationAnswerByKey(int $clientId, string $questionKey): ?string
+    {
+        if ($clientId <= 0 || ! $this->db->tableExists('certification_applications')) {
+            return null;
+        }
+
+        $row = $this->db->table('certification_applications')
+            ->select('application_answers.answer_text')
+            ->join('application_questions', 'application_questions.application_id = certification_applications.id')
+            ->join('application_answers', 'application_answers.application_question_id = application_questions.id', 'left')
+            ->where('certification_applications.client_id', $clientId)
+            ->where('application_questions.question_key', $questionKey)
+            ->orderBy('certification_applications.id', 'DESC')
+            ->get(1)
+            ->getRowArray();
+
+        $answer = trim((string) ($row['answer_text'] ?? ''));
+
+        return $answer === '' ? null : $answer;
     }
 
     private function applicationReviewSections(array $client, array $data): array
