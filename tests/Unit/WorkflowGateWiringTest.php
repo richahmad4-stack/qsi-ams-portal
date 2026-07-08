@@ -63,4 +63,25 @@ class WorkflowGateWiringTest extends TestCase
         self::assertStringNotContainsString('Legacy clients', $dashboard);
         self::assertFileDoesNotExist(__DIR__ . '/../../app/Controllers/Masters/LegacyImportController.php');
     }
+
+    public function testApplicationReviewPdfUsesPageFooterOnly(): void
+    {
+        $documentGenerator = file_get_contents(__DIR__ . '/../../app/Services/DocumentGeneratorService.php') ?: '';
+
+        self::assertStringContainsString('footer class="f28-page-footer"', $documentGenerator);
+        self::assertStringContainsString('<span class="page-number">Page </span>', $documentGenerator);
+        self::assertStringNotContainsString('<footer>Document No: \' . esc($review[', $documentGenerator);
+    }
+
+    public function testProposalAndContractUseControlledCommercialClosingBlocks(): void
+    {
+        $documentGenerator = file_get_contents(__DIR__ . '/../../app/Services/DocumentGeneratorService.php') ?: '';
+
+        self::assertStringContainsString('At QSI-Cert, we adhere to accreditation requirements', $documentGenerator);
+        self::assertStringContainsString('VAT (%) will be applicable', $documentGenerator);
+        self::assertStringContainsString('The Stage 1 audit focuses on reviewing and evaluating', $documentGenerator);
+        self::assertStringContainsString('The Stage 2 audit must be completed within 90 days', $documentGenerator);
+        self::assertStringContainsString('commercialAcceptanceTable', $documentGenerator);
+        self::assertStringContainsString('commercialImportantNoteHtml', $documentGenerator);
+    }
 }

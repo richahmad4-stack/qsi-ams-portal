@@ -750,6 +750,15 @@ class DocumentGeneratorService
                 'Surveillance Audit' => $payload['surveillance_activity'] ?? '',
                 'Audit Time Reference' => $payload['audit_time_reference'] ?? '',
             ])],
+            ['Acceptance and Authorization', $this->commercialAcceptanceTable(
+                $preparedBy !== '' ? $preparedBy : 'Engr. Mohammad Ahmad',
+                substr((string) ($proposal['created_at'] ?? $proposal['proposal_date'] ?? date('Y-m-d')), 0, 10),
+                $acceptedByClient !== '' ? $acceptedByClient : (string) ($client['company'] ?? 'Client Authorized Representative'),
+                substr($acceptedAt !== '' ? $acceptedAt : (string) ($proposal['approved_at'] ?? ''), 0, 10),
+                in_array((string) ($proposal['status'] ?? ''), ['accepted', 'approved'], true)
+            )],
+            ['Important Note', $this->commercialImportantNoteHtml($payload)],
+            ['Certification Assessment Note', '<p>Following the audit and based on the auditor&apos;s recommendations, QSI-Cert will conduct the certification assessment. If the QSI assessor confirms that all requirements, accreditation conditions, and contractual terms have been met, the corresponding certificates will be issued.</p>'],
         ];
     }
 
@@ -778,7 +787,7 @@ class DocumentGeneratorService
             'surveillance1_days' => number_format((float) ($reviewPayload['surveillance1_days'] ?? $duration['surveillance1_days'] ?? 1.00), 2),
             'surveillance2_days' => number_format((float) ($reviewPayload['surveillance2_days'] ?? $duration['surveillance2_days'] ?? 1.00), 2),
             'recertification_days' => number_format((float) ($reviewPayload['recertification_days'] ?? $duration['recertification_days'] ?? $duration['stage2_days']), 2),
-            'certification_process_obligations' => 'QSI-Cert delivers certification services in accordance with accreditation requirements and applicable standards. The client shall provide accurate information, maintain compliance with certification requirements, allow access for audit activities, and notify QSI-Cert of significant changes affecting certification.',
+            'certification_process_obligations' => $this->officialCommercialText('certification_process_obligations'),
             'payment_terms' => "Certification Audit Fee:\n50% payable upon signing the contract.\n50% payable before certificate issue.\n\nSurveillance Audit Fee:\n100% payable one month in advance of the scheduled surveillance audit.\n\nAdditional Fees:\nAdditional services, extra audit days, travel and accommodation are payable as agreed.",
             'certification_audit_includes' => "Audit planning and preparation.\nStage 1 document/readiness review.\nStage 2 on-site implementation audit.\nAudit reporting and technical review.\nCertification decision processing.\nCertificate issue after approval.",
             'surveillance_audit_includes' => "Audit planning and preparation.\nReview of changes since previous audit.\nSurveillance audit execution and reporting.\nFollow-up of previous findings and certification conditions.\nTechnical review and maintain-certification decision where applicable.",
@@ -786,19 +795,21 @@ class DocumentGeneratorService
             'certificate_reissue_fee' => '150 USD',
             'extraordinary_audit_1_fee' => '850 USD',
             'extraordinary_audit_2_fee' => '925 USD',
-            'vat_invoice_terms' => "VAT will be applied according to applicable regulations. Invoices may be sent electronically by email.\nThe proposal is valid until the stated validity date and is subject to changes in scope, sites, employees, risk, standards or applicable requirements.",
-            'stage1_activity' => 'Stage 1 verifies documentation, scope, site readiness, internal audit, management review, legal/regulatory awareness and preparedness for Stage 2.',
-            'stage2_activity' => 'Stage 2 verifies implementation and effectiveness of the management system against the applicable standard and certification scope.',
-            'certificate_issuance' => 'Certificate issue is subject to successful audit completion, closure of applicable nonconformities, technical review, certification decision and final approval.',
-            'surveillance_activity' => 'Surveillance audits verify continued conformity, changes, previous findings, internal audit, management review, objectives, operational controls and use of certification marks.',
+            'vat_invoice_terms' => $this->officialCommercialText('vat_invoice_terms'),
+            'stage1_activity' => $this->officialCommercialText('stage1_activity'),
+            'stage2_activity' => $this->officialCommercialText('stage2_activity'),
+            'certificate_issuance' => $this->officialCommercialText('certificate_issuance'),
+            'surveillance_activity' => $this->officialCommercialText('surveillance_activity'),
             'audit_time_reference' => 'Audit time is calculated from the application review considering selected standard(s), effective personnel, HACCP plans/processes where applicable, sites, shifts, risk and applicable IAF/ISO rules.',
+            'important_note' => $this->officialCommercialText('important_note'),
+            'contact_line' => 'QSI_CERT TEAM +966569009021 info@qsi-cert.com',
         ];
 
         if (($stored['total_audit_days'] ?? '') === '' && ($stored['days_allotted'] ?? '') !== '') {
             $stored['total_audit_days'] = $stored['days_allotted'];
         }
 
-        return $this->mergeNonEmpty($defaults, $stored);
+        return $this->commercialPayloadWithControlledText($this->mergeNonEmpty($defaults, $stored));
     }
 
     private function discardPartialDurationSet(array $payload): array
@@ -1190,7 +1201,7 @@ class DocumentGeneratorService
 
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->applicationReviewCss() . '</style></head><body>'
             . $body
-            . '<footer>Document No: ' . esc($review['document_number'] ?? 'F 28') . ' | Revision No: ' . esc($review['revision_number'] ?? '4') . ' | Issue No: ' . esc($review['issue_number'] ?? '2') . ' | Date: ' . esc($review['document_date'] ?? '2025-02-01') . '</footer>'
+            . '<footer class="f28-page-footer"><span class="page-number">Page </span></footer>'
             . '</body></html>';
     }
 
@@ -1541,7 +1552,7 @@ class DocumentGeneratorService
             'surveillance1_days' => number_format((float) ($reviewPayload['surveillance1_days'] ?? $duration['surveillance1_days'] ?? 1.00), 2),
             'surveillance2_days' => number_format((float) ($reviewPayload['surveillance2_days'] ?? $duration['surveillance2_days'] ?? 1.00), 2),
             'recertification_days' => number_format((float) ($reviewPayload['recertification_days'] ?? $duration['recertification_days'] ?? $duration['stage2_days']), 2),
-            'certification_process_obligations' => 'QSI-Cert delivers certification services in accordance with accreditation requirements and applicable standards. Compliance is verified through planned audits, technical review, certification decision and surveillance activities.',
+            'certification_process_obligations' => $this->officialCommercialText('certification_process_obligations'),
             'payment_terms' => "Certification Audit Fee:\n50% payable upon signing the contract.\n50% payable after receiving the draft copy of the certificate.\n\nSurveillance Audit Fee:\n100% payable one month in advance of the scheduled audit.",
             'certification_audit_includes' => "Audit planning and preparation.\nReview of management system documentation.\nStage 1 and Stage 2 audit execution.\nAudit reporting, technical review and certification decision.\nIssuance of the certificate after approval.",
             'surveillance_audit_includes' => "Audit planning and preparation.\nReview of changes since previous audit.\nSurveillance audit execution and reporting.\nFollow-up of previous findings and certification conditions.",
@@ -1549,13 +1560,13 @@ class DocumentGeneratorService
             'certificate_reissue_fee' => '150 USD',
             'extraordinary_audit_1_fee' => '850 USD',
             'extraordinary_audit_2_fee' => '925 USD',
-            'vat_invoice_terms' => 'VAT will be applied according to applicable regulations. Invoices may be sent electronically by email.',
-            'stage1_activity' => 'Stage 1 focuses on reviewing documentation, internal audit, management review, site conditions and readiness for Stage 2.',
-            'stage2_activity' => 'Stage 2 evaluates implementation and effectiveness of the management system and verifies compliance with applicable standard requirements.',
-            'certificate_issuance' => 'A Certificate of Registration valid for three years will be issued after successful audit completion, nonconformity closure where applicable, technical review, certification decision and final approval.',
-            'surveillance_activity' => 'Surveillance audits review changes, internal audit, management review, objectives, operational control, legal compliance, previous findings and use of certification marks.',
+            'vat_invoice_terms' => $this->officialCommercialText('vat_invoice_terms'),
+            'stage1_activity' => $this->officialCommercialText('stage1_activity'),
+            'stage2_activity' => $this->officialCommercialText('stage2_activity'),
+            'certificate_issuance' => $this->officialCommercialText('certificate_issuance'),
+            'surveillance_activity' => $this->officialCommercialText('surveillance_activity'),
             'audit_time_reference' => 'Audit time is calculated from the application review considering selected standard(s), effective personnel, HACCP plans/processes where applicable, sites, shifts, risk and applicable IAF/ISO rules.',
-            'important_note' => 'By signing this agreement, the Client confirms acceptance of the certification agreement, rules for certification, business conditions, and the requirement to provide necessary information for the certification process.',
+            'important_note' => $this->officialCommercialText('important_note'),
             'contact_line' => 'QSI_CERT TEAM +966569009021 info@qsi-cert.com',
         ];
 
@@ -1567,7 +1578,144 @@ class DocumentGeneratorService
             $contractPayload['total_audit_days'] = $contractPayload['days_allotted'];
         }
 
-        return $this->mergeNonEmpty($this->mergeNonEmpty($defaults, $proposalPayload), $contractPayload);
+        return $this->commercialPayloadWithControlledText($this->mergeNonEmpty($this->mergeNonEmpty($defaults, $proposalPayload), $contractPayload));
+    }
+
+    private function commercialPayloadWithControlledText(array $payload): array
+    {
+        foreach ([
+            'certification_process_obligations',
+            'vat_invoice_terms',
+            'stage1_activity',
+            'stage2_activity',
+            'certificate_issuance',
+            'surveillance_activity',
+            'important_note',
+        ] as $key) {
+            if ($this->shouldUseOfficialCommercialText($key, (string) ($payload[$key] ?? ''))) {
+                $payload[$key] = $this->officialCommercialText($key);
+            }
+        }
+
+        if ($this->shouldUseOfficialCommercialText('contact_line', (string) ($payload['contact_line'] ?? ''))) {
+            $payload['contact_line'] = 'QSI_CERT TEAM +966569009021 info@qsi-cert.com';
+        }
+
+        return $payload;
+    }
+
+    private function shouldUseOfficialCommercialText(string $key, string $value): bool
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return true;
+        }
+
+        $oldSystemPrefixes = [
+            'certification_process_obligations' => [
+                'QSI-Cert delivers certification services',
+            ],
+            'vat_invoice_terms' => [
+                'VAT will be applied according to applicable regulations.',
+            ],
+            'stage1_activity' => [
+                'Stage 1 verifies documentation',
+                'Stage 1 focuses on reviewing documentation',
+            ],
+            'stage2_activity' => [
+                'Stage 2 verifies implementation',
+                'Stage 2 evaluates implementation',
+            ],
+            'certificate_issuance' => [
+                'Certificate issue is subject',
+                'A Certificate of Registration valid for three years',
+            ],
+            'surveillance_activity' => [
+                'Surveillance audits verify continued conformity',
+                'Surveillance audits review changes',
+            ],
+            'important_note' => [
+                'By signing this agreement, the Client confirms acceptance',
+            ],
+            'contact_line' => [
+                'QSI_CERT TEAM',
+            ],
+        ];
+
+        foreach ($oldSystemPrefixes[$key] ?? [] as $prefix) {
+            if (str_starts_with($value, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function officialCommercialText(string $key): string
+    {
+        return match ($key) {
+            'certification_process_obligations' => "At QSI-Cert, we adhere to accreditation requirements and the applicable standards to ensure compliance within the scope of certification. Compliance is verified through regular follow-up audits, which are essential for maintaining the validity of the certification. The certificate's validity is retained only when follow-up audits are successfully completed.\n\nQSI-Cert ensures due diligence in training and managing its auditors, with a strong emphasis on confidentiality and privacy. Measures are in place to safeguard all data and documentation collected during audits. Experienced auditors with relevant expertise are appointed to evaluate critical facts and assess their significance and impact on the certified organization.\n\nThe certification process involves a thorough review of your management system documentation and an on-site audit conducted at your registered office and relevant premises. If compliance with all applicable requirements is confirmed during the audit, QSI-Cert will issue certificates of international validity for the defined certification period.\n\nCertified organizations will have the right to use QSI-Cert's certification logo on promotional materials and printed documents, as per the guidelines specified in Business Condition (F36).\n\nQSI-Cert is committed to upholding the highest standards in its certification services, ensuring trust, transparency, and professional integrity.\n\nThe certified client agrees to the following requirements in relation to Unannounced Visits conducted by IAS as per AC477 or SAAC requirements:\n\nAccess to Site and Records\nThe certified client shall permit IAS assessors full access to the facility, including all areas relevant to the certified scope, as well as access to the management system documentation and all associated records during unannounced visits.\n\nAvailability of Last Audit Report\nThe certified client shall maintain and make readily available a copy of the most recent audit report issued by the certification body for review by IAS assessors upon request.\n\nEvidence of Certification Process\nThe certified client shall maintain and provide demonstrable evidence of effective implementation of the certification process, including but not limited to management review records, internal audit reports, previous audit reports, corrective actions and closure of nonconformities, and any other records required to demonstrate ongoing compliance with certification requirements.",
+            'vat_invoice_terms' => "In accordance with the country's VAT regulations, VAT (%) will be applicable and payable by any taxable person to whom the services are provided. The audit price is the final price, inclusive of VAT. The taxable person and their business registration number must be recognized and registered in the respective country. Invoices will be sent electronically via email.\n\nIf the client decides to discontinue the certification during the certification cycle, the balance amount for the remaining contract (cycle) must be paid prior to cancellation.",
+            'stage1_activity' => "The Stage 1 audit focuses on reviewing and evaluating the organization's documentation, internal audit processes, and management review procedures. It also includes an assessment of the organization's location and site-specific conditions to determine its readiness for Stage 2. During this audit, QSI's audit team will assess the organization's understanding of the key requirements of the applicable standard, specifically regarding the performance of significant processes, objectives, and operations within the management system. The team will gather necessary information on the scope of the management system, processes, locations, and any related statutory and regulatory compliance requirements.",
+            'stage2_activity' => "Upon successful completion of Stage 1, the Stage 2 audit will evaluate the implementation and effectiveness of the organization's management system. This audit will focus on gathering evidence to verify the organization's compliance with all requirements of the applicable management system standard. The performance monitoring system, including key objectives, targets, and the organization's compliance with legal and other applicable requirements, will also be reviewed. The Stage 2 audit must be completed within 90 days from the end date of Stage 1. If this period lapses, the Stage 1 audit will need to be repeated.",
+            'certificate_issuance' => 'A Certificate of Registration with a validity of three (3) years will be issued upon the successful completion of both Stage 1 and Stage 2 audits.',
+            'surveillance_activity' => "During surveillance audits, QSI's audit team will assess any changes to the organization's management system, internal audit consistency, management review procedures, achievement of objectives, operational control, and ongoing compliance with legal and other applicable requirements. The team will also review the organization's response to audit findings from previous audits and verify adherence to the rules for using certification marks.\n\nThe first surveillance audit following initial certification must occur within 12 months from the certification decision date unless otherwise required by the specific certification scheme.",
+            'important_note' => "By signing this agreement, you confirm your acceptance of the terms and conditions outlined in the following annexures:\n- F_27 Annexure 01 - Certification Agreement\n- F_27 Annexure 02 - Rules for Certification\n\nAdditionally, by signing this offer, the Client commits to providing all necessary information for the certification process. Should any changes occur during the certification period - such as modifications to the number of employees, branch offices, or significant alterations in the scope of certification - this offer must be updated via an amendment to the contract.\n\nBy signing this offer, you also acknowledge and accept the Business Conditions for subsequent Follow-up/Surveillance audits of the certified management system, as detailed in the attached Business Conditions (F_27).\n\nFor any clarification regarding the terms of this offer, please feel free to contact us at:",
+            default => '',
+        };
+    }
+
+    private function commercialAcceptanceTable(string $qsiName, string $qsiDate, string $clientName, string $clientDate, bool $confirmed): string
+    {
+        $clientDate = $clientDate !== '' ? $clientDate : 'Pending';
+        $stamp = $confirmed ? '<div class="commercial-stamp">CONFIRMED</div>' : '<div class="commercial-stamp pending">PENDING</div>';
+
+        return '<table class="commercial-acceptance"><thead><tr><th>On Behalf of QSI-Cert</th><th>On Behalf of Client</th></tr></thead><tbody><tr>'
+            . '<td><div class="commercial-logo-wrap">' . $this->logoHtml('commercial-logo') . '</div><div class="commercial-name">' . esc($qsiName) . '</div><div class="commercial-date">' . esc($qsiDate) . '</div></td>'
+            . '<td>' . $stamp . '<div class="commercial-name">' . esc($clientName) . '</div><div class="commercial-date">' . esc($clientDate) . '</div></td>'
+            . '</tr></tbody></table>';
+    }
+
+    private function commercialImportantNoteHtml(array $payload): string
+    {
+        $note = (string) ($payload['important_note'] ?? $this->officialCommercialText('important_note'));
+        $paragraphs = preg_split('/\R{2,}/', trim($note)) ?: [];
+        $html = '<div class="commercial-note">';
+
+        foreach ($paragraphs as $paragraph) {
+            $paragraph = trim($paragraph);
+            if ($paragraph === '') {
+                continue;
+            }
+
+            $lines = preg_split('/\R/', $paragraph) ?: [];
+            $bulletLines = array_values(array_filter($lines, static fn (string $line): bool => str_starts_with(trim($line), '- ')));
+            if ($bulletLines !== []) {
+                $introLines = array_values(array_filter($lines, static fn (string $line): bool => ! str_starts_with(trim($line), '- ')));
+                if ($introLines !== []) {
+                    $html .= '<p>' . nl2br(esc(implode("\n", $introLines))) . '</p>';
+                }
+                $html .= '<ul>';
+                foreach ($bulletLines as $line) {
+                    $item = trim($line);
+                    $html .= '<li><span class="annexure-link">' . esc(substr($item, 2)) . '</span></li>';
+                }
+                $html .= '</ul>';
+            } else {
+                $html .= '<p>' . nl2br(esc($paragraph)) . '</p>';
+            }
+        }
+
+        return $html . '</div>' . $this->commercialContactTable();
+    }
+
+    private function commercialContactTable(): string
+    {
+        return '<table class="commercial-contact"><tbody><tr>'
+            . '<td>QSI_CERT TEAM</td>'
+            . '<td>+966569009021</td>'
+            . '<td><span class="annexure-link">info@qsi-cert.com</span></td>'
+            . '</tr></tbody></table>';
     }
 
     private function contractSections(array $data): array
@@ -1634,13 +1782,15 @@ class DocumentGeneratorService
                 'Surveillance Audit' => $payload['surveillance_activity'] ?? '',
                 'Audit Time Reference' => $payload['audit_time_reference'] ?? '',
             ])],
-            ['Signatures', $this->keyValueTable([
-                'On Behalf of QSI-Cert' => trim((string) ($contract['qsi_signatory_name'] ?? '') . ' ' . (string) ($contract['qsi_signatory_date'] ?? '')),
-                'On Behalf of Client' => trim((string) ($contract['client_signatory_name'] ?? '') . ' ' . (string) ($contract['client_signatory_date'] ?? '')),
-                'Signed By' => $contract['signed_by_name'] ?? '',
-                'Signed At' => $contract['signed_at'] ?? '',
-            ])],
-            ['Important Note', '<p>' . nl2br(esc((string) ($payload['important_note'] ?? ''))) . '</p><p>' . esc((string) ($payload['contact_line'] ?? '')) . '</p>'],
+            ['Acceptance and Authorization', $this->commercialAcceptanceTable(
+                (string) ($contract['qsi_signatory_name'] ?? 'Engr. Mohammad Ahmad'),
+                substr((string) ($contract['qsi_signatory_date'] ?? $contract['approved_at'] ?? $contract['contract_date'] ?? date('Y-m-d')), 0, 10),
+                (string) ($contract['client_signatory_name'] ?? $client['contact_person'] ?? $client['company'] ?? 'Client Authorized Representative'),
+                substr((string) ($contract['client_signatory_date'] ?? $contract['signed_at'] ?? ''), 0, 10),
+                in_array((string) ($contract['status'] ?? ''), ['signed', 'approved', 'accepted'], true)
+            )],
+            ['Important Note', $this->commercialImportantNoteHtml($payload)],
+            ['Certification Assessment Note', '<p>Following the audit and based on the auditor&apos;s recommendations, QSI-Cert will conduct the certification assessment. If the QSI assessor confirms that all requirements, accreditation conditions, and contractual terms have been met, the corresponding certificates will be issued.</p>'],
             ['Certification Cycle', $this->eventTable($data['events'])],
         ];
     }
@@ -3575,6 +3725,21 @@ class DocumentGeneratorService
             tbody tr:nth-child(even) td { background: #fbfdff; }
             p { margin: 0 0 9px; overflow-wrap: anywhere; word-break: break-word; }
             .muted { color: #6b7785; font-style: italic; }
+            .commercial-acceptance { margin-top: 8px; page-break-inside: avoid; table-layout: fixed; }
+            .commercial-acceptance th { text-align: center; color: #123d70; font-size: 11px; background: #f8fafc; border: 1px solid #1f2933; padding: 8px; }
+            .commercial-acceptance td { height: 124px; text-align: center; vertical-align: middle; border: 1px solid #1f2933; background: #fff; padding: 12px 14px; }
+            .commercial-logo-wrap { height: 42px; margin-bottom: 8px; }
+            .commercial-logo { max-width: 92px; max-height: 42px; object-fit: contain; }
+            .commercial-name { margin-top: 8px; font-size: 11px; font-weight: 700; color: #111827; }
+            .commercial-date { margin-top: 9px; font-size: 10.5px; font-weight: 700; color: #111827; }
+            .commercial-stamp { display: inline-block; margin-bottom: 12px; padding: 4px 10px; border: 2px solid #d92929; color: #d92929; font-weight: 800; font-size: 11px; letter-spacing: .8px; transform: rotate(-10deg); }
+            .commercial-stamp.pending { border-color: #64748b; color: #64748b; transform: none; }
+            .commercial-note { color: #123d70; font-style: italic; font-size: 10.4px; line-height: 1.45; page-break-inside: avoid; }
+            .commercial-note ul { margin: 6px 0 11px 24px; color: #0033cc; font-style: normal; font-weight: 700; }
+            .commercial-note li { margin: 2px 0; }
+            .annexure-link { color: #0033cc; text-decoration: underline; font-weight: 700; }
+            .commercial-contact { table-layout: fixed; margin-top: 8px; page-break-inside: avoid; }
+            .commercial-contact td { background: #dbe7f5; border: 1px solid #1f2933; color: #123d70; font-size: 11px; font-weight: 700; padding: 12px; }
             .qr { margin-top: 8px; font-size: 9px; color: #56616f; }
             .qr img { width: 80px; height: 80px; }
             .detail-record { page-break-inside: avoid; margin-bottom: 12px; }
@@ -3772,7 +3937,9 @@ class DocumentGeneratorService
             .f28-man-days th, .f28-man-days td { border: 1px solid #b8cad8; padding: 6px; text-align: center; }
             .f28-man-days th { background: #eaf2f8; color: #0f2638; }
             .f28-note { font-size: 10px; margin-top: 18px; }
-            footer { position: fixed; left: 40px; right: 40px; bottom: 16px; border-top: 1px solid #c8d7e3; padding-top: 6px; color: #607080; font-size: 8.6px; }
+            footer.f28-page-footer { position: fixed; left: 40px; right: 40px; bottom: 16px; border-top: 1px solid #c8d7e3; padding-top: 6px; color: #607080; font-size: 8.6px; text-align: center; }
+            footer.f28-page-footer span:first-child { width: auto; }
+            footer.f28-page-footer .page-number { width: auto; text-align: center; }
         ';
     }
 }
