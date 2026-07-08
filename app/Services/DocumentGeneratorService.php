@@ -1445,17 +1445,15 @@ class DocumentGeneratorService
             . $this->auditorAppointmentRequirementsTable($this->closingMeetingRequirements());
 
         return '<!doctype html><html><head><meta charset="utf-8"><style>' . $this->css() . $this->auditorAppointmentCss() . '</style></head><body>'
-            . '<header class="f30-header"><table><tr>'
-            . '<td class="f30-logo">' . $this->logoHtml('pdf-logo') . '</td>'
-            . '<td class="f30-title"><div>AUDITOR APPOINTMENT</div><div class="f30-cert">QSI - CERT</div></td>'
-            . '<td><table class="f30-control">'
-            . '<tr><th>Document No.</th><td>F 30_app</td></tr>'
-            . '<tr><th>Revision No.</th><td>2</td></tr>'
-            . '<tr><th>Issue No.</th><td>2</td></tr>'
-            . '<tr><th>Date</th><td>15.05.2022</td></tr>'
-            . '</table></td></tr></table></header>'
+            . '<header class="f30-header"><table><tbody>'
+            . '<tr><td class="f30-logo" rowspan="4">' . $this->logoHtml('pdf-logo') . '</td>'
+            . '<td class="f30-title" rowspan="4">AUDITOR APPOINTMENT<div>QSI certification document</div></td>'
+            . '<td class="f30-control-label">Document No.</td><td class="f30-control-value">F 30_app</td></tr>'
+            . '<tr><td class="f30-control-label">Revision No.</td><td class="f30-control-value">2</td></tr>'
+            . '<tr><td class="f30-control-label">Issue No.</td><td class="f30-control-value">2</td></tr>'
+            . '<tr><td class="f30-control-label">Date</td><td class="f30-control-value">15.05.2022</td></tr>'
+            . '</tbody></table></header>'
             . $body
-            . '<footer>Document No: F 30_app | Revision No: 2 | Issue No: 2 | Date: 15.05.2022</footer>'
             . '</body></html>';
     }
 
@@ -3974,20 +3972,21 @@ class DocumentGeneratorService
             h3 { color: #0b3558; font-size: 11.5px; margin: 14px 0 8px; page-break-after: avoid; }
             p { line-height: 1.35; margin: 7px 0 12px; }
             .f30-header { border: 0; padding: 0; margin-bottom: 18px; }
-            .f30-header table { border: 1.5px solid #0b3558; margin-bottom: 0; }
-            .f30-header td { border: 1px solid #b8cad8; padding: 8px; vertical-align: middle; }
-            .f30-logo { width: 23%; text-align: center; color: #0b5f9e; font-weight: 700; background: #f4f8fb; }
-            .f30-logo-text { font-size: 34px; line-height: 1; }
-            .f30-title { width: 43%; text-align: center; font-size: 17px; font-weight: 700; }
-            .f30-cert { background: #eaf2f8; color: #0b3558; font-size: 15px; padding: 16px 0; margin: 24px -8px -8px; }
-            .f30-control { margin-bottom: 0; }
-            .f30-control th { width: 54%; background: #fff; border: 1px solid #b8cad8; padding: 6px 8px; color: #0f2638; }
-            .f30-control td { width: 46%; background: #eaf2f8; border: 1px solid #b8cad8; padding: 6px 8px; color: #0b3558; }
+            .f30-header table { border: 1.6px solid #0b3558; margin-bottom: 0; table-layout: fixed; }
+            .f30-header td { border: 1px solid #b8cad8; padding: 8px 9px; vertical-align: middle; color: #123d70; }
+            .f30-logo { width: 18%; text-align: center; color: #0b5f9e; font-weight: 700; background: #f4f8fb; }
+            .f30-logo .pdf-logo { width: 90px; max-height: 52px; }
+            .f30-logo-text { font-size: 24px; line-height: 1; }
+            .f30-title { width: 54%; text-align: center; font-size: 17px; line-height: 1.28; color: #0b3558; background: #ffffff; font-weight: 700; }
+            .f30-title div { margin-top: 7px; color: #607080; font-family: DejaVu Serif, serif; font-size: 8.6px; font-weight: 700; text-transform: uppercase; letter-spacing: .85px; }
+            .f30-control-label { width: 15%; background: #f7fafc; color: #0b3558; font-size: 8.8px; font-weight: 700; text-align: left; white-space: nowrap; }
+            .f30-control-value { width: 13%; background: #ffffff; color: #123d70; font-size: 9.2px; font-weight: 700; text-align: left; white-space: nowrap; }
             .f30-table th { width: 40%; background: #eaf2f8; color: #0f2638; border: 1px solid #b8cad8; padding: 7px 8px; font-weight: 700; }
-            .f30-table td { width: 60%; border: 1px solid #b8cad8; padding: 7px 8px; }
+            .f30-table td { width: 60%; border: 1px solid #d6e1ea; padding: 7px 8px; color: #243442; }
+            .f30-table tbody tr:nth-child(even) td { background: #f7fafc; }
             .f30-grid th, .f30-grid td { border: 1px solid #b8cad8; padding: 7px 8px; vertical-align: top; }
             .f30-grid th { background: #eaf2f8; color: #0f2638; text-align: left; }
-            footer { position: fixed; left: 36px; right: 36px; bottom: 18px; border-top: 1px solid #c8d7e3; padding-top: 6px; color: #607080; font-size: 8.6px; }
+            .f30-grid tbody tr:nth-child(even) td { background: #f7fafc; }
         ';
     }
 
