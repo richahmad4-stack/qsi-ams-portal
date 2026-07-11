@@ -30,12 +30,37 @@ class SmartAuditContentEngineTest extends TestCase
             'requirement' => 'Personnel competence shall be determined and maintained.',
         ])['content'];
 
-        self::assertStringContainsString('Conformity note:', $traceability);
+        self::assertStringContainsString('Conformity Statement (Auditor Style)', $traceability);
+        self::assertStringContainsString('Conformity Note:', $traceability);
+        self::assertStringContainsString('Objective Evidence:', $traceability);
+        self::assertStringContainsString('Auditor Conclusion:', $traceability);
         self::assertStringContainsString('Ref:', $traceability);
         self::assertStringContainsString('traceability', strtolower($traceability));
         self::assertStringContainsString('competence matrix', strtolower($competence));
         self::assertNotSame($traceability, $competence);
         self::assertStringNotContainsString('auditor confirmation required', strtolower($traceability));
+    }
+
+    public function testConformityNarrativeUsesStandardSpecificManagementSystemLanguage(): void
+    {
+        $engine = new SmartAuditContentEngine($this->emptyPool());
+        $client = [
+            'company' => 'Demo Green Logistics LLC',
+            'scope' => 'Warehouse storage and distribution operations',
+        ];
+        $event = ['event_type' => 'surveillance1', 'audit_number' => 'AUD-ENV-001'];
+
+        $environment = $engine->conformitySection($client, $event, [
+            'standard_code' => 'ISO 14001:2015',
+            'clause_number' => '6.1',
+            'clause_title' => 'Actions to address risks and opportunities',
+            'requirement' => 'Environmental aspects and compliance obligations shall be considered.',
+        ])['content'];
+
+        self::assertStringContainsString('Environmental Management System', $environment);
+        self::assertStringContainsString('environmental aspects', strtolower($environment));
+        self::assertStringContainsString('Auditor Conclusion:', $environment);
+        self::assertStringNotContainsString('Food Safety Management System', $environment);
     }
 
     public function testNcrPackageHasClauseAlignedEvidenceAndCapaFields(): void

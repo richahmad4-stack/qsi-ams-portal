@@ -9,7 +9,6 @@ use DateTimeImmutable;
 class DemoWorkflowSeeder extends Seeder
 {
     private int $tenantId = 1;
-    private string $password = '';
     private array $users = [];
     private array $personnel = [];
     private array $standards = [];
@@ -21,11 +20,6 @@ class DemoWorkflowSeeder extends Seeder
     public function run(): void
     {
         $this->call(InitialAmsSeeder::class);
-        $this->password = (string) env('AMS_DEMO_PASSWORD', '');
-
-        if ($this->password === '') {
-            throw new \RuntimeException('Set AMS_DEMO_PASSWORD in .env before running DemoWorkflowSeeder.');
-        }
 
         $this->standards = $this->lookup('standards', 'code');
         $this->iaf = $this->lookup('iaf_codes', 'code');
@@ -36,8 +30,7 @@ class DemoWorkflowSeeder extends Seeder
         $scenarios = $this->scenarios();
 
         $this->db->transStart();
-        $this->seedDemoRoles();
-        $this->seedDemoUsersAndPersonnel();
+        $this->mapOriginalUsersAndPersonnel();
         $this->resetDemoClients();
 
         foreach ($scenarios as $index => $scenario) {
@@ -52,118 +45,52 @@ class DemoWorkflowSeeder extends Seeder
     {
         return [
             [
-                'company' => 'Demo HACCP Catering Kitchen LLC',
+                'company' => 'QSI Demo HACCP Foods',
                 'contact' => 'Mariam Al Harbi',
-                'email' => 'mariam.haccp@demo-qsi.test',
-                'phone' => '+966 11 502 9170',
+                'email' => 'demo.haccp.client@qsi.test',
+                'phone' => '+966 11 502 9101',
                 'city' => 'Riyadh',
-                'address' => 'Kitchen Complex 7, Riyadh',
-                'scope' => 'Preparation and delivery of chilled and hot meals for hospitals, offices and industrial camps.',
-                'employees' => 64,
-                'sites' => 2,
+                'address' => 'Demo Food Storage Zone, Riyadh',
+                'scope' => 'Storage and distribution of food products including receiving, temperature-controlled storage, order picking and dispatch.',
+                'employees' => 42,
+                'sites' => 1,
                 'risk' => 'medium',
                 'standards' => ['HACCP'],
-                'food' => 'E',
+                'food' => 'G',
                 'medical' => null,
                 'iaf' => '03',
-                'nace' => '56',
-                'processes' => ['Receiving and storage', 'Hot kitchen', 'Cold kitchen', 'Dispatch and transport', 'Cleaning and sanitation'],
+                'nace' => '52',
+                'processes' => ['Receiving inspection', 'Ambient storage', 'Cold storage', 'Order picking', 'Dispatch control'],
                 'base' => '2024-10-04',
                 'fees' => [8200, 4100, 4100],
                 'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 3, 'surveillance1' => 0, 'surveillance2' => 2],
             ],
-        ];
-
-        return [
             [
-                'company' => 'Demo Riyadh Precision Components LLC',
+                'company' => 'QSI Demo ISO 9001 Manufacturing',
                 'contact' => 'Saad Al Jaber',
-                'email' => 'saad.jaber@demo-qsi.test',
-                'phone' => '+966 11 410 1180',
+                'email' => 'demo.iso9001.client@qsi.test',
+                'phone' => '+966 11 410 1181',
                 'city' => 'Riyadh',
-                'address' => 'Industrial Area 2, Riyadh',
-                'scope' => 'Manufacture and inspection of machined metal components for industrial customers.',
-                'employees' => 52,
+                'address' => 'Second Industrial City, Riyadh',
+                'scope' => 'Manufacture and quality inspection of machined metal components for industrial customers.',
+                'employees' => 58,
                 'sites' => 1,
                 'risk' => 'medium',
                 'standards' => ['ISO 9001:2015'],
                 'food' => null,
                 'medical' => null,
                 'iaf' => '17',
-                'nace' => '32',
-                'processes' => ['Sales and contract review', 'CNC machining', 'Final inspection', 'Purchasing', 'Calibration'],
+                'nace' => '25',
+                'processes' => ['Contract review', 'Production planning', 'Machining', 'Final inspection', 'Calibration control'],
                 'base' => '2024-07-05',
                 'fees' => [7800, 3900, 3900],
                 'ncrs' => ['initial_stage1' => 0, 'initial_stage2' => 3, 'surveillance1' => 1, 'surveillance2' => 1],
             ],
             [
-                'company' => 'Demo Eastern Environmental Services Co.',
-                'contact' => 'Noura Al Mutairi',
-                'email' => 'noura.environment@demo-qsi.test',
-                'phone' => '+966 13 620 4460',
-                'city' => 'Dammam',
-                'address' => 'Environmental Services Park, Dammam',
-                'scope' => 'Waste collection, transfer, treatment coordination and environmental monitoring services.',
-                'employees' => 76,
-                'sites' => 2,
-                'risk' => 'medium',
-                'standards' => ['ISO 14001:2015'],
-                'food' => null,
-                'medical' => null,
-                'iaf' => '24',
-                'nace' => '38',
-                'processes' => ['Waste collection planning', 'Transfer station control', 'Environmental monitoring', 'Emergency preparedness', 'Compliance evaluation'],
-                'base' => '2024-08-08',
-                'fees' => [8800, 4400, 4400],
-                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 3, 'surveillance1' => 1, 'surveillance2' => 1],
-            ],
-            [
-                'company' => 'Demo SafeWork Contracting Ltd',
-                'contact' => 'Fahad Al Otaibi',
-                'email' => 'fahad.safework@demo-qsi.test',
-                'phone' => '+966 12 733 8810',
-                'city' => 'Jeddah',
-                'address' => 'Construction Support Zone, Jeddah',
-                'scope' => 'Civil maintenance, scaffolding, access works and site support contracting.',
-                'employees' => 148,
-                'sites' => 3,
-                'risk' => 'high',
-                'standards' => ['ISO 45001:2018'],
-                'food' => null,
-                'medical' => null,
-                'iaf' => '28',
-                'nace' => '43',
-                'processes' => ['Project mobilization', 'Hazard identification', 'Permit control', 'Incident reporting', 'Worker consultation'],
-                'base' => '2024-09-10',
-                'fees' => [11600, 5800, 5800],
-                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 4, 'surveillance1' => 2, 'surveillance2' => 1],
-            ],
-            [
-                'company' => 'Demo Sunrise Catering Kitchens LLC',
-                'contact' => 'Mariam Al Harbi',
-                'email' => 'mariam.sunrise@demo-qsi.test',
-                'phone' => '+966 11 502 9170',
-                'city' => 'Riyadh',
-                'address' => 'Kitchen Complex 7, Riyadh',
-                'scope' => 'Preparation and delivery of chilled and hot meals for hospitals, offices and industrial camps.',
-                'employees' => 64,
-                'sites' => 2,
-                'risk' => 'medium',
-                'standards' => ['HACCP'],
-                'food' => 'E',
-                'medical' => null,
-                'iaf' => '03',
-                'nace' => '56',
-                'processes' => ['Receiving and storage', 'Hot kitchen', 'Cold kitchen', 'Dispatch and transport', 'Cleaning and sanitation'],
-                'base' => '2024-10-04',
-                'fees' => [8200, 4100, 4100],
-                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 3, 'surveillance1' => 0, 'surveillance2' => 2],
-            ],
-            [
-                'company' => 'Demo Fresh Valley Dairy Factory',
+                'company' => 'QSI Demo ISO 22000 Dairy',
                 'contact' => 'Khalid Mansour',
-                'email' => 'khalid.dairy@demo-qsi.test',
-                'phone' => '+966 16 320 2188',
+                'email' => 'demo.iso22000.client@qsi.test',
+                'phone' => '+966 16 320 2189',
                 'city' => 'Qassim',
                 'address' => 'Food Industrial City, Qassim',
                 'scope' => 'Receiving, pasteurization, filling, cold storage and dispatch of dairy products.',
@@ -181,326 +108,104 @@ class DemoWorkflowSeeder extends Seeder
                 'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 4, 'surveillance1' => 2, 'surveillance2' => 1],
             ],
             [
-                'company' => 'Demo Gulf Frozen Foods Manufacturing',
-                'contact' => 'Sara Al Omari',
-                'email' => 'sara.frozen@demo-qsi.test',
-                'phone' => '+966 12 640 7711',
-                'city' => 'Jeddah',
-                'address' => 'Cold Chain Park, Jeddah',
-                'scope' => 'Processing, freezing, packing, cold storage and distribution of frozen ready-to-cook foods.',
-                'employees' => 166,
+                'company' => 'QSI Demo ISO 14001 Environmental Services',
+                'contact' => 'Noura Al Mutairi',
+                'email' => 'demo.iso14001.client@qsi.test',
+                'phone' => '+966 13 620 4461',
+                'city' => 'Dammam',
+                'address' => 'Environmental Services Park, Dammam',
+                'scope' => 'Waste collection, transfer coordination, environmental monitoring and compliance support services.',
+                'employees' => 76,
                 'sites' => 2,
+                'risk' => 'medium',
+                'standards' => ['ISO 14001:2015'],
+                'food' => null,
+                'medical' => null,
+                'iaf' => '24',
+                'nace' => '38',
+                'processes' => ['Waste collection planning', 'Transfer station control', 'Environmental monitoring', 'Emergency preparedness', 'Compliance evaluation'],
+                'base' => '2024-08-08',
+                'fees' => [8800, 4400, 4400],
+                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 3, 'surveillance1' => 1, 'surveillance2' => 1],
+            ],
+            [
+                'company' => 'QSI Demo ISO 45001 Contracting',
+                'contact' => 'Fahad Al Otaibi',
+                'email' => 'demo.iso45001.client@qsi.test',
+                'phone' => '+966 12 733 8811',
+                'city' => 'Jeddah',
+                'address' => 'Construction Support Zone, Jeddah',
+                'scope' => 'Civil maintenance, scaffolding, access works and site support contracting.',
+                'employees' => 148,
+                'sites' => 3,
                 'risk' => 'high',
-                'standards' => ['FSSC 22000 Version 6'],
-                'food' => 'CIII',
-                'medical' => null,
-                'iaf' => '03',
-                'nace' => '10',
-                'processes' => ['Raw material receiving', 'Freezing', 'Packing', 'Cold storage', 'Food defense and fraud review'],
-                'base' => '2024-12-01',
-                'fees' => [14800, 7400, 7400],
-                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 5, 'surveillance1' => 2, 'surveillance2' => 2],
-            ],
-            [
-                'company' => 'Demo MedTech Devices Manufacturing',
-                'contact' => 'Dr. Laila Hassan',
-                'email' => 'laila.medtech@demo-qsi.test',
-                'phone' => '+966 13 511 2288',
-                'city' => 'Dammam',
-                'address' => 'Medical Technology Park, Dammam',
-                'scope' => 'Manufacture, final inspection and distribution of non-active disposable medical devices.',
-                'employees' => 92,
-                'sites' => 1,
-                'risk' => 'high',
-                'standards' => ['ISO 13485:2016'],
-                'food' => null,
-                'medical' => 'MD-1.2',
-                'iaf' => '13',
-                'nace' => '32',
-                'processes' => ['Design transfer', 'Clean area production', 'Sterile packaging control', 'Final inspection', 'Complaint handling'],
-                'base' => '2025-01-12',
-                'fees' => [15200, 7600, 7600],
-                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 4, 'surveillance1' => 2, 'surveillance2' => 1],
-            ],
-            [
-                'company' => 'Demo Certification Services Bureau',
-                'contact' => 'Omar Al Salem',
-                'email' => 'omar.certbureau@demo-qsi.test',
-                'phone' => '+966 11 610 9910',
-                'city' => 'Riyadh',
-                'address' => 'Business Gate, Riyadh',
-                'scope' => 'Management system certification services including application review, audit planning, audit delivery, review and certification decision.',
-                'employees' => 34,
-                'sites' => 1,
-                'risk' => 'medium',
-                'standards' => ['ISO 17021'],
-                'food' => null,
-                'medical' => null,
-                'iaf' => '35',
-                'nace' => '71',
-                'processes' => ['Application review', 'Auditor competence control', 'Audit delivery', 'Technical review', 'Certification decision'],
-                'base' => '2025-02-10',
-                'fees' => [9800, 4900, 4900],
-                'ncrs' => ['initial_stage1' => 0, 'initial_stage2' => 3, 'surveillance1' => 1, 'surveillance2' => 1],
-            ],
-            [
-                'company' => 'Demo Product Certification House',
-                'contact' => 'Reema Khalid',
-                'email' => 'reema.productcert@demo-qsi.test',
-                'phone' => '+966 11 622 4488',
-                'city' => 'Riyadh',
-                'address' => 'Testing and Certification Zone, Riyadh',
-                'scope' => 'Product certification scheme operation, evaluation, review, decision and surveillance activities.',
-                'employees' => 28,
-                'sites' => 1,
-                'risk' => 'medium',
-                'standards' => ['ISO 17065'],
-                'food' => null,
-                'medical' => null,
-                'iaf' => '35',
-                'nace' => '71',
-                'processes' => ['Scheme application review', 'Evaluation planning', 'Testing subcontract control', 'Review and decision', 'Surveillance of certified products'],
-                'base' => '2025-03-02',
-                'fees' => [9400, 4700, 4700],
-                'ncrs' => ['initial_stage1' => 0, 'initial_stage2' => 3, 'surveillance1' => 1, 'surveillance2' => 1],
-            ],
-            [
-                'company' => 'Demo GreenBuild Integrated Facilities',
-                'contact' => 'Yasir Al Nasser',
-                'email' => 'yasir.greenbuild@demo-qsi.test',
-                'phone' => '+966 13 744 1200',
-                'city' => 'Dammam',
-                'address' => 'Business Gate Tower, Dammam',
-                'scope' => 'Integrated facilities management, maintenance, cleaning, landscaping and HSE support services.',
-                'employees' => 340,
-                'sites' => 4,
-                'risk' => 'medium',
-                'standards' => ['ISO 9001:2015', 'ISO 14001:2015', 'ISO 45001:2018'],
+                'standards' => ['ISO 45001:2018'],
                 'food' => null,
                 'medical' => null,
                 'iaf' => '28',
-                'nace' => '81',
-                'processes' => ['Contract management', 'Preventive maintenance', 'Waste management', 'OHS inspections', 'Customer service'],
-                'base' => '2025-03-28',
-                'fees' => [22800, 11400, 11400],
-                'ncrs' => ['initial_stage1' => 0, 'initial_stage2' => 3, 'surveillance1' => 2, 'surveillance2' => 1],
-            ],
-            [
-                'company' => 'Demo Najd Ready Meals Group',
-                'contact' => 'Faisal Al Qahtani',
-                'email' => 'faisal.readymeals@demo-qsi.test',
-                'phone' => '+966 11 502 9170',
-                'city' => 'Riyadh',
-                'address' => 'Second Industrial City, Riyadh',
-                'scope' => 'Manufacture of ready-to-eat meals, sauces and chilled food products for retail and institutional clients.',
-                'employees' => 214,
-                'sites' => 3,
-                'risk' => 'high',
-                'standards' => ['HACCP', 'ISO 22000:2018', 'ISO 9001:2015'],
-                'food' => 'CIII',
-                'medical' => null,
-                'iaf' => '03',
-                'nace' => '10',
-                'processes' => ['Product development', 'Cooking and cooling', 'Packing', 'Quality assurance', 'Supplier approval'],
-                'base' => '2025-04-16',
-                'fees' => [18400, 9200, 9200],
-                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 6, 'surveillance1' => 3, 'surveillance2' => 2],
-            ],
-            [
-                'company' => 'Demo SecurePack Food Packaging',
-                'contact' => 'Mona Saleh',
-                'email' => 'mona.securepack@demo-qsi.test',
-                'phone' => '+966 12 455 1190',
-                'city' => 'Jeddah',
-                'address' => 'Packaging Industrial Zone, Jeddah',
-                'scope' => 'Manufacture of food-contact packaging materials including extrusion, printing, slitting and packing.',
-                'employees' => 186,
-                'sites' => 2,
-                'risk' => 'medium',
-                'standards' => ['HACCP', 'ISO 22000:2018', 'FSSC 22000 Version 6'],
-                'food' => 'I',
-                'medical' => null,
-                'iaf' => '07',
-                'nace' => '32',
-                'processes' => ['Raw material receiving', 'Extrusion', 'Printing', 'Slitting and packing', 'Food safety verification'],
-                'base' => '2025-05-05',
-                'fees' => [19600, 9800, 9800],
-                'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 5, 'surveillance1' => 2, 'surveillance2' => 2],
-            ],
-            [
-                'company' => 'Demo CarePlus Medical Distribution',
-                'contact' => 'Abeer Siddiqui',
-                'email' => 'abeer.careplus@demo-qsi.test',
-                'phone' => '+966 11 700 5510',
-                'city' => 'Riyadh',
-                'address' => 'Healthcare Logistics City, Riyadh',
-                'scope' => 'Import, storage, distribution, servicing and complaint handling of non-active medical devices.',
-                'employees' => 68,
-                'sites' => 2,
-                'risk' => 'medium',
-                'standards' => ['ISO 9001:2015', 'ISO 13485:2016'],
-                'food' => null,
-                'medical' => 'MD-7',
-                'iaf' => '13',
-                'nace' => '46',
-                'processes' => ['Supplier qualification', 'Warehouse control', 'Device release', 'Complaint handling', 'Service records'],
-                'base' => '2025-05-26',
-                'fees' => [16200, 8100, 8100],
+                'nace' => '43',
+                'processes' => ['Project mobilization', 'Hazard identification', 'Permit control', 'Incident reporting', 'Worker consultation'],
+                'base' => '2024-09-10',
+                'fees' => [11600, 5800, 5800],
                 'ncrs' => ['initial_stage1' => 1, 'initial_stage2' => 4, 'surveillance1' => 2, 'surveillance2' => 1],
             ],
-            [
-                'company' => 'Demo Central Hospital Support Services',
-                'contact' => 'Dr. Hanan Rashid',
-                'email' => 'hanan.hospital@demo-qsi.test',
-                'phone' => '+966 11 833 4401',
-                'city' => 'Riyadh',
-                'address' => 'Medical District, Riyadh',
-                'scope' => 'Hospital catering, facility maintenance, infection-sensitive support services and occupational safety controls.',
-                'employees' => 420,
-                'sites' => 5,
-                'risk' => 'high',
-                'standards' => ['HACCP', 'ISO 22000:2018', 'ISO 9001:2015', 'ISO 14001:2015', 'ISO 45001:2018'],
-                'food' => 'E',
-                'medical' => null,
-                'iaf' => '38',
-                'nace' => '86',
-                'processes' => ['Patient meal preparation', 'Facilities maintenance', 'Waste and environmental control', 'OHS risk control', 'Quality and complaint management'],
-                'base' => '2025-06-18',
-                'fees' => [28600, 14300, 14300],
-                'ncrs' => ['initial_stage1' => 2, 'initial_stage2' => 6, 'surveillance1' => 3, 'surveillance2' => 2],
-            ],
         ];
     }
 
-    private function seedDemoRoles(): void
+    private function mapOriginalUsersAndPersonnel(): void
     {
-        $roles = [
-            ['super_admin', 'Super Admin'],
-            ['general_manager', 'General Manager'],
-            ['chief_operating_officer', 'Chief Operating Officer'],
-            ['certification_manager', 'Certification Manager'],
-            ['trainer', 'Trainer'],
-            ['sales_executive', 'Sales Executive'],
-            ['document_controller', 'Document Controller'],
-            ['client_representative', 'Client Representative'],
+        $assignments = [
+            'super_admin' => 'admin@qsi.local',
+            'general_manager' => 'rana.amjad.hanif@qsi.local',
+            'coo' => 'mohammad.ahmad@qsi.local',
+            'quality_manager' => 'rimsha.mahmoud@qsi.local',
+            'certification_manager' => 'rana.arslan.khan@qsi.local',
+            'technical_manager' => 'rimsha.mahmoud@qsi.local',
+            'technical_reviewer' => 'rimsha.mahmoud@qsi.local',
+            'decision_maker' => 'rana.amjad.hanif@qsi.local',
+            'lead_auditor' => 'rifki.el.sherbeny@qsi.local',
+            'auditor' => 'mohammad.arshad.ali@qsi.local',
+            'trainer' => 'mohammad.raheel@qsi.local',
+            'finance' => 'mohammad.ahmad@qsi.local',
+            'sales' => 'rana.arslan.khan@qsi.local',
+            'document_controller' => 'rana.arslan.khan@qsi.local',
+            'client_rep' => 'admin@qsi.local',
+            'administrator' => 'rana.arslan.khan@qsi.local',
         ];
 
-        foreach ($roles as [$code, $name]) {
-            $this->db->query(
-                'INSERT IGNORE INTO roles (tenant_id, code, name, description, system_role) VALUES (?, ?, ?, ?, 1)',
-                [$this->tenantId, $code, $name, $name . ' demo access role.']
-            );
-            $roleId = $this->roleId($code);
-            if ($code === 'super_admin') {
-                $this->db->query(
-                    'INSERT IGNORE INTO role_permissions (role_id, permission_id) SELECT ?, id FROM permissions',
-                    [$roleId]
-                );
-            }
-        }
-    }
-
-    private function seedDemoUsersAndPersonnel(): void
-    {
-        $users = [
-            'super_admin' => ['Ammar Al Farsi', 'demo.superadmin@qsi.local', 'super_admin'],
-            'general_manager' => ['Dr. Samir Haddad', 'demo.gm@qsi.local', 'general_manager'],
-            'coo' => ['Lina Barakat', 'demo.coo@qsi.local', 'chief_operating_officer'],
-            'quality_manager' => ['Maha Al Salem', 'demo.qm@qsi.local', 'quality_manager'],
-            'certification_manager' => ['Yousef Nasser', 'demo.certmanager@qsi.local', 'certification_manager'],
-            'technical_manager' => ['Hassan Al Rashed', 'demo.tm@qsi.local', 'technical_manager'],
-            'technical_reviewer' => ['Nabil Khan', 'demo.reviewer@qsi.local', 'technical_reviewer'],
-            'decision_maker' => ['Dr. Reem Mansour', 'demo.decision@qsi.local', 'certification_decision_maker'],
-            'lead_auditor' => ['Omar Siddiqui', 'demo.lead@qsi.local', 'lead_auditor'],
-            'auditor' => ['Fatima Zahra', 'demo.auditor@qsi.local', 'auditor'],
-            'trainer' => ['Bilal Qureshi', 'demo.trainer@qsi.local', 'trainer'],
-            'finance' => ['Rania Dawood', 'demo.finance@qsi.local', 'finance'],
-            'sales' => ['Aisha Rahman', 'demo.sales@qsi.local', 'sales_executive'],
-            'document_controller' => ['Priya Menon', 'demo.docs@qsi.local', 'document_controller'],
-            'client_rep' => ['Ahmed Client', 'demo.client@qsi.local', 'client_representative'],
-            'administrator' => ['QSI Demo Administrator', 'demo.admin@qsi.local', 'administrator'],
-        ];
-
-        foreach ($users as $key => [$name, $email, $roleCode]) {
-            $roleId = $this->roleId($roleCode);
-            $existing = $this->db->table('users')
+        foreach ($assignments as $key => $email) {
+            $user = $this->db->table('users')
+                ->select('id')
                 ->where('tenant_id', $this->tenantId)
                 ->where('email', $email)
                 ->get(1)
                 ->getRowArray();
 
-            $payload = [
-                'tenant_id' => $this->tenantId,
-                'primary_role_id' => $roleId,
-                'full_name' => $name,
-                'email' => $email,
-                'phone' => '+966 55 ' . str_pad((string) (1000000 + count($this->users) * 137), 7, '0', STR_PAD_LEFT),
-                'password_hash' => password_hash($this->password, PASSWORD_DEFAULT),
-                'status' => 'active',
-                'must_change_password' => 0,
-                'last_login_at' => $this->dateTime('2026-07-04', '08:30:00'),
-            ];
-
-            if ($existing === null) {
-                $payload['created_at'] = date('Y-m-d H:i:s');
-                $this->db->table('users')->insert($payload);
-                $userId = (int) $this->db->insertID();
-            } else {
-                $userId = (int) $existing['id'];
-                $this->db->table('users')->where('id', $userId)->update($payload);
+            if ($user === null) {
+                throw new \RuntimeException('Original AMS user not found for demo assignment: ' . $email);
             }
 
-            $this->db->query(
-                'INSERT IGNORE INTO user_role_assignments (user_id, role_id, created_at) VALUES (?, ?, ?)',
-                [$userId, $roleId, date('Y-m-d H:i:s')]
-            );
+            $this->users[$key] = (int) $user['id'];
 
-            $this->users[$key] = $userId;
-            $this->personnel[$key] = $this->upsertPersonnel($userId, $name, $email, $roleCode);
+            $personnel = $this->db->table('personnel')
+                ->select('id')
+                ->where('tenant_id', $this->tenantId)
+                ->where('email', $email)
+                ->get(1)
+                ->getRowArray();
+
+            if ($personnel !== null) {
+                $this->personnel[$key] = (int) $personnel['id'];
+            }
+        }
+
+        foreach (['lead_auditor', 'auditor', 'trainer', 'technical_reviewer', 'decision_maker'] as $key) {
+            if (! isset($this->personnel[$key])) {
+                throw new \RuntimeException('Original AMS personnel record not found for demo assignment: ' . $key);
+            }
         }
 
         $this->seedPersonnelCompetencies();
-    }
-
-    private function upsertPersonnel(int $userId, string $name, string $email, string $roleCode): int
-    {
-        $type = match ($roleCode) {
-            'lead_auditor' => 'lead_auditor',
-            'auditor', 'trainer' => 'auditor',
-            'technical_reviewer' => 'technical_reviewer',
-            'certification_decision_maker' => 'decision_maker',
-            'client_representative' => 'client_representative',
-            default => 'staff',
-        };
-
-        $existing = $this->db->table('personnel')
-            ->where('tenant_id', $this->tenantId)
-            ->where('email', $email)
-            ->get(1)
-            ->getRowArray();
-
-        $payload = [
-            'tenant_id' => $this->tenantId,
-            'user_id' => $userId,
-            'client_id' => null,
-            'full_name' => $name,
-            'email' => $email,
-            'phone' => '+966 56 ' . str_pad((string) (2000000 + $userId * 53), 7, '0', STR_PAD_LEFT),
-            'personnel_type' => $type,
-            'approval_status' => 'approved',
-            'languages' => json_encode(['English', 'Arabic'], JSON_THROW_ON_ERROR),
-            'countries' => json_encode(['Saudi Arabia', 'United Arab Emirates', 'Bahrain'], JSON_THROW_ON_ERROR),
-            'experience_summary' => $name . ' is seeded as a demo ' . str_replace('_', ' ', $roleCode) . ' with approved competence records.',
-        ];
-
-        if ($existing === null) {
-            $payload['created_at'] = date('Y-m-d H:i:s');
-            $this->db->table('personnel')->insert($payload);
-            return (int) $this->db->insertID();
-        }
-
-        $this->db->table('personnel')->where('id', (int) $existing['id'])->update($payload);
-        return (int) $existing['id'];
     }
 
     private function seedPersonnelCompetencies(): void
@@ -537,6 +242,12 @@ class DemoWorkflowSeeder extends Seeder
         $clients = $this->db->table('clients')
             ->select('id')
             ->where('tenant_id', $this->tenantId)
+            ->groupStart()
+                ->like('company', 'Demo ', 'after')
+                ->orLike('company', 'QSI Demo ', 'after')
+                ->orLike('email', 'demo.', 'after')
+                ->orLike('email', '@demo-qsi.test', 'both')
+            ->groupEnd()
             ->get()
             ->getResultArray();
         $clientIds = array_map(static fn (array $row): int => (int) $row['id'], $clients);
@@ -635,7 +346,7 @@ class DemoWorkflowSeeder extends Seeder
             'number_of_sites' => $scenario['sites'],
             'certification_status' => 'certified',
             'risk_category' => $scenario['risk'],
-            'certificate_number' => 'QSI-CERT-DEMO-' . $clientNo,
+            'certificate_number' => null,
             'initial_certification_date' => $issue->format('Y-m-d'),
             'certificate_issue_date' => $issue->format('Y-m-d'),
             'certificate_expiry_date' => $expiry->format('Y-m-d'),
@@ -646,13 +357,6 @@ class DemoWorkflowSeeder extends Seeder
         $clientId = (int) $this->db->insertID();
 
         $this->seedClientRepresentativePersonnel($clientId, $scenario);
-
-        if ($index === 1) {
-            $this->db->table('personnel')
-                ->where('tenant_id', $this->tenantId)
-                ->where('email', 'demo.client@qsi.local')
-                ->update(['client_id' => $clientId]);
-        }
 
         $standardIds = $this->seedClientMasterData($clientId, $scenario);
         $applicationId = $this->seedApplication($clientId, $scenario, $standardIds, $base, $clientNo);
@@ -1053,7 +757,7 @@ class DemoWorkflowSeeder extends Seeder
             'signed_at' => $this->dateTime($this->plus($base, 6), '11:00:00'),
             'signed_by_name' => $scenario['contact'],
             'contract_payload' => json_encode($payload, JSON_THROW_ON_ERROR),
-            'qsi_signatory_name' => 'Dr. Samir Haddad',
+            'qsi_signatory_name' => 'Dr. Rana Amjad Hanif',
             'qsi_signatory_date' => $this->plus($base, 6),
             'client_signatory_name' => $scenario['contact'],
             'client_signatory_date' => $this->plus($base, 6),
@@ -1468,7 +1172,7 @@ class DemoWorkflowSeeder extends Seeder
     private function seedCertificates(int $clientId, array $scenario, array $standardIds, ?int $decisionId, DateTimeImmutable $issue, DateTimeImmutable $expiry, string $clientNo): void
     {
         foreach (array_keys($standardIds) as $idx => $code) {
-            $certificateNumber = 'QSI-DEMO-' . $clientNo . '-' . str_pad((string) ($idx + 1), 2, '0', STR_PAD_LEFT);
+            $certificateNumber = $this->nextCertificateNumber($code);
             $slug = strtolower(str_replace([' ', ':'], '-', $certificateNumber));
             $this->db->table('certificates')->insert([
                 'tenant_id' => $this->tenantId,
@@ -1487,6 +1191,12 @@ class DemoWorkflowSeeder extends Seeder
             ]);
             $certificateId = (int) $this->db->insertID();
 
+            if ($idx === 0) {
+                $this->db->table('clients')->where('id', $clientId)->update([
+                    'certificate_number' => $certificateNumber,
+                ]);
+            }
+
             $this->db->table('certificate_public_events')->insert([
                 'certificate_id' => $certificateId,
                 'search_term' => $certificateNumber,
@@ -1495,6 +1205,41 @@ class DemoWorkflowSeeder extends Seeder
                 'created_at' => $this->dateTime('2026-07-04', '13:00:00'),
             ]);
         }
+    }
+
+    private function nextCertificateNumber(string $standardCode): string
+    {
+        $prefix = 'QSI-' . $this->certificateStandardPrefix($standardCode);
+        $rows = $this->db->table('certificates')
+            ->select('certificate_number')
+            ->where('tenant_id', $this->tenantId)
+            ->like('certificate_number', $prefix . '-', 'after')
+            ->get()
+            ->getResultArray();
+
+        $max = 0;
+        foreach ($rows as $row) {
+            $number = (string) ($row['certificate_number'] ?? '');
+            if (preg_match('/^' . preg_quote($prefix, '/') . '-(\d{4,})$/', $number, $matches) === 1) {
+                $max = max($max, (int) $matches[1]);
+            }
+        }
+
+        return $prefix . '-' . str_pad((string) ($max + 1), 4, '0', STR_PAD_LEFT);
+    }
+
+    private function certificateStandardPrefix(string $standardCode): string
+    {
+        $code = strtoupper(trim($standardCode));
+        $code = str_replace([':', '.', '/', '\\'], ' ', $code);
+        $parts = preg_split('/[^A-Z0-9]+/', $code) ?: [];
+        $parts = array_values(array_filter($parts, static fn (string $part): bool => $part !== '' && ! preg_match('/^(19|20)\d{2}$/', $part)));
+
+        if ($parts === []) {
+            return 'STANDARD';
+        }
+
+        return substr(implode('', $parts), 0, 24);
     }
 
     private function seedFeedbackAndNotifications(int $clientId, int $programId, array $scenario, DateTimeImmutable $issue, DateTimeImmutable $expiry, string $clientNo): void
@@ -1662,10 +1407,10 @@ class DemoWorkflowSeeder extends Seeder
     private function committeeRows(): array
     {
         return [
-            ['role' => 'Lead Auditor', 'initial_stage1' => 'Omar Siddiqui', 'initial_stage2' => 'Omar Siddiqui', 'surveillance1' => 'Omar Siddiqui', 'surveillance2' => 'Omar Siddiqui', 'recertification' => 'Omar Siddiqui'],
-            ['role' => 'Auditor 1', 'initial_stage1' => 'Fatima Zahra', 'initial_stage2' => 'Fatima Zahra', 'surveillance1' => 'Fatima Zahra', 'surveillance2' => 'Fatima Zahra', 'recertification' => 'Fatima Zahra'],
+            ['role' => 'Lead Auditor', 'initial_stage1' => 'Mr. Rifki El-Sherbeny', 'initial_stage2' => 'Mr. Rifki El-Sherbeny', 'surveillance1' => 'Mr. Rifki El-Sherbeny', 'surveillance2' => 'Mr. Rifki El-Sherbeny', 'recertification' => 'Mr. Rifki El-Sherbeny'],
+            ['role' => 'Auditor 1', 'initial_stage1' => 'Mohammad Arshad Ali', 'initial_stage2' => 'Mohammad Arshad Ali', 'surveillance1' => 'Mohammad Arshad Ali', 'surveillance2' => 'Mohammad Arshad Ali', 'recertification' => 'Mohammad Arshad Ali'],
             ['role' => 'Auditor 2', 'initial_stage1' => '', 'initial_stage2' => '', 'surveillance1' => '', 'surveillance2' => '', 'recertification' => ''],
-            ['role' => 'Technical Specialist', 'initial_stage1' => 'Bilal Qureshi', 'initial_stage2' => 'Bilal Qureshi', 'surveillance1' => '', 'surveillance2' => '', 'recertification' => 'Bilal Qureshi'],
+            ['role' => 'Technical Specialist', 'initial_stage1' => 'Mohammad Raheel', 'initial_stage2' => 'Mohammad Raheel', 'surveillance1' => '', 'surveillance2' => '', 'recertification' => 'Mohammad Raheel'],
             ['role' => 'Additional / Trainee Auditor', 'initial_stage1' => '', 'initial_stage2' => '', 'surveillance1' => '', 'surveillance2' => '', 'recertification' => ''],
             ['role' => 'Observer', 'initial_stage1' => '', 'initial_stage2' => '', 'surveillance1' => '', 'surveillance2' => '', 'recertification' => ''],
         ];

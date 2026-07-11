@@ -212,7 +212,7 @@ class SmartAuditContentEngine
     private function normaliseConformityNote(string $note): string
     {
         $note = str_replace('Draft conformity note - auditor confirmation required:', 'Conformity note:', $note);
-        $note = str_replace('This is a sampled conformity conclusion. The auditor may edit the note or raise a separate NC if conflicting evidence is found.', 'This is a sampled conformity conclusion. The auditor may edit the note or raise a separate NC if conflicting evidence is found.', $note);
+        $note = str_replace('This is a sampled conformity conclusion. The auditor may edit the note or raise a separate NC if conflicting evidence is found.', '', $note);
 
         return trim($note);
     }

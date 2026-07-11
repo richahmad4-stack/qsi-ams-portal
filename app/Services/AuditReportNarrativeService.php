@@ -14,18 +14,26 @@ class AuditReportNarrativeService
         $processes = $this->processTrail($planItems, $standard, $clauseTitle, $scope);
         $evidence = $this->evidenceTrail($standard, $clauseNumber, $clauseTitle, (string) ($clause['evidence_examples'] ?? ''), $scope);
         $auditNumber = trim((string) ($event['audit_number'] ?? ''));
-        $sampledEvidence = $this->withDocumentReferences($client, $clauseNumber, array_slice($evidence, 0, 3));
+        $sampledEvidence = $this->withDocumentReferences(
+            $client,
+            $clauseNumber,
+            $this->auditorEvidenceSet($standard, $clauseNumber, $clauseTitle, $scope, $processes, $evidence, $auditTeam)
+        );
         $clauseFocus = $this->clauseFocus($clauseNumber, $clauseTitle);
+        $systemName = $this->managementSystemName($standard, $scope);
+        $scopeText = $scope !== '' ? $scope : 'the certified activities';
+        $auditContext = "during {$stage}" . ($auditNumber !== '' ? " ({$auditNumber})" : '');
 
         return trim(
-            "Draft conformity note - auditor confirmation required:\n"
-            . "Sampled during {$stage}" . ($auditNumber !== '' ? " ({$auditNumber})" : '') . " for {$standard} {$clauseNumber} - {$clauseTitle}. "
-            . "The audit trail covered {$processes} within the scope \"{$scope}\". "
-            . "Evidence reviewed was generally consistent with the requirement for {$clauseFocus}; no NC was raised from this sample.\n\n"
-            . "Objective evidence sampled:\n"
+            "Conformity Statement (Auditor Style)\n\n"
+            . "Conformity Note:\n"
+            . "The organization has established, implemented and maintained controls relevant to {$standard} {$clauseNumber} - {$clauseTitle} within the scope \"{$scopeText}\". "
+            . "The audit trail was sampled {$auditContext} and covered {$processes}. "
+            . "Processes, records, interviews and site observations reviewed were consistent with the requirement for {$clauseFocus} and with the intended operation of the {$systemName}.\n\n"
+            . "Objective Evidence:\n"
             . $this->bulletList($sampledEvidence)
-            . "\nAuditor remark:\n"
-            . "This is a sampled conformity conclusion. The auditor may edit the note or raise a separate NC if conflicting evidence is found."
+            . "\n\nAuditor Conclusion:\n"
+            . "Based on the records reviewed, personnel interviewed and activities observed during the audit trail for {$scopeText}, the organization demonstrated effective implementation of the applicable controls for {$standard} {$clauseNumber}. No nonconformities were identified against this sampled requirement."
         );
     }
 
@@ -184,6 +192,19 @@ class AuditReportNarrativeService
         }
 
         return array_slice(array_values(array_unique($evidence)), 0, 5);
+    }
+
+    private function auditorEvidenceSet(string $standard, string $clauseNumber, string $clauseTitle, string $scope, string $processes, array $clauseEvidence, array $auditTeam): array
+    {
+        $evidence = array_merge(
+            array_slice($clauseEvidence, 0, 3),
+            array_slice($this->recordEvidence($standard, $clauseTitle, $scope), 0, 2),
+            array_slice($this->documentEvidence($standard, $clauseTitle, $scope), 0, 1),
+            array_slice($this->observationEvidence($standard, $clauseTitle, $scope, $processes), 0, 1),
+            array_slice($this->interviewEvidence($standard, $clauseTitle, $auditTeam), 0, 1)
+        );
+
+        return array_slice(array_values(array_unique($evidence)), 0, 8);
     }
 
     private function clauseSpecificEvidence(string $standard, string $clauseNumber, string $clauseTitle, string $scope): array
@@ -572,6 +593,29 @@ class AuditReportNarrativeService
         }
 
         return false;
+    }
+
+    private function managementSystemName(string $standard, string $scope): string
+    {
+        $lower = strtolower($standard . ' ' . $scope);
+
+        if ($this->isFood($lower)) {
+            return 'Food Safety Management System';
+        }
+
+        if (str_contains($lower, '9001') || str_contains($lower, 'quality')) {
+            return 'Quality Management System';
+        }
+
+        if (str_contains($lower, '14001') || str_contains($lower, 'environment')) {
+            return 'Environmental Management System';
+        }
+
+        if (str_contains($lower, '45001') || str_contains($lower, 'safety') || str_contains($lower, 'ohs')) {
+            return 'OH&S Management System';
+        }
+
+        return 'management system';
     }
 
     private function documentEvidence(string $standard, string $clauseTitle, string $scope): array

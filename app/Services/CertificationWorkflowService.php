@@ -98,6 +98,7 @@ class CertificationWorkflowService
         $surveillance1 = $this->eventByType($auditEvents, ['surveillance1']);
         $surveillance2 = $this->eventByType($auditEvents, ['surveillance2']);
         $recertification = $this->eventByType($auditEvents, ['recertification']);
+        $initialAuditEvents = array_values(array_filter([$stage1, $stage2]));
         $technicalReview = $this->certificationTechnicalReview($tenantId, $stage1, $stage2);
         $decision = $technicalReview === null ? null : $this->latest('certification_decisions', [
             'tenant_id' => $tenantId,
@@ -117,8 +118,10 @@ class CertificationWorkflowService
             'surveillance2' => $surveillance2,
             'recertification' => $recertification,
             'appointment_count' => $this->appointmentCount($auditEvents),
-            'open_ncr_count' => $this->ncrCount($tenantId, $auditEvents, false),
-            'total_ncr_count' => $this->ncrCount($tenantId, $auditEvents, true),
+            'open_ncr_count' => $this->ncrCount($tenantId, $initialAuditEvents, false),
+            'total_ncr_count' => $this->ncrCount($tenantId, $initialAuditEvents, true),
+            'open_capa_count' => $this->capaCount($tenantId, $initialAuditEvents, false),
+            'total_capa_count' => $this->capaCount($tenantId, $initialAuditEvents, true),
             'technical_review' => $technicalReview,
             'certification_decision' => $decision,
             'certificate_count' => $this->count('certificates', ['tenant_id' => $tenantId, 'client_id' => $clientId]),
@@ -239,12 +242,14 @@ class CertificationWorkflowService
             return $this->status('pending', 'Waiting for Stage 2 audit.');
         }
 
-        if ($records['open_ncr_count'] > 0) {
-            return $this->status('in_progress', $records['open_ncr_count'] . ' nonconformity record(s) still open.');
+        $openCorrectiveActionCount = (int) $records['open_ncr_count'] + (int) ($records['open_capa_count'] ?? 0);
+        if ($openCorrectiveActionCount > 0) {
+            return $this->status('in_progress', $openCorrectiveActionCount . ' NCR/CAPA record(s) still open.');
         }
 
-        if ($records['total_ncr_count'] > 0) {
-            return $this->status('complete', 'All nonconformities are closed.');
+        $totalCorrectiveActionCount = (int) $records['total_ncr_count'] + (int) ($records['total_capa_count'] ?? 0);
+        if ($totalCorrectiveActionCount > 0) {
+            return $this->status('complete', 'All NCR/CAPA records are closed.');
         }
 
         return in_array($records['stage2']['status'], ['completed', 'closed'], true)
@@ -444,7 +449,25 @@ class CertificationWorkflowService
             ->whereIn('audit_event_id', array_column($events, 'id'));
 
         if (! $includeClosed) {
-            $builder->whereNotIn('status', ['closed', 'verified_closed']);
+            $builder->whereNotIn('status', ['closed', 'verified_closed', 'cancelled']);
+        }
+
+        return $builder->countAllResults();
+    }
+
+    private function capaCount(int $tenantId, array $events, bool $includeClosed): int
+    {
+        if ($events === []) {
+            return 0;
+        }
+
+        $builder = $this->db->table('capas')
+            ->join('ncrs', 'ncrs.id = capas.ncr_id')
+            ->where('capas.tenant_id', $tenantId)
+            ->whereIn('ncrs.audit_event_id', array_column($events, 'id'));
+
+        if (! $includeClosed) {
+            $builder->whereNotIn('capas.status', ['closed', 'verified_closed', 'cancelled']);
         }
 
         return $builder->countAllResults();

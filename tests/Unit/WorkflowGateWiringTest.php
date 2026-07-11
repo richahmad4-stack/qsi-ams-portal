@@ -26,9 +26,18 @@ class WorkflowGateWiringTest extends TestCase
 
     public function testTechnicalReviewAndDecisionUseFileLevelGates(): void
     {
+        $workflowService = file_get_contents(__DIR__ . '/../../app/Services/CertificationWorkflowService.php') ?: '';
+
         self::assertStringContainsString('certificationFileGateFailures($clientId, $eventId)', $this->controller);
         self::assertStringContainsString('eventsRequiredForFileGate', $this->controller);
         self::assertStringContainsString('auditTeamCoverageFailures($clientId, $eventId)', $this->controller);
+        self::assertStringContainsString("'open_capa_count' => \$this->capaCount", $workflowService);
+        self::assertStringContainsString("'total_capa_count' => \$this->capaCount", $workflowService);
+        self::assertStringContainsString('$initialAuditEvents = array_values(array_filter([$stage1, $stage2]))', $workflowService);
+        self::assertStringContainsString("['closed', 'verified_closed', 'cancelled']", $workflowService);
+        $workflowView = file_get_contents(__DIR__ . '/../../app/Views/workflow/show.php') ?: '';
+        self::assertStringContainsString("'tm_file_review' => \$eventRoute(\$stage2 ?? \$stage1, 'technical_review')", $workflowView);
+        self::assertStringContainsString("'certification_decision' => \$eventRoute(\$stage2 ?? \$stage1, 'decision')", $workflowView);
     }
 
     public function testReviewerAndDecisionMakerMustCoverWholeClientScope(): void
@@ -165,19 +174,19 @@ class WorkflowGateWiringTest extends TestCase
         self::assertStringNotContainsString('Controlled document prepared by QSI AMS', $documentGenerator);
     }
 
-    public function testWorkflowShowsDocumentControlRegister(): void
+    public function testDocumentControlsRemainInTemplatesNotWorkflow(): void
     {
         $workflow = file_get_contents(__DIR__ . '/../../app/Views/workflow/show.php') ?: '';
         $templateForm = file_get_contents(__DIR__ . '/../../app/Views/masters/templates/form.php') ?: '';
+        $templateIndex = file_get_contents(__DIR__ . '/../../app/Views/masters/templates/index.php') ?: '';
         $templateModel = file_get_contents(__DIR__ . '/../../app/Models/DocumentTemplateModel.php') ?: '';
         $documentGenerator = file_get_contents(__DIR__ . '/../../app/Services/DocumentGeneratorService.php') ?: '';
 
-        self::assertStringContainsString('Document No.', $workflow);
-        self::assertStringContainsString('Revision', $workflow);
-        self::assertStringContainsString('Issue', $workflow);
-        self::assertStringContainsString('renderDocumentControlRegister', $workflow);
-        self::assertStringContainsString('technical_review_report', $workflow);
+        self::assertStringNotContainsString('renderDocumentControlRegister', $workflow);
+        self::assertStringNotContainsString('<th>Document No.</th>', $workflow);
+        self::assertStringNotContainsString('technical_review_report', $workflow);
         self::assertStringContainsString('document_number', $templateForm);
+        self::assertStringContainsString('Document No.', $templateIndex);
         self::assertStringContainsString('document_number', $templateModel);
         self::assertStringContainsString('documentTemplateKey', $documentGenerator);
         self::assertStringContainsString('standardDocumentControl', $documentGenerator);

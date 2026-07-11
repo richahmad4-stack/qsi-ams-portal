@@ -72,7 +72,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Auditor Appointment PDFs now use the same clean official-form header instead of the old nested document-control table and large QSI-CERT band.
 - Audit Plan PDFs now use the same clean official-form F31 header and no redundant document-control footer line.
 - Audit Report, NCR/CAPA, Technical Review, and Decision PDFs now use the same official-form QSI header with document-control cells and no old prepared-date footer.
-- Controlled document numbers, revisions, issue numbers, and document dates are now managed in Templates and shown in the workflow PDF sections for certification and surveillance files, with edit links for compliance-controlled updates.
+- Controlled document numbers, revisions, issue numbers, and document dates are managed in Templates and rendered inside controlled PDFs, while assessor-facing workflow screens no longer show the document-control register.
 - A complete cross-computer `SESSION_HANDOFF_AMS.md` now records the current architecture, certification rules, role/conflict policy, document design system, completed modules, known gaps, verification steps, and exact continuation priorities for a fresh Codex session.
 - HACCP client applications now include a normal application question for `Number of HACCP Studies / Plans`, visible only for HACCP files and linked to application review audit-duration inputs.
 - Application Review now uses the saved client application HACCP Studies/Plans count as the source of truth, preventing stale review payload values from showing a different count.
@@ -85,6 +85,15 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Certification workflow status now selects the Initial Stage 2 Technical Review for the certification file card, so future surveillance/recertification pending reviews no longer make an approved certification Technical Review appear in progress.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
 - Local PHP startup now loads `scripts/php-local.ini`, enabling `intl` and buffering/logging startup warnings so database-backed sessions remain available when large workflow forms such as Technical Review are submitted. Client 26 Technical Review was browser-submitted successfully after the fix.
+- Certification workflow status now keeps initial certification NCR/CAPA completion scoped to Stage 1/Stage 2, treats cancelled records as closed, includes CAPA status in the workflow card, and opens Technical Review/Decision with the Stage 2 event id so pending recertification records do not block the current certification decision.
+- Audit Report PDFs now remove submission timestamps from report submission/draft tables, show the assigned audit team as "Audited by", show the client representative receiving the report, and render shared auditor-style checklist notes with Conformity Note, Objective Evidence, and Auditor Conclusion sections generated per standard/clause/scope rather than as a HACCP-only text block.
+- Certificate output has been tightened: the PDF date grid no longer squeezes the certificate number into an overlapping four-column row, the certificate number now renders as a separate controlled line, typography/spacing in the lower certificate area is reduced for a cleaner professional layout, and certificate DOCX text is XML-escaped so Word can open generated files containing characters such as ampersands.
+- Certificate numbering now uses controlled standard-based numbers such as `QSI-HACCP-0001` and `QSI-ISO9001-0001` instead of timestamp/client auto numbers; normal certificate issue, Cycle Builder automation, demo seeding, the existing MUNAJEM certificate record, and the client visible certificate number were aligned to the new format.
+- Certificate verification details now sit directly under the QR code in both PDF and DOCX outputs, removing the awkward floating lower-right validity block and keeping the certificate footer visually cleaner.
+- The main demo workflow seeder now safely resets only demo clients, seeds exactly five full certification cycles for the core standards (HACCP, ISO 9001, ISO 22000, ISO 14001, ISO 45001), and preserves real/current clients such as MUNAJEM.
+- Seeded full-cycle demo clients now include application review, proposal, contract, audit program, five audit events, report drafts, NCR/CAPA records, technical reviews, certification decisions, active certificates, and feedback records for each of the five core standards.
+- Certificate prefix generation now preserves standard numbers such as `9001`, so ISO 9001 certificates use `QSI-ISO9001-0001` instead of collapsing to `QSI-ISO-0001`.
+- Demo workflow seeding no longer creates fake internal `demo.*@qsi.local` users or personnel. Seeded internal responsibilities now map to original AMS users/personnel, and the previously created fake demo user/personnel records were removed from the local database.
 
 ## Current Focus
 
@@ -96,8 +105,8 @@ Project-owner compliance hardening and operational readiness: core workflow gate
 - Add a controlled data migration/import screen for historic certificates and clients using staging/validation before anything becomes live.
 - Configure real SMTP settings and test appointment/reminder email delivery outside the local demo environment.
 - Add hosting/deployment documentation for domain, TLS, environment secrets, scheduler, queue/process manager, and backup/restore.
-- Browser-test the Cycle Builder with one HACCP file, one ISO 9001 file, and one multi-standard file, then review the prepared workflow screens and PDFs.
-- Review the single HACCP-only demo client in the browser and confirm the workflow list, client standards badge, certificate, surveillance states, PDFs, and role dashboards read correctly.
+- Browser-test the five full-cycle standard demo clients and one multi-standard file, then review the workflow screens and PDFs.
+- Review the five standard demo clients in the browser and confirm the client standards badges, audit files, role assignments, certificates, dashboards, and standard-specific forms behave correctly.
 - Browser-test the new Smart Audit Content Engine on HACCP, ISO 9001, and multi-standard client files to confirm report clauses and NCR/CAPA records are varied, clause-aligned, and not duplicated.
 - Continue refining Clause Pool matching and screen actions so auditors can prepare all clauses, refresh individual clause answers, and refresh NC/CAPA records from approved templates.
 - Convert the user-supplied official forms into richer controlled HTML/PDF sections for application, review, proposal, contract, audit programme, appointment, plan, report, NCR/CAPA, technical review, decision, certificate and feedback.

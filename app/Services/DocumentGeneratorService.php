@@ -425,18 +425,18 @@ class DocumentGeneratorService
             . '<table class="certificate-dates"><colgroup><col class="date-label"><col class="date-value"><col class="date-label"><col class="date-value"></colgroup><tbody>'
             . '<tr><th>Initial Certification Date:</th><td>' . esc($initialDate) . '</td><th>Certification Date:</th><td>' . esc($issueDate) . '</td></tr>'
             . '<tr><th>Surveillance 1 Date:</th><td>' . esc($surveillance1) . '</td><th>Surveillance 2 Date:</th><td>' . esc($surveillance2) . '</td></tr>'
-            . '<tr><th>Valid Till:</th><td>' . esc($expiryDate) . '</td><th>Certificate Number:</th><td>' . esc($certificateNumber) . '</td></tr>'
+            . '<tr><th>Valid Till:</th><td>' . esc($expiryDate) . '</td><th>Certificate No.:</th><td class="certificate-number-cell">' . esc($certificateNumber) . '</td></tr>'
             . '</tbody></table>'
             . '<div class="certificate-validity-note">This Certificate is valid upon the successful completion of periodic surveillance audits to maintain compliance with the relevant standards.</div>'
             . '<table class="certificate-signatures"><tbody><tr>'
             . '<td><div class="signature-line">' . $approvedSignature . '</div><div>Approved by</div></td>'
             . '<td><div class="signature-line">' . $printedSignature . '</div><div>Printed by</div></td>'
             . '</tr></tbody></table>'
-            . '<table class="certificate-verification-table"><tbody><tr>'
-            . '<td class="certificate-qr-cell"><img src="' . esc($qr, 'attr') . '" alt="Certificate QR"></td>'
-            . '<td class="certificate-verification-text"><div class="certificate-validity">Validity code: <strong>' . esc($certificateNumber) . '</strong></div>'
-            . '<div class="certificate-verify">Check validity of the certificate using this code on <strong>certificate.qsicert.ca</strong><br>Or email us at <strong>info@qsi-cert.com</strong><br>QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia</div></td>'
-            . '</tr></tbody></table>'
+            . '<div class="certificate-verification-block">'
+            . '<img src="' . esc($qr, 'attr') . '" alt="Certificate QR">'
+            . '<div class="certificate-validity">Validity code: <strong>' . esc($certificateNumber) . '</strong></div>'
+            . '<div class="certificate-verify">Check validity of the certificate using this code on <strong>certificate.qsicert.ca</strong><br>Or email us at <strong>info@qsi-cert.com</strong><br>QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia</div>'
+            . '</div>'
             . '</div></div></body></html>';
     }
 
@@ -460,7 +460,7 @@ class DocumentGeneratorService
         $code = strtoupper($standardCode);
 
         return match (true) {
-            str_contains($code, 'HACCP') => 'General Principles of Food Hygiene and Guidelines for the implementation & certification of the Hazard Analysis and Critical Control Points (HACCP) system, as per the Codex Alimentarius, CXC 1-1969 (2020).',
+            str_contains($code, 'HACCP') => 'General Principles of Food Hygiene and Guidelines for the implementation and certification of the Hazard Analysis and Critical Control Points (HACCP) system, as per the Codex Alimentarius, CXC 1-1969 (2020).',
             str_contains($code, '22000') => 'Food safety management systems - Requirements for any organization in the food chain.',
             str_contains($code, 'FSSC') => 'Food safety system certification requirements for organizations in the food chain.',
             str_contains($code, '9001') => 'Quality management systems - Requirements.',
@@ -555,29 +555,29 @@ class DocumentGeneratorService
         }
 
         $section->addText(
-            'This is to certify the ' . $this->certificateSystemName($standardCode) . ' of',
+            $this->certificateDocxText('This is to certify the ' . $this->certificateSystemName($standardCode) . ' of'),
             ['size' => 11],
             ['spaceAfter' => Converter::pointToTwip(22)]
         );
         $section->addText(
-            $companyName,
+            $this->certificateDocxText($companyName),
             ['size' => $companyFontSize, 'bold' => true],
             ['spaceAfter' => Converter::pointToTwip(4)]
         );
-        $section->addText($address, ['size' => 9], ['spaceAfter' => Converter::pointToTwip(24)]);
+        $section->addText($this->certificateDocxText($address), ['size' => 9], ['spaceAfter' => Converter::pointToTwip(24)]);
         $section->addText(
-            'has been assessed and found to be in compliance with the ' . (str_contains(strtoupper($standardCode), 'HACCP') ? 'document' : 'Standard'),
+            $this->certificateDocxText('has been assessed and found to be in compliance with the ' . (str_contains(strtoupper($standardCode), 'HACCP') ? 'document' : 'Standard')),
             ['size' => 11],
             ['spaceAfter' => Converter::pointToTwip(16)]
         );
-        $section->addText($standardCode, ['size' => 30], ['spaceAfter' => Converter::pointToTwip(10)]);
+        $section->addText($this->certificateDocxText($standardCode), ['size' => 30], ['spaceAfter' => Converter::pointToTwip(10)]);
         $this->addDocxMultilineText(
             $section,
             $this->certificateStandardDescription($standardCode),
             ['size' => 9.5, 'bold' => true, 'italic' => true],
             ['spaceAfter' => Converter::pointToTwip(16)]
         );
-        $section->addText('applicable to', ['size' => 14], ['spaceAfter' => Converter::pointToTwip(8)]);
+        $section->addText($this->certificateDocxText('applicable to'), ['size' => 14], ['spaceAfter' => Converter::pointToTwip(8)]);
         $this->addDocxMultilineText(
             $section,
             (string) ($certificate['scope'] ?? ''),
@@ -596,10 +596,10 @@ class DocumentGeneratorService
         ]);
         $this->addCertificateDateRow($dateTable, 'Initial Certification Date:', $initialDate, 'Certification Date:', $issueDate);
         $this->addCertificateDateRow($dateTable, 'Surveillance 1 Date:', $surveillance1, 'Surveillance 2 Date:', $surveillance2);
-        $this->addCertificateDateRow($dateTable, 'Valid Till:', $expiryDate, 'Certificate Number:', $certificateNumber);
+        $this->addCertificateDateRow($dateTable, 'Valid Till:', $expiryDate, 'Certificate No.:', $certificateNumber, true);
 
         $section->addText(
-            'This Certificate is valid upon the successful completion of periodic surveillance audits to maintain compliance with the relevant standards.',
+            $this->certificateDocxText('This Certificate is valid upon the successful completion of periodic surveillance audits to maintain compliance with the relevant standards.'),
             ['size' => 8.5, 'italic' => true],
             ['spaceBefore' => Converter::pointToTwip(4), 'spaceAfter' => Converter::pointToTwip(24)]
         );
@@ -613,26 +613,25 @@ class DocumentGeneratorService
             $approved->addImage($approvedSignaturePath, ['width' => 112, 'height' => 30, 'alignment' => Jc::CENTER]);
         }
         $approved->addText('', [], ['borderBottomSize' => 6, 'borderBottomColor' => '1f2933']);
-        $approved->addText('Approved by', ['size' => 8.8], ['alignment' => Jc::CENTER]);
+        $approved->addText($this->certificateDocxText('Approved by'), ['size' => 8.8], ['alignment' => Jc::CENTER]);
         $printed = $signatures->addCell(2850);
         if ($printedSignaturePath !== '') {
             $printed->addImage($printedSignaturePath, ['width' => 112, 'height' => 30, 'alignment' => Jc::CENTER]);
         }
         $printed->addText('', [], ['borderBottomSize' => 6, 'borderBottomColor' => '1f2933']);
-        $printed->addText('Printed by', ['size' => 8.8], ['alignment' => Jc::CENTER]);
+        $printed->addText($this->certificateDocxText('Printed by'), ['size' => 8.8], ['alignment' => Jc::CENTER]);
 
         $verification = $section->addTable(['cellMarginTop' => 15, 'cellMarginBottom' => 15]);
         $verification->addRow();
-        $qrCell = $verification->addCell(1500);
+        $qrCell = $verification->addCell(3550);
         $qrPath = $this->qrPngPath((string) ($certificate['qr_payload'] ?? $certificateNumber));
         if ($qrPath !== '') {
             $qrCell->addImage($qrPath, ['width' => 68, 'height' => 68]);
         }
-        $verifyCell = $verification->addCell(6200);
-        $verifyCell->addText('Validity code: ' . $certificateNumber, ['size' => 9.4, 'bold' => true, 'color' => '1c6d8a']);
-        $verifyCell->addText('Check validity of the certificate using this code on certificate.qsicert.ca', ['size' => 7.6]);
-        $verifyCell->addText('Or email us at info@qsi-cert.com', ['size' => 7.6]);
-        $verifyCell->addText('QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia', ['size' => 7.6]);
+        $qrCell->addText($this->certificateDocxText('Validity code: ' . $certificateNumber), ['size' => 8.1, 'bold' => true, 'color' => '1c6d8a']);
+        $qrCell->addText($this->certificateDocxText('Check validity of the certificate using this code on certificate.qsicert.ca'), ['size' => 6.9]);
+        $qrCell->addText($this->certificateDocxText('Or email us at info@qsi-cert.com'), ['size' => 6.9]);
+        $qrCell->addText($this->certificateDocxText('QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia'), ['size' => 6.9]);
 
         $directory = WRITEPATH . 'uploads' . DIRECTORY_SEPARATOR . 'documents' . DIRECTORY_SEPARATOR . 'tenant_' . $tenantId . DIRECTORY_SEPARATOR . 'client_' . $clientId;
         if (! is_dir($directory)) {
@@ -673,17 +672,26 @@ class DocumentGeneratorService
 
         $lastIndex = count($lines) - 1;
         foreach ($lines as $index => $line) {
-            $container->addText($line, $fontStyle, $index === $lastIndex ? $paragraphStyle : ['spaceAfter' => 0]);
+            $container->addText($this->certificateDocxText($line), $fontStyle, $index === $lastIndex ? $paragraphStyle : ['spaceAfter' => 0]);
         }
     }
 
-    private function addCertificateDateRow(mixed $table, string $leftLabel, string $leftValue, string $rightLabel, string $rightValue): void
+    private function addCertificateDateRow(mixed $table, string $leftLabel, string $leftValue, string $rightLabel, string $rightValue, bool $rightValueEmphasis = false): void
     {
         $table->addRow();
-        $table->addCell(2100)->addText($leftLabel, ['size' => 8.5, 'bold' => true]);
-        $table->addCell(1450)->addText($leftValue, ['size' => 8.5], ['alignment' => Jc::RIGHT]);
-        $table->addCell(1800)->addText($rightLabel, ['size' => 8.5, 'bold' => true]);
-        $table->addCell(1700)->addText($rightValue, ['size' => 8.5], ['alignment' => Jc::RIGHT]);
+        $table->addCell(2100)->addText($this->certificateDocxText($leftLabel), ['size' => 8.5, 'bold' => true]);
+        $table->addCell(1450)->addText($this->certificateDocxText($leftValue), ['size' => 8.5], ['alignment' => Jc::RIGHT]);
+        $table->addCell(1800)->addText($this->certificateDocxText($rightLabel), ['size' => 8.5, 'bold' => true]);
+        $table->addCell(1700)->addText(
+            $this->certificateDocxText($rightValue),
+            ['size' => $rightValueEmphasis ? 8.1 : 8.5, 'bold' => $rightValueEmphasis, 'color' => $rightValueEmphasis ? '1c6d8a' : '111827'],
+            ['alignment' => Jc::RIGHT]
+        );
+    }
+
+    private function certificateDocxText(string $text): string
+    {
+        return htmlspecialchars($text, ENT_XML1 | ENT_COMPAT, 'UTF-8');
     }
 
     private function writePdf(int $tenantId, ?int $clientId, string $key, string $title, ?string $relatedTable, ?int $relatedId, string $html, int $userId): array
@@ -2978,14 +2986,27 @@ class DocumentGeneratorService
     {
         return [
             ['Audit Events', $this->eventTable($data['events'])],
+            ['Audit Report Identification', $this->auditReportIdentification($data)],
             ['Audit Report Submission', $this->keyValueTable([
                 'Report Submission Date' => $this->auditReportSubmissionDate($data['reports'] ?? []),
             ])],
-            ['Report Drafts', $this->recordTable($data['reports'], ['audit_number', 'report_type', 'status', 'version_number', 'submitted_at'])],
-            ['Checklist / Report Notes', $this->reportChecklistNotes($data['report_sections'] ?? [])],
+            ['Report Drafts', $this->recordTable(
+                $this->auditReportDraftRows($data['reports'] ?? []),
+                ['audit_number', 'report_type', 'status', 'version_number', 'submitted_date'],
+                ['submitted_date' => 'Submitted Date']
+            )],
+            ['Checklist / Report Notes', $this->reportChecklistNotes($data['report_sections'] ?? [], $data['client'] ?? [])],
             ['Nonconformities', $this->recordTable($data['ncrs'], ['ncr_number', 'classification', 'status', 'finding'])],
-            ['CAPA', $this->recordDetailTables($data['capas'] ?? [], ['capa_number', 'status', 'issue', 'immediate_correction', 'root_cause', 'corrective_action', 'preventive_action', 'responsible_person', 'target_date', 'evidence_reference', 'verification', 'effectiveness', 'closed_at'], 'capa_number')],
+            ['CAPA', $this->recordDetailTables($this->auditReportCapaRows($data['capas'] ?? []), ['capa_number', 'status', 'issue', 'immediate_correction', 'root_cause', 'corrective_action', 'preventive_action', 'responsible_person', 'target_date', 'evidence_reference', 'verification', 'effectiveness', 'closed_at'], 'capa_number')],
         ];
+    }
+
+    private function auditReportIdentification(array $data): string
+    {
+        return $this->keyValueTable([
+            'Audited by' => $this->auditTeamDisplay($data['appointments'] ?? []),
+            'Report submitted to client representative' => $this->clientRepresentativeDisplay($data),
+        ]);
     }
 
     private function auditReportSubmissionDate(array $reports): string
@@ -2993,19 +3014,86 @@ class DocumentGeneratorService
         foreach ($reports as $report) {
             $submittedAt = trim((string) ($report['submitted_at'] ?? ''));
             if ($submittedAt !== '') {
-                return $submittedAt;
+                return $this->dateOnly($submittedAt);
             }
         }
 
         return 'Not submitted';
     }
 
-    private function reportChecklistNotes(array $sections): string
+    private function auditReportDraftRows(array $reports): array
+    {
+        return array_map(function (array $report): array {
+            $submittedAt = trim((string) ($report['submitted_at'] ?? ''));
+            $report['submitted_date'] = $submittedAt !== '' ? $this->dateOnly($submittedAt) : 'Not submitted';
+            unset($report['submitted_at']);
+
+            return $report;
+        }, $reports);
+    }
+
+    private function auditReportCapaRows(array $capas): array
+    {
+        return array_map(function (array $capa): array {
+            $closedAt = trim((string) ($capa['closed_at'] ?? ''));
+            if ($closedAt !== '') {
+                $capa['closed_at'] = $this->dateOnly($closedAt);
+            }
+
+            return $capa;
+        }, $capas);
+    }
+
+    private function auditTeamDisplay(array $appointments): string
+    {
+        $names = [];
+        foreach ($appointments as $appointment) {
+            $name = trim((string) ($appointment['full_name'] ?? $appointment['auditor_name'] ?? $appointment['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $role = trim((string) ($appointment['appointment_role'] ?? $appointment['role'] ?? ''));
+            $display = $role !== '' ? $name . ' (' . ucwords(str_replace('_', ' ', $role)) . ')' : $name;
+            if (! in_array($display, $names, true)) {
+                $names[] = $display;
+            }
+        }
+
+        return $names === [] ? 'Not assigned' : implode("\n", $names);
+    }
+
+    private function clientRepresentativeDisplay(array $data): string
+    {
+        $client = $data['client'] ?? [];
+        $contract = $data['contract'] ?? [];
+        $application = $data['certification_application'] ?? [];
+        $review = $data['application_review'] ?? [];
+
+        foreach ([
+            $contract['client_signatory_name'] ?? null,
+            $contract['signed_by_name'] ?? null,
+            $client['contact_person'] ?? null,
+            $application['declaration_name'] ?? null,
+            $review['management_representative'] ?? null,
+            $client['contact_name'] ?? null,
+        ] as $candidate) {
+            $name = trim((string) $candidate);
+            if ($name !== '') {
+                return $name;
+            }
+        }
+
+        return 'Client authorized representative';
+    }
+
+    private function reportChecklistNotes(array $sections, array $client = []): string
     {
         if ($sections === []) {
             return '<p class="muted">No checklist notes available.</p>';
         }
 
+        $scope = trim((string) ($client['scope'] ?? $client['business_activity'] ?? ''));
         $html = '';
         foreach ($sections as $index => $section) {
             $standard = trim((string) ($section['standard_code'] ?? ''));
@@ -3023,8 +3111,11 @@ class DocumentGeneratorService
             $html .= '<th>Clause</th><td>' . esc($clauseNumber !== '' ? $clauseNumber : 'N/A') . '</td>';
             $html .= '<th>Record Type</th><td>' . esc(ucwords(str_replace('_', ' ', $sectionKey))) . '</td>';
             $html .= '</tr></tbody></table>';
+            if ($scope !== '') {
+                $html .= '<table class="report-note-meta"><tbody><tr><th>Scope</th><td>' . esc($scope) . '</td></tr></tbody></table>';
+            }
             $html .= '<div class="report-note-body">';
-            $html .= '<div class="report-note-label">Audit evidence and conclusion</div>';
+            $html .= '<div class="report-note-label">Conformity statement and objective evidence</div>';
             $content = $this->cleanReportNoteContent($content);
             $html .= $content !== '' ? nl2br(esc($content)) : '<span class="muted">No note recorded.</span>';
             $html .= '</div></div>';
@@ -3036,7 +3127,6 @@ class DocumentGeneratorService
     private function cleanReportNoteContent(string $content): string
     {
         $content = str_replace(["\r\n", "\r"], "\n", trim($content));
-        $content = preg_replace('/^Conformity note:\s*/i', '', $content) ?? $content;
         $content = preg_replace('/\n+Clause Pool basis:\s*\n+/i', "\n\n", $content) ?? $content;
         $content = preg_replace('/\n*Template reference:\s*CP-\d+\.\s*Prepared from approved Clause Pool; editable by auditor\.?/i', '', $content) ?? $content;
 
@@ -3971,32 +4061,30 @@ class DocumentGeneratorService
             .certificate-company.company-long { font-size: 17.2pt; line-height: 1.08; }
             .certificate-address { font-size: 9.3pt; line-height: 1.22; max-width: 112mm; margin-bottom: 10mm; }
             .certificate-compliance { font-size: 11.2pt; margin-bottom: 8mm; }
-            .certificate-standard { font-size: 29pt; line-height: 1; margin-bottom: 5mm; font-weight: 400; }
-            .certificate-description { font-size: 9.3pt; line-height: 1.25; font-weight: 700; font-style: italic; max-width: 130mm; margin-bottom: 7mm; }
+            .certificate-standard { font-size: 27pt; line-height: 1; margin-bottom: 4.5mm; font-weight: 400; letter-spacing: 0.2mm; }
+            .certificate-description { font-size: 8.8pt; line-height: 1.25; font-weight: 700; font-style: italic; max-width: 130mm; margin-bottom: 6.5mm; }
             .certificate-applicable { font-size: 13pt; margin-bottom: 4mm; }
-            .certificate-scope { font-size: 14.5pt; line-height: 1.14; font-weight: 700; max-width: 134mm; margin-bottom: 5mm; }
+            .certificate-scope { font-size: 14pt; line-height: 1.14; font-weight: 700; max-width: 134mm; margin-bottom: 4.2mm; }
             .certificate-scope.scope-medium { font-size: 12.6pt; line-height: 1.12; }
             .certificate-scope.scope-long { font-size: 11.2pt; line-height: 1.1; }
-            .certificate-dates { width: 137mm; table-layout: fixed; margin: 0 0 3.5mm; border-collapse: collapse; border-top: 0.35mm solid #1f2933; border-bottom: 0.35mm solid #1f2933; }
-            .certificate-dates .date-label { width: 40mm; }
-            .certificate-dates .date-value { width: 28.5mm; }
-            .certificate-dates th, .certificate-dates td { border: 0; padding: 0.85mm 1mm; font-size: 7.9pt; color: #111827; background: transparent !important; line-height: 1.12; vertical-align: middle; }
+            .certificate-dates { width: 137mm; table-layout: fixed; margin: 0 0 3.2mm; border-collapse: collapse; border-top: 0.35mm solid #1f2933; border-bottom: 0.35mm solid #1f2933; }
+            .certificate-dates .date-label { width: 38mm; }
+            .certificate-dates .date-value { width: 30.5mm; }
+            .certificate-dates th, .certificate-dates td { border: 0; padding: 0.82mm 1.2mm; font-size: 7.45pt; color: #111827; background: transparent !important; line-height: 1.12; vertical-align: middle; }
             .certificate-dates tbody tr:nth-child(even) td { background: transparent !important; }
             .certificate-dates th { font-weight: 700; text-align: left; white-space: nowrap; }
             .certificate-dates td { text-align: right; white-space: nowrap; }
-            .certificate-validity-note { font-size: 8.3pt; line-height: 1.26; font-style: italic; max-width: 134mm; margin-bottom: 4mm; }
-            .certificate-signatures { width: 90mm; table-layout: fixed; border-collapse: collapse; margin: 0 0 4mm; }
+            .certificate-dates .certificate-number-cell { color: #1c6d8a; font-weight: 700; font-size: 7.25pt; letter-spacing: 0.05mm; }
+            .certificate-validity-note { font-size: 8pt; line-height: 1.24; font-style: italic; max-width: 134mm; margin-bottom: 3.5mm; }
+            .certificate-signatures { width: 90mm; table-layout: fixed; border-collapse: collapse; margin: 0 0 3.5mm; }
             .certificate-signatures td { border: 0 !important; background: transparent !important; padding: 0 6mm 0 0; text-align: center; font-size: 8.6pt; vertical-align: top; }
             .signature-line { height: 11mm; border-bottom: 0.25mm solid #1f2933; margin-bottom: 1.2mm; text-align: center; }
             .certificate-signature-image { max-width: 39mm; max-height: 10.5mm; display: inline-block; vertical-align: bottom; }
-            .certificate-verification-table { width: 137mm; table-layout: fixed; border-collapse: collapse; margin-top: 0; }
-            .certificate-verification-table td { border: 0 !important; background: transparent !important; padding: 0; vertical-align: top; }
-            .certificate-qr-cell { width: 25mm; }
-            .certificate-qr-cell img { width: 22mm; height: 22mm; }
-            .certificate-verification-text { width: 112mm; padding-left: 5mm !important; padding-top: 1mm !important; }
-            .certificate-validity { font-size: 9pt; margin-bottom: 1.4mm; white-space: nowrap; }
-            .certificate-validity strong { color: #1c6d8a; font-size: 9.7pt; }
-            .certificate-verify { font-size: 7.3pt; line-height: 1.2; color: #1f2933; }
+            .certificate-verification-block { width: 52mm; margin-top: 1mm; }
+            .certificate-verification-block img { width: 22mm; height: 22mm; display: block; margin-bottom: 2.1mm; }
+            .certificate-validity { font-size: 7.6pt; margin-bottom: 1mm; line-height: 1.16; }
+            .certificate-validity strong { color: #1c6d8a; font-size: 8.1pt; }
+            .certificate-verify { font-size: 6.7pt; line-height: 1.18; color: #1f2933; }
         ';
     }
 

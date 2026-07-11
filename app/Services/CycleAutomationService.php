@@ -1551,7 +1551,7 @@ class CycleAutomationService
             : 'active';
 
         foreach ($preview['standards'] as $idx => $standard) {
-            $certNo = $this->number('QSI-CERT-AUTO', $clientId) . '-' . str_pad((string) ($idx + 1), 2, '0', STR_PAD_LEFT);
+            $certNo = $this->nextCertificateNumber($tenantId, (string) ($standard['code'] ?? $standard['standard_code'] ?? $standard['name'] ?? 'STANDARD'));
             $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '-', $certNo));
             $this->db->table('certificates')->insert([
                 'tenant_id' => $tenantId,
@@ -1910,6 +1910,41 @@ class CycleAutomationService
     private function number(string $prefix, int $id): string
     {
         return $prefix . '-' . str_pad((string) $id, 4, '0', STR_PAD_LEFT) . '-' . date('His');
+    }
+
+    private function nextCertificateNumber(int $tenantId, string $standardCode): string
+    {
+        $prefix = 'QSI-' . $this->certificateStandardPrefix($standardCode);
+        $rows = $this->db->table('certificates')
+            ->select('certificate_number')
+            ->where('tenant_id', $tenantId)
+            ->like('certificate_number', $prefix . '-', 'after')
+            ->get()
+            ->getResultArray();
+
+        $max = 0;
+        foreach ($rows as $row) {
+            $number = (string) ($row['certificate_number'] ?? '');
+            if (preg_match('/^' . preg_quote($prefix, '/') . '-(\d{4,})$/', $number, $matches) === 1) {
+                $max = max($max, (int) $matches[1]);
+            }
+        }
+
+        return $prefix . '-' . str_pad((string) ($max + 1), 4, '0', STR_PAD_LEFT);
+    }
+
+    private function certificateStandardPrefix(string $standardCode): string
+    {
+        $code = strtoupper(trim($standardCode));
+        $code = str_replace([':', '.', '/', '\\'], ' ', $code);
+        $parts = preg_split('/[^A-Z0-9]+/', $code) ?: [];
+        $parts = array_values(array_filter($parts, static fn (string $part): bool => $part !== '' && ! preg_match('/^(19|20)\d{2}$/', $part)));
+
+        if ($parts === []) {
+            return 'STANDARD';
+        }
+
+        return substr(implode('', $parts), 0, 24);
     }
 
     private function intOrNull(mixed $value): ?int

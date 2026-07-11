@@ -1645,7 +1645,7 @@ class WorkflowActionController extends BaseController
                 continue;
             }
 
-            $number = $this->number('CERT-' . preg_replace('/[^A-Z0-9]+/', '-', strtoupper((string) $standard['standard_code'])), $clientId);
+            $number = $this->nextCertificateNumber((string) $standard['standard_code']);
             $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '-', $number)) . '-' . random_int(1000, 9999);
             $payload = [
                 'tenant_id' => (int) session()->get('tenant_id'),
@@ -3174,7 +3174,7 @@ class WorkflowActionController extends BaseController
             ->whereIn('audit_event_id', array_column($events, 'id'));
 
         if (! $includeClosed) {
-            $builder->whereNotIn('status', ['closed', 'verified_closed']);
+            $builder->whereNotIn('status', ['closed', 'verified_closed', 'cancelled']);
         }
 
         return $builder->countAllResults();
@@ -3942,6 +3942,42 @@ class WorkflowActionController extends BaseController
     private function number(string $prefix, int $clientId): string
     {
         return $prefix . '-' . date('YmdHis') . '-' . $clientId . '-' . random_int(100, 999);
+    }
+
+    private function nextCertificateNumber(string $standardCode): string
+    {
+        $prefix = 'QSI-' . $this->certificateStandardPrefix($standardCode);
+        $tenantId = (int) session()->get('tenant_id');
+        $rows = $this->db->table('certificates')
+            ->select('certificate_number')
+            ->where('tenant_id', $tenantId)
+            ->like('certificate_number', $prefix . '-', 'after')
+            ->get()
+            ->getResultArray();
+
+        $max = 0;
+        foreach ($rows as $row) {
+            $number = (string) ($row['certificate_number'] ?? '');
+            if (preg_match('/^' . preg_quote($prefix, '/') . '-(\d{4,})$/', $number, $matches) === 1) {
+                $max = max($max, (int) $matches[1]);
+            }
+        }
+
+        return $prefix . '-' . str_pad((string) ($max + 1), 4, '0', STR_PAD_LEFT);
+    }
+
+    private function certificateStandardPrefix(string $standardCode): string
+    {
+        $code = strtoupper(trim($standardCode));
+        $code = str_replace([':', '.', '/', '\\'], ' ', $code);
+        $parts = preg_split('/[^A-Z0-9]+/', $code) ?: [];
+        $parts = array_values(array_filter($parts, static fn (string $part): bool => $part !== '' && ! preg_match('/^(19|20)\d{2}$/', $part)));
+
+        if ($parts === []) {
+            return 'STANDARD';
+        }
+
+        return substr(implode('', $parts), 0, 24);
     }
 
     private function nullableText(string $field): ?string

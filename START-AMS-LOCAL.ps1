@@ -1,24 +1,24 @@
 $ErrorActionPreference = 'Stop'
 
-$amsRoot = 'C:\Users\PCD\Documents\AMS'
-$xamppRoot = 'C:\xampp'
-$mysqlStart = Join-Path $xamppRoot 'mysql_start.bat'
+$amsRoot = 'C:\Users\pc\Documents\Codex\qsi-ams-portal'
+$databaseScript = Join-Path $amsRoot 'scripts\run-local-database.ps1'
+$appScript = Join-Path $amsRoot 'scripts\run-local-app.ps1'
 
 if (-not (Test-Path $amsRoot)) {
     throw "AMS folder not found: $amsRoot"
 }
 
-if (-not (Test-Path $mysqlStart)) {
-    throw "XAMPP MySQL launcher not found: $mysqlStart"
+if (-not (Test-Path $databaseScript)) {
+    throw "AMS database launcher not found: $databaseScript"
 }
 
-Write-Host 'Starting XAMPP MySQL...' -ForegroundColor Cyan
-Start-Process -FilePath 'cmd.exe' -ArgumentList '/k', "cd /d `"$xamppRoot`" && `"$mysqlStart`""
+Write-Host 'Starting QSI AMS MySQL on 127.0.0.1:3308...' -ForegroundColor Cyan
+Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $databaseScript) -WorkingDirectory $amsRoot
 
 Start-Sleep -Seconds 6
 
 Write-Host 'Starting QSI AMS on http://127.0.0.1:8080/login ...' -ForegroundColor Cyan
-Start-Process -FilePath 'cmd.exe' -ArgumentList '/k', "cd /d `"$amsRoot`" && php spark serve --host 127.0.0.1 --port 8080"
+Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $appScript) -WorkingDirectory $amsRoot
 
 Start-Sleep -Seconds 3
 Start-Process 'http://127.0.0.1:8080/login'
