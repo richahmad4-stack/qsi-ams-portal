@@ -30,3 +30,5 @@ http://localhost:8080/login
 - QSI AMS on `http://127.0.0.1:8080`
 
 The local database files are stored in `.mysql-data/`, which is ignored by Git.
+
+The application launcher also loads `scripts/php-local.ini` for the PHP built-in server. This enables the required `intl` extension and prevents startup warnings from sending response headers before CodeIgniter initializes its database-backed session.

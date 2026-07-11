@@ -84,6 +84,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MySQL Audit Management System for a certifica
 - Website lead intake now has a local `website_leads` table and permissions, ready for the next step of connecting the website/Supabase leads feed to AMS screens.
 - Certification workflow status now selects the Initial Stage 2 Technical Review for the certification file card, so future surveillance/recertification pending reviews no longer make an approved certification Technical Review appear in progress.
 - Safe database reproducibility files: `database/schema.sql` and reference-only `database/seed-data.sql`.
+- Local PHP startup now loads `scripts/php-local.ini`, enabling `intl` and buffering/logging startup warnings so database-backed sessions remain available when large workflow forms such as Technical Review are submitted. Client 26 Technical Review was browser-submitted successfully after the fix.
 
 ## Current Focus
 
