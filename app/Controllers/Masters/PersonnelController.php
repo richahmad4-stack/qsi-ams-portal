@@ -10,18 +10,22 @@ use App\Models\MedicalDeviceCategoryModel;
 use App\Models\PersonnelCompetencyModel;
 use App\Models\PersonnelModel;
 use App\Models\StandardModel;
+use App\Models\UserModel;
 use App\Services\AuditLogger;
+use Config\Database;
 
 class PersonnelController extends BaseController
 {
     private PersonnelModel $personnel;
     private PersonnelCompetencyModel $competencies;
+    private UserModel $users;
     private AuditLogger $auditLogger;
 
     public function __construct()
     {
         $this->personnel = new PersonnelModel();
         $this->competencies = new PersonnelCompetencyModel();
+        $this->users = new UserModel();
         $this->auditLogger = new AuditLogger();
     }
 
@@ -137,7 +141,12 @@ class PersonnelController extends BaseController
         }
 
         $data = $this->payload();
+        if (($loginError = $this->linkedLoginValidationError($person, $data)) !== null) {
+            return redirect()->back()->withInput()->with('error', $loginError);
+        }
+
         $this->personnel->update($id, $data);
+        $this->updateLinkedLogin($person, $data);
         $this->auditLogger->record('update', 'personnel', 'personnel', $id, $person, $data);
 
         return redirect()->to('/masters/personnel')->with('success', 'Personnel profile updated.');
@@ -214,8 +223,9 @@ class PersonnelController extends BaseController
     private function findTenantPerson(int $id): ?array
     {
         $person = $this->personnel
-            ->select('personnel.*, clients.company AS linked_client_company')
+            ->select('personnel.*, clients.company AS linked_client_company, users.email AS login_email, users.status AS login_status, users.must_change_password AS login_must_change_password')
             ->join('clients', 'clients.id = personnel.client_id', 'left')
+            ->join('users', 'users.id = personnel.user_id', 'left')
             ->where('personnel.id', $id)
             ->where('personnel.tenant_id', (int) session()->get('tenant_id'))
             ->first();
@@ -235,7 +245,151 @@ class PersonnelController extends BaseController
             'personnel_type' => 'required|max_length[80]',
             'client_id' => 'permit_empty|integer',
             'approval_status' => 'required|max_length[40]',
+            'new_password' => 'permit_empty|min_length[8]|max_length[255]',
+            'confirm_password' => 'permit_empty|max_length[255]',
         ];
+    }
+
+    private function linkedLoginValidationError(array $person, array $data): ?string
+    {
+        if (! $this->shouldManageLinkedLogin($person, $data) && ! $this->shouldManageClientLogin($data)) {
+            return null;
+        }
+
+        if (($data['email'] ?? null) === null) {
+            return ($data['personnel_type'] ?? '') === 'client_representative'
+                ? 'Email is required for client portal login.'
+                : 'Email is required for staff login.';
+        }
+
+        if (($data['personnel_type'] ?? '') === 'client_representative' && ($data['client_id'] ?? null) === null) {
+            return 'Link the client representative to a client before enabling client portal login.';
+        }
+
+        $password = trim((string) $this->request->getPost('new_password'));
+        $confirm = trim((string) $this->request->getPost('confirm_password'));
+        if ($password !== '' && $password !== $confirm) {
+            return 'The password confirmation does not match.';
+        }
+
+        if (($data['personnel_type'] ?? '') === 'client_representative' && (int) ($person['user_id'] ?? 0) <= 0 && $password === '') {
+            return 'Enter a password when enabling a new client portal login.';
+        }
+
+        $duplicateQuery = $this->users
+            ->where('tenant_id', (int) session()->get('tenant_id'))
+            ->where('email', (string) $data['email']);
+
+        if ((int) ($person['user_id'] ?? 0) > 0) {
+            $duplicateQuery->where('id !=', (int) $person['user_id']);
+        }
+
+        $duplicate = $duplicateQuery->first();
+
+        return $duplicate === null ? null : 'A login user with this email already exists.';
+    }
+
+    private function updateLinkedLogin(array $person, array $data): void
+    {
+        if (! $this->shouldManageLinkedLogin($person, $data)) {
+            $this->syncClientPortalLogin($person, $data);
+            return;
+        }
+
+        $payload = [
+            'full_name' => $data['full_name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'],
+            'status' => ($data['approval_status'] ?? '') === 'suspended' ? 'inactive' : 'active',
+            'must_change_password' => $this->request->getPost('must_change_password') === '1' ? 1 : 0,
+        ];
+
+        $password = trim((string) $this->request->getPost('new_password'));
+        if ($password !== '') {
+            $payload['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+        }
+
+        $this->users->update((int) $person['user_id'], $payload);
+    }
+
+    private function shouldManageLinkedLogin(array $person, array $data): bool
+    {
+        return (int) ($person['user_id'] ?? 0) > 0
+            && ($data['personnel_type'] ?? '') !== 'client_representative';
+    }
+
+    private function shouldManageClientLogin(array $data): bool
+    {
+        return ($data['personnel_type'] ?? '') === 'client_representative'
+            && $this->request->getPost('enable_client_login') === '1';
+    }
+
+    private function syncClientPortalLogin(array $person, array $data): void
+    {
+        if (($data['personnel_type'] ?? '') !== 'client_representative') {
+            return;
+        }
+
+        $userId = (int) ($person['user_id'] ?? 0);
+        if (! $this->shouldManageClientLogin($data)) {
+            if ($userId > 0) {
+                $this->users->update($userId, ['status' => 'inactive']);
+            }
+
+            return;
+        }
+
+        $roleId = $this->clientRepresentativeRoleId((int) session()->get('tenant_id'));
+        if ($roleId === null) {
+            throw new \RuntimeException('Client Representative role is not configured.');
+        }
+
+        $payload = [
+            'tenant_id' => (int) session()->get('tenant_id'),
+            'primary_role_id' => $roleId,
+            'full_name' => $data['full_name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'],
+            'status' => 'active',
+            'must_change_password' => $this->request->getPost('must_change_password') === '1' ? 1 : 0,
+        ];
+
+        $password = trim((string) $this->request->getPost('new_password'));
+        if ($password !== '') {
+            $payload['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+        }
+
+        if ($userId > 0) {
+            $this->users->update($userId, $payload);
+        } else {
+            $payload['password_hash'] ??= password_hash('Password123!', PASSWORD_DEFAULT);
+            $userId = (int) $this->users->insert($payload);
+            $this->personnel->update((int) $person['id'], ['user_id' => $userId]);
+        }
+
+        $this->syncSingleRole($userId, $roleId);
+    }
+
+    private function clientRepresentativeRoleId(int $tenantId): ?int
+    {
+        $role = Database::connect()->table('roles')
+            ->select('id')
+            ->where('tenant_id', $tenantId)
+            ->where('code', 'client_representative')
+            ->get(1)
+            ->getRowArray();
+
+        return $role === null ? null : (int) $role['id'];
+    }
+
+    private function syncSingleRole(int $userId, int $roleId): void
+    {
+        $db = Database::connect();
+        $db->table('user_role_assignments')->where('user_id', $userId)->delete();
+        $db->table('user_role_assignments')->insert([
+            'user_id' => $userId,
+            'role_id' => $roleId,
+        ]);
     }
 
     private function payload(): array

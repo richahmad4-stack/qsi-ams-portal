@@ -23,6 +23,11 @@ $types = [
     'client_representative' => 'Client - Representative',
 ];
 $statuses = ['pending', 'approved', 'suspended', 'expired'];
+$isEdit = ! empty($person['id']);
+$isClientRepresentative = ($person['personnel_type'] ?? '') === 'client_representative';
+$hasStaffLogin = $isEdit && ! empty($person['user_id']) && ! $isClientRepresentative;
+$hasClientLogin = $isEdit && ! empty($person['user_id']) && $isClientRepresentative;
+$clientLoginEnabled = old('enable_client_login', $hasClientLogin && ($person['login_status'] ?? '') !== 'inactive' ? '1' : '0') === '1';
 ?>
 
 <form method="post" action="<?= esc($action) ?>">
@@ -84,6 +89,74 @@ $statuses = ['pending', 'approved', 'suspended', 'expired'];
             </div>
         </div>
     </section>
+
+    <?php if ($isEdit): ?>
+        <section class="panel mt-3">
+            <h2 class="h6 mb-3"><?= $isClientRepresentative ? 'Client Portal Login' : 'Login and password' ?></h2>
+            <?php if ($hasStaffLogin): ?>
+                <div class="alert alert-info small">
+                    Login username is the staff email address. Leave password blank if you do not want to change it.
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label" for="login_email_preview">Login email / username</label>
+                        <input id="login_email_preview" class="form-control" value="<?= esc($value('email')) ?>" disabled>
+                        <div class="form-text">This follows the Email field above when you save.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="new_password">Reset password</label>
+                        <input id="new_password" name="new_password" type="password" class="form-control" autocomplete="new-password" placeholder="Leave blank to keep current password">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="confirm_password">Confirm password</label>
+                        <input id="confirm_password" name="confirm_password" type="password" class="form-control" autocomplete="new-password" placeholder="Repeat new password">
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check mt-md-4">
+                            <input class="form-check-input" type="checkbox" id="must_change_password" name="must_change_password" value="1" <?= (int) old('must_change_password', $person['login_must_change_password'] ?? 0) === 1 ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="must_change_password">Require password change on next login</label>
+                        </div>
+                    </div>
+                </div>
+            <?php elseif ($isClientRepresentative): ?>
+                <div class="alert alert-info small">
+                    Client portal username is the representative email address. Enable only when this client contact should access the portal.
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="form-check mt-md-4">
+                            <input class="form-check-input" type="checkbox" id="enable_client_login" name="enable_client_login" value="1" <?= $clientLoginEnabled ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="enable_client_login">Enable client portal login</label>
+                        </div>
+                        <div class="form-text">Uncheck to make the client login inactive.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="client_login_email_preview">Login email / username</label>
+                        <input id="client_login_email_preview" class="form-control" value="<?= esc($value('email')) ?>" disabled>
+                        <div class="form-text">This follows the Email field above when you save.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="new_password">Reset password</label>
+                        <input id="new_password" name="new_password" type="password" class="form-control" autocomplete="new-password" placeholder="<?= $hasClientLogin ? 'Leave blank to keep current password' : 'Required when enabling login' ?>">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="confirm_password">Confirm password</label>
+                        <input id="confirm_password" name="confirm_password" type="password" class="form-control" autocomplete="new-password" placeholder="Repeat new password">
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check mt-md-4">
+                            <input class="form-check-input" type="checkbox" id="must_change_password" name="must_change_password" value="1" <?= (int) old('must_change_password', $person['login_must_change_password'] ?? 0) === 1 ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="must_change_password">Require password change on next login</label>
+                        </div>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div class="alert alert-warning mb-0">
+                    This personnel profile is not linked to an internal login user, so password reset is not available here.
+                </div>
+            <?php endif; ?>
+        </section>
+    <?php endif; ?>
 
     <div class="d-flex gap-2 mt-3">
         <button class="btn btn-primary" type="submit">

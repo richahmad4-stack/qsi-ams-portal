@@ -28,6 +28,13 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
         'as' => 'dashboard',
     ]);
     $routes->get('dashboard/section/(:segment)', 'Dashboard\DashboardDetailController::show/$1', ['filter' => 'permission:dashboard,view']);
+    $routes->get('client-portal', 'ClientPortalController::index', ['filter' => 'permission:dashboard,view']);
+    $routes->get('client-portal/documents/(:num)/(:segment)', 'ClientPortalController::clientDocument/$1/$2', ['filter' => 'permission:dashboard,view']);
+    $routes->get('client-portal/audit-events/(:num)/documents/(:segment)', 'ClientPortalController::eventDocument/$1/$2', ['filter' => 'permission:dashboard,view']);
+    $routes->get('client-portal/certificates/(:num)/pdf', 'ClientPortalController::certificate/$1', ['filter' => 'permission:dashboard,view']);
+    $routes->get('client-portal/capas/(:num)', 'ClientPortalController::editCapa/$1', ['filter' => 'permission:dashboard,view']);
+    $routes->post('client-portal/capas/(:num)', 'ClientPortalController::updateCapa/$1', ['filter' => 'permission:dashboard,view']);
+    $routes->post('client-portal/feedback', 'ClientPortalController::saveFeedback', ['filter' => 'permission:dashboard,view']);
     $routes->get('finance', 'Finance\FinanceController::index', ['filter' => 'permission:finance,view']);
     $routes->get('operations/readiness', 'Operations\ReadinessController::index', ['filter' => 'permission:operations,view']);
     $routes->get('admin/users', 'Admin\UserController::index', ['filter' => 'permission:users,view']);

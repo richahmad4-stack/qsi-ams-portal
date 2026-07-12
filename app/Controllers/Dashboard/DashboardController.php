@@ -15,6 +15,9 @@ class DashboardController extends BaseController
 
         $dashboardService = new DashboardService();
         $dashboard = $dashboardService->dashboardForUser((int) $user['tenant_id'], (int) $user['id'], (array) $user['roles']);
+        if ($dashboard['mode'] === 'client') {
+            return redirect()->to('/client-portal');
+        }
 
         return view('dashboard/index', [
             'title' => 'Dashboard',

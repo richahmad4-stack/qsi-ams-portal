@@ -62,6 +62,13 @@ class DashboardService
 
     public function dashboardForUser(int $tenantId, int $userId, array $roles): array
     {
+        if (in_array('client_representative', $roles, true)) {
+            return [
+                'mode' => 'client',
+                'data' => [],
+            ];
+        }
+
         if (array_intersect(self::GLOBAL_DASHBOARD_ROLES, $roles) !== []) {
             return [
                 'mode' => 'global',
