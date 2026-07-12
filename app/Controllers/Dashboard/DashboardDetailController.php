@@ -125,7 +125,7 @@ class DashboardDetailController extends BaseController
                 'view' => site_url('certificates/verify/' . $certificate['public_slug']),
                 'edit' => site_url('workflow/certification/' . $certificate['client_id'] . '/certificates'),
                 'pdf' => site_url('workflow/certification/certificates/' . $certificate['id'] . '/pdf'),
-                'docx' => site_url('workflow/certification/certificates/' . $certificate['id'] . '/docx'),
+                'printable_pdf' => site_url('workflow/certification/certificates/' . $certificate['id'] . '/printable-pdf'),
             ], $certificates),
         ];
     }

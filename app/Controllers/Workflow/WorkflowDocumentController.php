@@ -64,6 +64,25 @@ class WorkflowDocumentController extends BaseController
             ->setFileName($this->downloadName($document['document_title']));
     }
 
+    public function certificatePrintable(int $certificateId)
+    {
+        $tenantId = (int) session()->get('tenant_id');
+        $certificate = $this->certificates
+            ->where('tenant_id', $tenantId)
+            ->where('id', $certificateId)
+            ->first();
+
+        if ($certificate === null) {
+            return redirect()->to('/workflow/certification')->with('error', 'Certificate not found.');
+        }
+
+        $document = $this->generator->generateCertificatePrintable($tenantId, $certificateId, (int) session()->get('user_id'));
+        $this->auditLogger->record('download', 'documents', 'generated_documents', (int) $document['id'], null, $document);
+
+        return $this->response->download($document['storage_path'], null)
+            ->setFileName($this->downloadName($document['document_title']));
+    }
+
     public function certificateWord(int $certificateId)
     {
         $tenantId = (int) session()->get('tenant_id');
@@ -80,7 +99,7 @@ class WorkflowDocumentController extends BaseController
         $this->auditLogger->record('download', 'documents', 'generated_documents', (int) $document['id'], null, $document);
 
         return $this->response->download($document['storage_path'], null)
-            ->setFileName($this->downloadName($document['document_title'], 'docx'));
+            ->setFileName($this->downloadName($document['document_title']));
     }
 
     public function eventDocument(int $clientId, int $eventId, string $documentKey)

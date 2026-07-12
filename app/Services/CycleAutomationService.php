@@ -984,6 +984,8 @@ class CycleAutomationService
                 : 'System prepared the application review. Technical Manager shall verify scope, competence, resources, impartiality, audit time and selected standards before approval.',
             'review_payload' => json_encode(array_merge([
                 'standards_text' => implode(', ', array_column($preview['standards'], 'code')),
+                'certification_route' => $this->cycleCertificationRoute($preview['standards'], $input),
+                'accreditation_body' => $this->cycleAccreditationBody($preview['standards'], $input),
                 'effective_employees' => $input['employee_count'],
                 'days_allotted' => number_format((float) $duration['total_days'], 2),
                 'stage1_days' => number_format((float) $duration['stage1_days'], 2),
@@ -1009,6 +1011,37 @@ class CycleAutomationService
         ]);
 
         return (int) $this->db->insertID();
+    }
+
+    private function cycleCertificationRoute(array $standards, array $input): string
+    {
+        $route = strtolower(trim((string) ($input['certification_route'] ?? '')));
+        if ($route === 'accredited' || $route === 'unaccredited') {
+            return $this->isHaccpOnlyStandards($standards) ? 'unaccredited' : $route;
+        }
+
+        return 'unaccredited';
+    }
+
+    private function cycleAccreditationBody(array $standards, array $input): string
+    {
+        if ($this->cycleCertificationRoute($standards, $input) !== 'accredited') {
+            return '';
+        }
+
+        $body = strtoupper(trim((string) ($input['accreditation_body'] ?? '')));
+
+        return in_array($body, ['IAS', 'SAAC'], true) ? $body : '';
+    }
+
+    private function isHaccpOnlyStandards(array $standards): bool
+    {
+        $codes = array_values(array_filter(array_map(
+            static fn (array $standard): string => strtoupper((string) ($standard['code'] ?? '')),
+            $standards
+        )));
+
+        return $codes !== [] && count($codes) === 1 && str_contains($codes[0], 'HACCP');
     }
 
     private function createProposal(int $tenantId, int $clientId, int $reviewId, int $userId, array $preview): int

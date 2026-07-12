@@ -106,9 +106,10 @@ $section = static function (string $title): string {
 
         <?= $section('8. Audit Scheme and 9. Competence Requirement') ?>
         <?= $input('standards_text', 'Standards') ?>
-        <?= $input('accreditation_body', 'Accreditation Body') ?>
+        <?= $select('certification_route', 'Certification Route', ['unaccredited' => 'Unaccredited', 'accredited' => 'Accredited'], 'col-md-4') ?>
+        <?= $select('accreditation_body', 'Accreditation Body (if accredited)', ['' => 'Select', 'IAS' => 'IAS', 'SAAC' => 'SAAC'], 'col-md-4') ?>
         <?= $input('initial_audit_type', 'Initial Audit Type') ?>
-        <?= $input('audit_category', 'Audit Category') ?>
+        <?= $textarea('audit_category', 'IAF / Food Chain Category matched to scope', 2, 'col-12') ?>
         <?= $textarea('competence_requirements', 'Competence Requirements for Standard', 2) ?>
 
         <?= $section('10. Audit Man Days Calculation') ?>
@@ -303,6 +304,23 @@ $section = static function (string $title): string {
         field(name)?.addEventListener('input', calculate);
         field(name)?.addEventListener('change', calculate);
     });
+    const route = field('certification_route');
+    const body = field('accreditation_body');
+    const syncAccreditationBody = () => {
+        if (!route || !body) return;
+        const haccpOnly = standardsFromDb.length === 1 && String(standardsFromDb[0]).toUpperCase().includes('HACCP');
+        if (haccpOnly) {
+            route.value = 'unaccredited';
+        }
+        if (haccpOnly || route.value !== 'accredited') {
+            body.value = '';
+            body.disabled = true;
+            return;
+        }
+        body.disabled = false;
+    };
+    route?.addEventListener('change', syncAccreditationBody);
+    syncAccreditationBody();
     calculate();
 })();
 </script>

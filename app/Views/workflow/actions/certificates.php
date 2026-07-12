@@ -106,13 +106,13 @@
                     <td><?= esc($certificate['status']) ?></td>
                     <td class="small"><?= esc($certificate['qr_payload']) ?></td>
                     <td class="text-end">
-                        <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('workflow/certification/certificates/' . $certificate['id'] . '/docx') ?>">
-                            <i class="fa-solid fa-file-word me-1" aria-hidden="true"></i>
-                            Word
-                        </a>
                         <a class="btn btn-outline-primary btn-sm" href="<?= site_url('workflow/certification/certificates/' . $certificate['id'] . '/pdf') ?>">
                             <i class="fa-solid fa-file-pdf me-1" aria-hidden="true"></i>
                             PDF
+                        </a>
+                        <a class="btn btn-primary btn-sm" href="<?= site_url('workflow/certification/certificates/' . $certificate['id'] . '/printable-pdf') ?>">
+                            <i class="fa-solid fa-print me-1" aria-hidden="true"></i>
+                            Printable PDF
                         </a>
                     </td>
                 </tr>

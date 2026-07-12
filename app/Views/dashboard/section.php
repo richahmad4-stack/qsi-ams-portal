@@ -56,13 +56,13 @@
                         <?php if (! empty($row['pdf'])): ?>
                             <a class="btn btn-outline-danger btn-sm" href="<?= esc($row['pdf']) ?>">
                                 <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
-                                Generate PDF
+                                PDF
                             </a>
                         <?php endif; ?>
-                        <?php if (! empty($row['docx'])): ?>
-                            <a class="btn btn-outline-secondary btn-sm" href="<?= esc($row['docx']) ?>">
-                                <i class="fa-solid fa-file-word" aria-hidden="true"></i>
-                                Word
+                        <?php if (! empty($row['printable_pdf'])): ?>
+                            <a class="btn btn-primary btn-sm" href="<?= esc($row['printable_pdf']) ?>">
+                                <i class="fa-solid fa-print" aria-hidden="true"></i>
+                                Printable PDF
                             </a>
                         <?php endif; ?>
                     </td>

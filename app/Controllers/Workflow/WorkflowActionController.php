@@ -158,6 +158,13 @@ class WorkflowActionController extends BaseController
         $application = $this->latestCertificationApplication($clientId);
         $standards = $this->clientStandardRows($clientId);
         $reviewPayload = $this->reviewPayloadFromRequest();
+        if (! $this->isHaccpOnly($standards)
+            && strtolower((string) ($reviewPayload['certification_route'] ?? '')) === 'accredited'
+            && ! in_array(strtoupper((string) ($reviewPayload['accreditation_body'] ?? '')), ['IAS', 'SAAC'], true)
+        ) {
+            return redirect()->back()->withInput()->with('error', 'Select IAS or SAAC when the application review route is Accredited.');
+        }
+        $reviewPayload = $this->normaliseAccreditationReviewPayload($reviewPayload, $standards);
         $duration = $this->durationService->calculateApplicationReview($client, $standards, $reviewPayload);
         $reviewPayload = $this->applyDurationToReviewPayload($reviewPayload, $duration);
         $payload = [
@@ -3272,8 +3279,10 @@ class WorkflowActionController extends BaseController
     private function clientStandardRows(int $clientId): array
     {
         return $this->db->table('client_standards')
-            ->select('client_standards.*, standards.code AS standard_code, standards.scheme_type')
+            ->select('client_standards.*, standards.code AS standard_code, standards.scheme_type, iaf_codes.code AS iaf_code, iaf_codes.title AS iaf_title, food_chain_categories.code AS food_category_code, food_chain_categories.title AS food_category_title, food_chain_categories.description AS food_category_description')
             ->join('standards', 'standards.id = client_standards.standard_id')
+            ->join('iaf_codes', 'iaf_codes.id = client_standards.iaf_code_id', 'left')
+            ->join('food_chain_categories', 'food_chain_categories.id = client_standards.food_chain_category_id', 'left')
             ->where('client_standards.client_id', $clientId)
             ->get()
             ->getResultArray();
@@ -3331,9 +3340,10 @@ class WorkflowActionController extends BaseController
             'employee_justification' => '',
             'invoice_established' => 'No',
             'standards_text' => $standardText,
-            'accreditation_body' => 'QSI-Cert',
+            'certification_route' => $this->defaultCertificationRoute($standards),
+            'accreditation_body' => $this->defaultAccreditationBody($standards),
             'initial_audit_type' => 'Initial Certification',
-            'audit_category' => '',
+            'audit_category' => $this->scopeCategorySummary($standards),
             'competence_requirements' => 'Competence requirement meet.',
             'days_allotted' => $review['md5_duration_days'] ?? '3.00',
             'stage1_days' => $review['stage1_days'] ?? '1.00',
@@ -3372,6 +3382,7 @@ class WorkflowActionController extends BaseController
         if ($standardText !== '') {
             $payload['standards_text'] = $standardText;
         }
+        $payload = $this->normaliseAccreditationReviewPayload($payload, $standards);
         $applicationHaccpPlans = $this->applicationAnswerByKey((int) ($application['id'] ?? 0), 'haccp_plans_processes');
         if ($applicationHaccpPlans !== null) {
             $payload['haccp_plans_processes'] = $applicationHaccpPlans;
@@ -3417,6 +3428,73 @@ class WorkflowActionController extends BaseController
         return $payload;
     }
 
+    private function normaliseAccreditationReviewPayload(array $payload, array $standards): array
+    {
+        if ($this->isHaccpOnly($standards)) {
+            $payload['certification_route'] = 'unaccredited';
+            $payload['accreditation_body'] = '';
+        } else {
+            $route = strtolower(trim((string) ($payload['certification_route'] ?? '')));
+            $payload['certification_route'] = $route === 'accredited' ? 'accredited' : 'unaccredited';
+            $body = strtoupper(trim((string) ($payload['accreditation_body'] ?? '')));
+            $payload['accreditation_body'] = $payload['certification_route'] === 'accredited' && in_array($body, ['IAS', 'SAAC'], true)
+                ? $body
+                : '';
+        }
+
+        $payload['audit_category'] = trim((string) ($payload['audit_category'] ?? '')) !== ''
+            ? (string) $payload['audit_category']
+            : $this->scopeCategorySummary($standards);
+
+        return $payload;
+    }
+
+    private function defaultCertificationRoute(array $standards): string
+    {
+        return $this->isHaccpOnly($standards) ? 'unaccredited' : 'unaccredited';
+    }
+
+    private function defaultAccreditationBody(array $standards): string
+    {
+        return $this->isHaccpOnly($standards) ? '' : '';
+    }
+
+    private function isHaccpOnly(array $standards): bool
+    {
+        $codes = array_values(array_filter(array_map(
+            static fn (array $row): string => strtoupper((string) ($row['standard_code'] ?? '')),
+            $standards
+        )));
+
+        return $codes !== [] && count($codes) === 1 && str_contains($codes[0], 'HACCP');
+    }
+
+    private function scopeCategorySummary(array $standards): string
+    {
+        $parts = [];
+        foreach ($standards as $standard) {
+            $code = strtoupper((string) ($standard['standard_code'] ?? ''));
+            if (str_contains($code, 'HACCP')) {
+                continue;
+            }
+
+            $foodCode = trim((string) ($standard['food_category_code'] ?? ''));
+            $foodTitle = trim((string) ($standard['food_category_title'] ?? ''));
+            if ((str_contains($code, '22000') || str_contains($code, 'FSSC')) && $foodCode !== '') {
+                $parts[] = $code . ': Food-chain category ' . $foodCode . ($foodTitle !== '' ? ' - ' . $foodTitle : '');
+                continue;
+            }
+
+            $iafCode = trim((string) ($standard['iaf_code'] ?? ''));
+            $iafTitle = trim((string) ($standard['iaf_title'] ?? ''));
+            if ($iafCode !== '') {
+                $parts[] = $code . ': IAF ' . $iafCode . ($iafTitle !== '' ? ' - ' . $iafTitle : '');
+            }
+        }
+
+        return implode("\n", array_unique($parts));
+    }
+
     private function reviewPayloadFromRequest(): array
     {
         $fields = [
@@ -3445,6 +3523,7 @@ class WorkflowActionController extends BaseController
             'employee_justification',
             'invoice_established',
             'standards_text',
+            'certification_route',
             'accreditation_body',
             'initial_audit_type',
             'audit_category',
@@ -3502,7 +3581,8 @@ class WorkflowActionController extends BaseController
             'number_of_locations' => (string) ($client['number_of_sites'] ?? 1),
             'intro_message' => 'Thank you for expressing your interest in obtaining certification for your company. We are pleased to inform you that we have prepared a tailored certification offer based on the requirements of the applicable standard.',
             'standards_text' => $standardsText,
-            'accreditation_body' => $reviewPayload['accreditation_body'] ?? 'QSI-Cert',
+            'certification_route' => $reviewPayload['certification_route'] ?? 'unaccredited',
+            'accreditation_body' => $reviewPayload['accreditation_body'] ?? '',
             'initial_audit_type' => $reviewPayload['initial_audit_type'] ?? 'Initial Certification',
             'total_audit_days' => number_format((float) ($reviewPayload['days_allotted'] ?? $review['md5_duration_days'] ?? $duration['total_days']), 2, '.', ''),
             'stage1_days' => number_format((float) ($reviewPayload['stage1_days'] ?? $review['stage1_days'] ?? $duration['stage1_days']), 2, '.', ''),
@@ -3566,7 +3646,7 @@ class WorkflowActionController extends BaseController
     {
         return $this->payloadFields([
             'legal_documentation', 'management_representative', 'phone_fax', 'number_of_locations',
-            'intro_message', 'standards_text', 'accreditation_body', 'initial_audit_type',
+            'intro_message', 'standards_text', 'certification_route', 'accreditation_body', 'initial_audit_type',
             'total_audit_days', 'stage1_days', 'stage2_days', 'surveillance1_days', 'surveillance2_days', 'recertification_days',
             'certification_process_obligations', 'payment_terms', 'certification_audit_includes', 'surveillance_audit_includes',
             'additional_a4_copy_fee', 'certificate_reissue_fee', 'extraordinary_audit_1_fee', 'extraordinary_audit_2_fee',
@@ -3586,7 +3666,8 @@ class WorkflowActionController extends BaseController
             'phone_fax' => $proposalPayload['phone_fax'] ?? ($client['phone'] ?? ''),
             'number_of_locations' => $proposalPayload['number_of_locations'] ?? (string) ($client['number_of_sites'] ?? 1),
             'standards_text' => $proposalPayload['standards_text'] ?? '',
-            'accreditation_body' => $proposalPayload['accreditation_body'] ?? 'QSI-Cert',
+            'certification_route' => $proposalPayload['certification_route'] ?? 'unaccredited',
+            'accreditation_body' => $proposalPayload['accreditation_body'] ?? '',
             'initial_audit_type' => $proposalPayload['initial_audit_type'] ?? 'Initial Certification',
             'total_audit_days' => $proposalPayload['total_audit_days'] ?? '',
             'stage1_days' => $proposalPayload['stage1_days'] ?? '',
@@ -3617,7 +3698,7 @@ class WorkflowActionController extends BaseController
     {
         return $this->payloadFields([
             'legal_documentation', 'management_representative', 'phone_fax', 'number_of_locations',
-            'standards_text', 'accreditation_body', 'initial_audit_type',
+            'standards_text', 'certification_route', 'accreditation_body', 'initial_audit_type',
             'total_audit_days', 'stage1_days', 'stage2_days', 'surveillance1_days', 'surveillance2_days', 'recertification_days',
             'certification_process_obligations', 'payment_terms', 'certification_audit_includes', 'surveillance_audit_includes',
             'additional_a4_copy_fee', 'certificate_reissue_fee', 'extraordinary_audit_1_fee', 'extraordinary_audit_2_fee',

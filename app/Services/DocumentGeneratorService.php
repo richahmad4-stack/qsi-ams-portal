@@ -74,20 +74,38 @@ class DocumentGeneratorService
         );
     }
 
-    public function generateCertificateWord(int $tenantId, int $certificateId, int $userId): array
+    public function generateCertificatePrintable(int $tenantId, int $certificateId, int $userId): array
     {
         $certificate = $this->certificateRecord($tenantId, $certificateId);
-        $title = 'Certificate Word - ' . $certificate['certificate_number'];
+        $title = 'Printable Certificate - ' . $certificate['certificate_number'];
+        $html = $this->certificateHtml($certificate, false);
 
-        return $this->writeCertificateDocx($tenantId, (int) $certificate['client_id'], $title, $certificateId, $certificate, $userId);
+        return $this->writePdf(
+            $tenantId,
+            (int) $certificate['client_id'],
+            'certificate_printable',
+            $title,
+            'certificates',
+            $certificateId,
+            $html,
+            $userId
+        );
+    }
+
+    public function generateCertificateWord(int $tenantId, int $certificateId, int $userId): array
+    {
+        return $this->generateCertificatePrintable($tenantId, $certificateId, $userId);
     }
 
     private function certificateRecord(int $tenantId, int $certificateId): array
     {
         $certificate = $this->db->table('certificates')
-            ->select('certificates.*, clients.company, clients.legal_name, clients.address, clients.city, clients.country, clients.client_logo_path, standards.code AS standard_code, standards.name AS standard_name')
+            ->select('certificates.*, clients.company, clients.legal_name, clients.address, clients.city, clients.country, clients.client_logo_path, standards.code AS standard_code, standards.name AS standard_name, client_standards.iaf_code_id, client_standards.food_chain_category_id, iaf_codes.code AS iaf_code, iaf_codes.title AS iaf_title, food_chain_categories.code AS food_category_code, food_chain_categories.title AS food_category_title, food_chain_categories.description AS food_category_description')
             ->join('clients', 'clients.id = certificates.client_id')
             ->join('standards', 'standards.id = certificates.standard_id')
+            ->join('client_standards', 'client_standards.client_id = certificates.client_id AND client_standards.standard_id = certificates.standard_id', 'left')
+            ->join('iaf_codes', 'iaf_codes.id = client_standards.iaf_code_id', 'left')
+            ->join('food_chain_categories', 'food_chain_categories.id = client_standards.food_chain_category_id', 'left')
             ->where('certificates.tenant_id', $tenantId)
             ->where('certificates.id', $certificateId)
             ->get(1)
@@ -96,6 +114,9 @@ class DocumentGeneratorService
         if ($certificate === null) {
             throw new \RuntimeException('Certificate not found.');
         }
+
+        $review = $this->latest('application_reviews', ['client_id' => (int) $certificate['client_id']]);
+        $certificate['application_review_payload'] = (string) ($review['review_payload'] ?? '');
 
         return $certificate;
     }
@@ -386,14 +407,17 @@ class DocumentGeneratorService
         return $timestamp === false ? $date : date('d.m.Y', $timestamp);
     }
 
-    private function certificateHtml(array $certificate): string
+    private function certificateHtml(array $certificate, bool $includeBackground = true): string
     {
         $qr = $this->qrDataUri((string) $certificate['qr_payload']);
-        $background = $this->certificateBackgroundDataUri();
+        $background = $includeBackground ? $this->certificateBackgroundDataUri() : '';
         $approvedSignature = $this->certificateSignatureHtml('assets/img/qsi-signature-approved.png');
         $printedSignature = $this->certificateSignatureHtml('assets/img/qsi-signature-printed.png');
         $clientLogo = $this->clientCertificateLogoHtml((string) ($certificate['client_logo_path'] ?? ''));
         $standardCode = (string) ($certificate['standard_code'] ?? '');
+        $accreditation = $this->certificateAccreditationProfile($certificate);
+        $accreditationBlock = $this->certificateAccreditationHtml($accreditation);
+        $verificationClass = ($accreditation['show_logos'] ?? false) ? ' has-accreditation' : '';
         $certificateNumber = (string) ($certificate['certificate_number'] ?? '');
         $companyName = (string) ($certificate['legal_name'] ?: $certificate['company']);
         $companyClass = strlen($companyName) > 45 ? ' company-long' : (strlen($companyName) > 32 ? ' company-medium' : '');
@@ -422,6 +446,7 @@ class DocumentGeneratorService
             . '<div class="certificate-description">' . nl2br(esc($this->certificateStandardDescription($standardCode))) . '</div>'
             . '<div class="certificate-applicable">applicable to</div>'
             . '<div class="certificate-scope' . esc($scopeClass, 'attr') . '">' . nl2br(esc($scope)) . '</div>'
+            . ($accreditation['show_category'] ? '<div class="certificate-classification">' . esc($accreditation['category_label']) . '</div>' : '')
             . '<table class="certificate-dates"><colgroup><col class="date-label"><col class="date-value"><col class="date-label"><col class="date-value"></colgroup><tbody>'
             . '<tr><th>Initial Certification Date:</th><td>' . esc($initialDate) . '</td><th>Certification Date:</th><td>' . esc($issueDate) . '</td></tr>'
             . '<tr><th>Surveillance 1 Date:</th><td>' . esc($surveillance1) . '</td><th>Surveillance 2 Date:</th><td>' . esc($surveillance2) . '</td></tr>'
@@ -432,12 +457,119 @@ class DocumentGeneratorService
             . '<td><div class="signature-line">' . $approvedSignature . '</div><div>Approved by</div></td>'
             . '<td><div class="signature-line">' . $printedSignature . '</div><div>Printed by</div></td>'
             . '</tr></tbody></table>'
-            . '<div class="certificate-verification-block">'
-            . '<img src="' . esc($qr, 'attr') . '" alt="Certificate QR">'
+            . '<div class="certificate-verification-block' . esc($verificationClass, 'attr') . '">'
+            . '<table class="certificate-verification-row"><tbody><tr>'
+            . $accreditationBlock
+            . '<td class="certificate-qr-panel">'
+            . '<img class="certificate-qr-image" src="' . esc($qr, 'attr') . '" alt="Certificate QR">'
+            . '</td>'
+            . '</tr></tbody></table>'
             . '<div class="certificate-validity">Validity code: <strong>' . esc($certificateNumber) . '</strong></div>'
-            . '<div class="certificate-verify">Check validity of the certificate using this code on <strong>certificate.qsicert.ca</strong><br>Or email us at <strong>info@qsi-cert.com</strong><br>QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia</div>'
-            . '</div>'
+            . '<div class="certificate-verify">Verify this certificate with code <strong>' . esc($certificateNumber) . '</strong> at <strong>certificate.qsicert.ca</strong> or by email at <strong>info@qsi-cert.com</strong>. QSI-CERT, P.O. Box No. 246049, Riyadh 11312, Kingdom of Saudi Arabia.</div>'
             . '</div></div></body></html>';
+    }
+
+    private function certificateAccreditationProfile(array $certificate): array
+    {
+        $standardCode = strtoupper((string) ($certificate['standard_code'] ?? ''));
+        if (str_contains($standardCode, 'HACCP')) {
+            return [
+                'route' => 'unaccredited',
+                'body' => '',
+                'show_logos' => false,
+                'show_category' => false,
+                'category_label' => '',
+            ];
+        }
+
+        $payload = json_decode((string) ($certificate['application_review_payload'] ?? ''), true) ?: [];
+        $route = strtolower(trim((string) ($payload['certification_route'] ?? 'unaccredited')));
+        $body = strtoupper(trim((string) ($payload['accreditation_body'] ?? '')));
+        $isAccredited = $route === 'accredited' && in_array($body, ['IAS', 'SAAC'], true);
+        $categoryLabel = $this->certificateCategoryLabel($certificate);
+
+        return [
+            'route' => $isAccredited ? 'accredited' : 'unaccredited',
+            'body' => $isAccredited ? $body : '',
+            'show_logos' => $isAccredited,
+            'show_category' => $categoryLabel !== '',
+            'category_label' => $categoryLabel,
+            'iaf_logo' => $isAccredited ? 'assets/img/accreditation/iaf-mla-certificate.png' : '',
+            'body_logo' => $isAccredited ? $this->certificateAccreditationBodyLogo((string) ($certificate['standard_code'] ?? ''), $body) : '',
+        ];
+    }
+
+    private function certificateCategoryLabel(array $certificate): string
+    {
+        $standardCode = strtoupper((string) ($certificate['standard_code'] ?? ''));
+        $foodCode = trim((string) ($certificate['food_category_code'] ?? ''));
+        $foodTitle = trim((string) ($certificate['food_category_title'] ?? ''));
+        $foodDescription = trim((string) ($certificate['food_category_description'] ?? ''));
+
+        if (str_contains($standardCode, '22000') || str_contains($standardCode, 'FSSC')) {
+            if ($foodCode === '') {
+                return '';
+            }
+
+            return 'Food-chain category: ' . $foodCode
+                . ($foodTitle !== '' ? ' - ' . $foodTitle : '')
+                . ($foodDescription !== '' ? ' (' . $foodDescription . ')' : '');
+        }
+
+        $iafCode = trim((string) ($certificate['iaf_code'] ?? ''));
+        $iafTitle = trim((string) ($certificate['iaf_title'] ?? ''));
+        if ($iafCode !== '') {
+            return 'IAF scope: IAF ' . $iafCode . ($iafTitle !== '' ? ' - ' . $iafTitle : '');
+        }
+
+        return '';
+    }
+
+    private function certificateAccreditationHtml(array $profile): string
+    {
+        if (! ($profile['show_logos'] ?? false)) {
+            return '';
+        }
+
+        $iafLogo = $this->certificateAccreditationImageHtml((string) ($profile['iaf_logo'] ?? ''), 'IAF MLA logo', 'iaf-logo');
+        $bodyLogo = $this->certificateAccreditationImageHtml((string) ($profile['body_logo'] ?? ''), 'Accreditation body logo', 'body-logo');
+
+        if ($iafLogo === '' && $bodyLogo === '') {
+            return '';
+        }
+
+        return $iafLogo . $bodyLogo;
+    }
+
+    private function certificateAccreditationImageHtml(string $relativePath, string $alt, string $class): string
+    {
+        $dataUri = $this->assetDataUri($relativePath);
+
+        return $dataUri === ''
+            ? ''
+            : '<td class="certificate-accreditation-logo ' . esc($class, 'attr') . '"><img src="' . esc($dataUri, 'attr') . '" alt="' . esc($alt, 'attr') . '"></td>';
+    }
+
+    private function certificateAccreditationBodyLogo(string $standardCode, string $body): string
+    {
+        if (strtoupper($body) === 'IAS') {
+            return 'assets/img/accreditation/ias-management-systems-certificate.png';
+        }
+
+        $code = strtoupper($standardCode);
+        if (str_contains($code, '22000') || str_contains($code, 'FSSC')) {
+            return 'assets/img/accreditation/saac-fsms-certificate.png';
+        }
+
+        if (str_contains($code, '14001')) {
+            return 'assets/img/accreditation/saac-ems-certificate.png';
+        }
+
+        if (str_contains($code, '45001')) {
+            return 'assets/img/accreditation/saac-ohs-certificate.png';
+        }
+
+        return 'assets/img/accreditation/saac-qms-certificate.png';
     }
 
     private function certificateSystemName(string $standardCode): string
@@ -496,6 +628,7 @@ class DocumentGeneratorService
     private function writeCertificateDocx(int $tenantId, int $clientId, string $title, int $certificateId, array $certificate, int $userId): array
     {
         $standardCode = (string) ($certificate['standard_code'] ?? '');
+        $accreditation = $this->certificateAccreditationProfile($certificate);
         $certificateNumber = (string) ($certificate['certificate_number'] ?? '');
         $companyName = (string) ($certificate['legal_name'] ?: $certificate['company']);
         $companyFontSize = strlen($companyName) > 45 ? 17.5 : (strlen($companyName) > 32 ? 19.5 : 22);
@@ -584,6 +717,13 @@ class DocumentGeneratorService
             ['size' => 15, 'bold' => true],
             ['spaceAfter' => Converter::pointToTwip(10)]
         );
+        if ($accreditation['show_category']) {
+            $section->addText(
+                $this->certificateDocxText((string) $accreditation['category_label']),
+                ['size' => 7.2, 'bold' => true, 'color' => '0b3558'],
+                ['spaceAfter' => Converter::pointToTwip(8)]
+            );
+        }
 
         $dateTable = $section->addTable([
             'borderTopSize' => 8,
@@ -621,17 +761,32 @@ class DocumentGeneratorService
         $printed->addText('', [], ['borderBottomSize' => 6, 'borderBottomColor' => '1f2933']);
         $printed->addText($this->certificateDocxText('Printed by'), ['size' => 8.8], ['alignment' => Jc::CENTER]);
 
-        $verification = $section->addTable(['cellMarginTop' => 15, 'cellMarginBottom' => 15]);
+        $verification = $section->addTable(['cellMarginTop' => 15, 'cellMarginBottom' => 15, 'cellMarginLeft' => 0, 'cellMarginRight' => 70]);
         $verification->addRow();
-        $qrCell = $verification->addCell(3550);
+        if ($accreditation['show_logos']) {
+            $iafLogoPath = $this->publicAssetPath((string) ($accreditation['iaf_logo'] ?? ''));
+            $bodyLogoPath = $this->publicAssetPath((string) ($accreditation['body_logo'] ?? ''));
+            $iafCell = $verification->addCell(1985, ['valign' => 'top']);
+            if ($iafLogoPath !== '') {
+                $iafCell->addImage($iafLogoPath, ['width' => Converter::cmToPixel(3.22), 'height' => Converter::cmToPixel(1.76), 'alignment' => Jc::LEFT]);
+            }
+            $bodyCell = $verification->addCell(1008, ['valign' => 'top']);
+            if ($bodyLogoPath !== '') {
+                $bodyCell->addImage($bodyLogoPath, ['width' => Converter::cmToPixel(2.22), 'height' => Converter::cmToPixel(3.53), 'alignment' => Jc::LEFT]);
+            }
+        }
+
+        $qrCell = $verification->addCell($accreditation['show_logos'] ? 1200 : 3550, ['valign' => 'top']);
         $qrPath = $this->qrPngPath((string) ($certificate['qr_payload'] ?? $certificateNumber));
         if ($qrPath !== '') {
-            $qrCell->addImage($qrPath, ['width' => 68, 'height' => 68]);
+            $qrCell->addImage($qrPath, ['width' => Converter::cmToPixel(2.2), 'height' => Converter::cmToPixel(2.2)]);
         }
-        $qrCell->addText($this->certificateDocxText('Validity code: ' . $certificateNumber), ['size' => 8.1, 'bold' => true, 'color' => '1c6d8a']);
-        $qrCell->addText($this->certificateDocxText('Check validity of the certificate using this code on certificate.qsicert.ca'), ['size' => 6.9]);
-        $qrCell->addText($this->certificateDocxText('Or email us at info@qsi-cert.com'), ['size' => 6.9]);
-        $qrCell->addText($this->certificateDocxText('QSI-CERT - P. O. Box No 246049 Riyadh 11312 Kingdom of Saudi Arabia'), ['size' => 6.9]);
+        $section->addText($this->certificateDocxText('Validity code: ' . $certificateNumber), ['size' => 8.1, 'bold' => true, 'color' => '1c6d8a']);
+        $section->addText(
+            $this->certificateDocxText('Verify this certificate with code ' . $certificateNumber . ' at certificate.qsicert.ca or by email at info@qsi-cert.com. QSI-CERT, P.O. Box No. 246049, Riyadh 11312, Kingdom of Saudi Arabia.'),
+            ['size' => 6.8],
+            ['spaceAfter' => 0]
+        );
 
         $directory = WRITEPATH . 'uploads' . DIRECTORY_SEPARATOR . 'documents' . DIRECTORY_SEPARATOR . 'tenant_' . $tenantId . DIRECTORY_SEPARATOR . 'client_' . $clientId;
         if (! is_dir($directory)) {
@@ -787,6 +942,7 @@ class DocumentGeneratorService
             ])],
             ['Audit Scheme', $this->keyValueTable([
                 'Standard' => $payload['standards_text'] ?? implode(', ', array_column($data['standards'] ?? [], 'standard_code')),
+                'Certification Route' => ucfirst((string) ($payload['certification_route'] ?? 'unaccredited')),
                 'Accreditation Body' => $payload['accreditation_body'] ?? '',
                 'Initial Audit Type' => $payload['initial_audit_type'] ?? '',
             ]) . $this->recordTable([[
@@ -1011,7 +1167,8 @@ class DocumentGeneratorService
             'number_of_locations' => (string) ($client['number_of_sites'] ?? 1),
             'intro_message' => 'Thank you for expressing your interest in obtaining certification for your company. We are pleased to submit this certification proposal based on the submitted application and application review.',
             'standards_text' => implode(', ', array_keys($duration['standard_days'] ?? [])),
-            'accreditation_body' => $reviewPayload['accreditation_body'] ?? 'QSI-Cert',
+            'certification_route' => $reviewPayload['certification_route'] ?? 'unaccredited',
+            'accreditation_body' => $reviewPayload['accreditation_body'] ?? '',
             'initial_audit_type' => $reviewPayload['initial_audit_type'] ?? 'Initial Certification',
             'total_audit_days' => number_format((float) ($reviewPayload['days_allotted'] ?? $review['md5_duration_days'] ?? $duration['total_days']), 2),
             'stage1_days' => number_format((float) ($reviewPayload['stage1_days'] ?? $review['stage1_days'] ?? $duration['stage1_days']), 2),
@@ -1267,7 +1424,8 @@ class DocumentGeneratorService
             ])],
             ['Audit Scheme', $this->keyValueTable([
                 'Standards' => $standards,
-                'Accreditation Body' => $v('accreditation_body', 'QSI-Cert'),
+                'Certification Route' => ucfirst($v('certification_route', 'unaccredited')),
+                'Accreditation Body' => $v('accreditation_body', ''),
                 'Initial Audit Type' => $v('initial_audit_type', 'Initial Certification'),
                 'Audit Category' => $v('audit_category'),
             ])],
@@ -1387,7 +1545,8 @@ class DocumentGeneratorService
         $body .= '<h2>7. Accounts</h2>' . $this->f28Table(['Invoice date and amount established' => $v('invoice_established', 'No')]);
         $body .= '<h2>8. Audit Scheme</h2>' . $this->f28Table([
             'Standards' => $standards,
-            'Accreditation Body' => $v('accreditation_body', 'QSI-Cert'),
+            'Certification Route' => ucfirst($v('certification_route', 'unaccredited')),
+            'Accreditation Body' => $v('accreditation_body', ''),
             'Initial Audit Type' => $v('initial_audit_type', 'Initial Certification'),
             'Audit Category' => $v('audit_category'),
         ]);
@@ -1786,7 +1945,8 @@ class DocumentGeneratorService
             'phone_fax' => $client['phone'] ?? '',
             'number_of_locations' => (string) ($client['number_of_sites'] ?? 1),
             'standards_text' => implode(', ', array_keys($duration['standard_days'] ?? [])),
-            'accreditation_body' => $reviewPayload['accreditation_body'] ?? 'QSI-Cert',
+            'certification_route' => $reviewPayload['certification_route'] ?? 'unaccredited',
+            'accreditation_body' => $reviewPayload['accreditation_body'] ?? '',
             'initial_audit_type' => $reviewPayload['initial_audit_type'] ?? 'Initial Certification',
             'total_audit_days' => number_format((float) ($reviewPayload['days_allotted'] ?? $review['md5_duration_days'] ?? $duration['total_days']), 2),
             'stage1_days' => number_format((float) ($reviewPayload['stage1_days'] ?? $review['stage1_days'] ?? $duration['stage1_days']), 2),
@@ -1915,6 +2075,7 @@ class DocumentGeneratorService
             ])],
             ['Audit Scheme', $this->keyValueTable([
                 'Standard' => $payload['standards_text'] ?? '',
+                'Certification Route' => ucfirst((string) ($payload['certification_route'] ?? 'unaccredited')),
                 'Accreditation Body' => $payload['accreditation_body'] ?? '',
                 'Initial Audit Type' => $payload['initial_audit_type'] ?? '',
             ]) . $this->recordTable([[
@@ -3505,8 +3666,10 @@ class DocumentGeneratorService
     private function clientStandards(int $clientId): array
     {
         return $this->db->table('client_standards')
-            ->select('client_standards.*, standards.code AS standard_code, standards.scheme_type')
+            ->select('client_standards.*, standards.code AS standard_code, standards.scheme_type, iaf_codes.code AS iaf_code, iaf_codes.title AS iaf_title, food_chain_categories.code AS food_category_code, food_chain_categories.title AS food_category_title, food_chain_categories.description AS food_category_description')
             ->join('standards', 'standards.id = client_standards.standard_id')
+            ->join('iaf_codes', 'iaf_codes.id = client_standards.iaf_code_id', 'left')
+            ->join('food_chain_categories', 'food_chain_categories.id = client_standards.food_chain_category_id', 'left')
             ->where('client_standards.client_id', $clientId)
             ->get()
             ->getResultArray();
@@ -4056,9 +4219,9 @@ class DocumentGeneratorService
             .certificate-client-logo { position: absolute; right: 0; top: 9mm; width: 30mm; height: 17mm; text-align: right; }
             .certificate-client-logo img { max-width: 30mm; max-height: 17mm; object-fit: contain; }
             .certificate-intro { font-size: 11.2pt; margin-bottom: 10mm; }
-            .certificate-company { font-size: 22pt; line-height: 1.12; font-weight: 700; max-width: 125mm; margin-bottom: 3mm; }
-            .certificate-company.company-medium { font-size: 19.5pt; line-height: 1.1; }
-            .certificate-company.company-long { font-size: 17.2pt; line-height: 1.08; }
+            .certificate-company { font-size: 19.8pt; line-height: 1.14; font-weight: 700; max-width: 125mm; margin-bottom: 3mm; }
+            .certificate-company.company-medium { font-size: 18pt; line-height: 1.12; }
+            .certificate-company.company-long { font-size: 16.2pt; line-height: 1.1; }
             .certificate-address { font-size: 9.3pt; line-height: 1.22; max-width: 112mm; margin-bottom: 10mm; }
             .certificate-compliance { font-size: 11.2pt; margin-bottom: 8mm; }
             .certificate-standard { font-size: 27pt; line-height: 1; margin-bottom: 4.5mm; font-weight: 400; letter-spacing: 0.2mm; }
@@ -4067,6 +4230,7 @@ class DocumentGeneratorService
             .certificate-scope { font-size: 14pt; line-height: 1.14; font-weight: 700; max-width: 134mm; margin-bottom: 4.2mm; }
             .certificate-scope.scope-medium { font-size: 12.6pt; line-height: 1.12; }
             .certificate-scope.scope-long { font-size: 11.2pt; line-height: 1.1; }
+            .certificate-classification { font-size: 6.8pt; color: #0b3558; font-weight: 700; line-height: 1.22; max-width: 132mm; margin: -2mm 0 3mm; }
             .certificate-dates { width: 137mm; table-layout: fixed; margin: 0 0 3.2mm; border-collapse: collapse; border-top: 0.35mm solid #1f2933; border-bottom: 0.35mm solid #1f2933; }
             .certificate-dates .date-label { width: 38mm; }
             .certificate-dates .date-value { width: 30.5mm; }
@@ -4080,11 +4244,23 @@ class DocumentGeneratorService
             .certificate-signatures td { border: 0 !important; background: transparent !important; padding: 0 6mm 0 0; text-align: center; font-size: 8.6pt; vertical-align: top; }
             .signature-line { height: 11mm; border-bottom: 0.25mm solid #1f2933; margin-bottom: 1.2mm; text-align: center; }
             .certificate-signature-image { max-width: 39mm; max-height: 10.5mm; display: inline-block; vertical-align: bottom; }
-            .certificate-verification-block { width: 52mm; margin-top: 1mm; }
-            .certificate-verification-block img { width: 22mm; height: 22mm; display: block; margin-bottom: 2.1mm; }
-            .certificate-validity { font-size: 7.6pt; margin-bottom: 1mm; line-height: 1.16; }
-            .certificate-validity strong { color: #1c6d8a; font-size: 8.1pt; }
-            .certificate-verify { font-size: 6.7pt; line-height: 1.18; color: #1f2933; }
+            .certificate-verification-block { width: 112mm; margin-top: 1mm; }
+            .certificate-verification-block.has-accreditation { width: 112mm; }
+            .certificate-verification-row { width: 23.5mm; table-layout: fixed; border-collapse: collapse; margin: 0; }
+            .certificate-verification-block.has-accreditation .certificate-verification-row { width: 84mm; }
+            .certificate-verification-row td { border: 0 !important; background: transparent !important; padding: 0 1.5mm 0 0; vertical-align: top; }
+            .certificate-accreditation-logo { height: 35.5mm; text-align: left; }
+            .certificate-accreditation-logo.iaf-logo { width: 42.2mm; padding-top: 5.8mm !important; }
+            .certificate-accreditation-logo.iaf-logo img { max-width: 32.2mm; max-height: 17.6mm; width: auto; height: auto; display: inline-block; margin: 0; }
+            .certificate-accreditation-logo.body-logo { width: 21.2mm; padding-right: 0.15mm !important; }
+            .certificate-accreditation-logo.body-logo img { max-width: 22.2mm; max-height: 35.3mm; width: auto; height: auto; display: inline-block; margin: 0; }
+            .certificate-qr-panel { width: 23.5mm; vertical-align: top; padding-left: 0 !important; padding-right: 0 !important; }
+            .certificate-qr-image { width: 22mm; height: 22mm; display: block; margin-bottom: 2mm; }
+            .certificate-verification-block.has-accreditation .certificate-qr-image { margin-left: -4.2mm; }
+            .certificate-validity { font-size: 7.35pt; margin-bottom: 1mm; line-height: 1.16; white-space: nowrap; }
+            .certificate-validity strong { color: #1c6d8a; font-size: 7.75pt; }
+            .certificate-verify { font-size: 6.45pt; line-height: 1.23; color: #1f2933; max-width: 112mm; }
+            .certificate-verify strong { white-space: nowrap; }
         ';
     }
 

@@ -612,6 +612,8 @@ class DemoWorkflowSeeder extends Seeder
             'shifts_auditing' => $scenario['risk'] === 'high' ? 'Two shifts' : 'Single shift',
             'risk_classification' => ucfirst($scenario['risk']),
             'standards_text' => implode(', ', array_keys($standardIds)),
+            'certification_route' => $this->demoCertificationRoute($scenario),
+            'accreditation_body' => $this->demoAccreditationBody($scenario),
             'audit_category' => $scenario['food'] ?? $scenario['iaf'],
             'competence_requirements' => 'Competence confirmed for selected standards, scope, IAF/food category and risk profile.',
             'days_allotted' => number_format($days['total'], 2),
@@ -645,11 +647,11 @@ class DemoWorkflowSeeder extends Seeder
             'review_payload' => json_encode($payload, JSON_THROW_ON_ERROR),
             'status' => 'qm_approved',
             'reviewed_at' => $this->dateTime($this->plus($base, 1), '14:00:00'),
-            'technical_reviewer_name' => 'Hassan Al Rashed',
+            'technical_reviewer_name' => 'Ms. Rimsha Mahmoud',
             'technical_review_date' => $this->plus($base, 1),
             'quality_manager_status' => 'approved',
             'quality_manager_comments' => 'Independent quality approval granted.',
-            'quality_manager_name' => 'Maha Al Salem',
+            'quality_manager_name' => 'Ms. Rimsha Mahmoud',
             'quality_manager_date' => $this->plus($base, 2),
             'general_manager_status' => 'not_required',
             'general_manager_comments' => 'GM approval is completed at certification decision stage.',
@@ -657,6 +659,27 @@ class DemoWorkflowSeeder extends Seeder
         ]);
 
         return (int) $this->db->insertID();
+    }
+
+    private function demoCertificationRoute(array $scenario): string
+    {
+        $codes = array_map('strtoupper', array_map('strval', $scenario['standards'] ?? []));
+        if (count($codes) === 1 && str_contains($codes[0], 'HACCP')) {
+            return 'unaccredited';
+        }
+
+        return 'accredited';
+    }
+
+    private function demoAccreditationBody(array $scenario): string
+    {
+        if ($this->demoCertificationRoute($scenario) !== 'accredited') {
+            return '';
+        }
+
+        $joined = strtoupper(implode(' ', array_map('strval', $scenario['standards'] ?? [])));
+
+        return str_contains($joined, '14001') || str_contains($joined, '45001') ? 'SAAC' : 'IAS';
     }
 
     private function seedProposal(int $clientId, int $reviewId, array $scenario, DateTimeImmutable $base, string $clientNo): int
@@ -670,7 +693,8 @@ class DemoWorkflowSeeder extends Seeder
         $payload = [
             'intro_message' => 'Thank you for the opportunity to provide certification services. This proposal is based on the submitted application and application review.',
             'standards_text' => implode(', ', $scenario['standards']),
-            'accreditation_body' => 'QSI-Cert',
+            'certification_route' => $this->demoCertificationRoute($scenario),
+            'accreditation_body' => $this->demoAccreditationBody($scenario),
             'initial_audit_type' => 'Initial Certification',
             'total_audit_days' => number_format($this->durationDays($scenario)['total'], 2),
             'payment_terms' => '50% before Stage 1 audit and 50% before certificate issue.',
@@ -860,9 +884,9 @@ class DemoWorkflowSeeder extends Seeder
             'surveillance_2_status' => $surv2 < new DateTimeImmutable('today') ? 'completed' : 'active',
             'status' => 'active',
             'program_payload' => json_encode($programPayload, JSON_THROW_ON_ERROR),
-            'prepared_by_name' => 'Yousef Nasser',
+            'prepared_by_name' => 'Rana Arslan Khan',
             'prepared_date' => $this->plus($base, 10),
-            'approved_by_name' => 'Hassan Al Rashed',
+            'approved_by_name' => 'Ms. Rimsha Mahmoud',
             'approved_date' => $this->plus($base, 11),
             'created_by' => $this->users['certification_manager'],
             'created_at' => $this->dateTime($this->plus($base, 10), '10:00:00'),

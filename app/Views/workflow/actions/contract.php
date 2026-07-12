@@ -102,7 +102,8 @@ $textarea = static function (string $field, string $label, int $rows = 3, string
 
         <?= $section('Audit scheme and duration') ?>
         <?= $input('standards_text', 'Standard(s)') ?>
-        <?= $input('accreditation_body', 'Accreditation body') ?>
+        <?= $input('certification_route', 'Certification route', 'col-md-3') ?>
+        <?= $input('accreditation_body', 'Accreditation body', 'col-md-3') ?>
         <?= $input('initial_audit_type', 'Initial audit type') ?>
         <?php foreach ([
             'total_audit_days' => 'Total audit days',

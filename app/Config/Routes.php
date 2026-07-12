@@ -85,6 +85,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('workflow/certification/(:num)/documents/(:segment)', 'Workflow\WorkflowDocumentController::clientDocument/$1/$2', ['filter' => 'permission:document_templates,download']);
     $routes->get('workflow/certification/(:num)/audit-events/(:num)/documents/(:segment)', 'Workflow\WorkflowDocumentController::eventDocument/$1/$2/$3', ['filter' => 'permission:document_templates,download']);
     $routes->get('workflow/certification/certificates/(:num)/pdf', 'Workflow\WorkflowDocumentController::certificate/$1', ['filter' => 'permission:certificates,download']);
+    $routes->get('workflow/certification/certificates/(:num)/printable-pdf', 'Workflow\WorkflowDocumentController::certificatePrintable/$1', ['filter' => 'permission:certificates,download']);
     $routes->get('workflow/certification/certificates/(:num)/docx', 'Workflow\WorkflowDocumentController::certificateWord/$1', ['filter' => 'permission:certificates,download']);
 
     $routes->get('masters/clients', 'Masters\ClientController::index', ['filter' => 'permission:clients,view']);
