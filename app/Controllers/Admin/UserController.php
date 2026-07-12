@@ -6,6 +6,7 @@ use App\Controllers\BaseController;
 use App\Models\RoleModel;
 use App\Models\UserModel;
 use App\Services\AuditLogger;
+use App\Services\PasswordPolicy;
 use Config\Database;
 
 class UserController extends BaseController
@@ -74,9 +75,12 @@ class UserController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Select at least one role.');
         }
 
+        $policy = new PasswordPolicy();
         $password = trim((string) $this->request->getPost('password'));
         if ($password === '') {
-            $password = 'Password123!';
+            $password = $policy->temporaryPassword();
+        } elseif (! $policy->isStrong($password)) {
+            return redirect()->back()->withInput()->with('error', PasswordPolicy::MESSAGE);
         }
 
         $data = [
@@ -87,7 +91,7 @@ class UserController extends BaseController
             'phone' => trim((string) $this->request->getPost('phone')) ?: null,
             'password_hash' => password_hash($password, PASSWORD_DEFAULT),
             'status' => (string) $this->request->getPost('status'),
-            'must_change_password' => $this->request->getPost('must_change_password') === '1' ? 1 : 0,
+            'must_change_password' => 1,
         ];
 
         $id = (int) $this->users->insert($data);
@@ -148,6 +152,11 @@ class UserController extends BaseController
 
         $newPassword = trim((string) $this->request->getPost('password'));
         if ($newPassword !== '') {
+            $policy = new PasswordPolicy();
+            if (! $policy->isStrong($newPassword)) {
+                return redirect()->back()->withInput()->with('error', PasswordPolicy::MESSAGE);
+            }
+
             $data['password_hash'] = password_hash($newPassword, PASSWORD_DEFAULT);
             $data['must_change_password'] = 1;
         }
@@ -183,7 +192,7 @@ class UserController extends BaseController
             'email' => 'required|valid_email|max_length[190]',
             'phone' => 'permit_empty|max_length[40]',
             'status' => 'required|in_list[active,inactive,suspended]',
-            'password' => $new ? 'permit_empty|min_length[8]' : 'permit_empty|min_length[8]',
+            'password' => 'permit_empty',
         ];
     }
 

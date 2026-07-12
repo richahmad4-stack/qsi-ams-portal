@@ -17,6 +17,10 @@ $routes->get('certificates/verify/(:segment)', 'PublicCertificateController::ver
 
 $routes->get('login', 'Auth\AuthController::login', ['as' => 'login']);
 $routes->post('login', 'Auth\AuthController::authenticate', ['as' => 'login.post']);
+$routes->get('forgot-password', 'Auth\PasswordResetController::request', ['as' => 'password.request']);
+$routes->post('forgot-password', 'Auth\PasswordResetController::send', ['as' => 'password.email']);
+$routes->get('reset-password', 'Auth\PasswordResetController::edit', ['as' => 'password.reset']);
+$routes->post('reset-password', 'Auth\PasswordResetController::update', ['as' => 'password.update']);
 $routes->post('logout', 'Auth\AuthController::logout', ['filter' => 'auth', 'as' => 'logout']);
 
 $routes->group('', ['filter' => 'auth'], static function (RouteCollection $routes): void {

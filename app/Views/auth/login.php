@@ -100,6 +100,9 @@
                 <i class="fa-solid fa-right-to-bracket me-2" aria-hidden="true"></i>
                 Sign in
             </button>
+            <div class="text-center mt-3">
+                <a href="<?= site_url('forgot-password') ?>">Forgot password?</a>
+            </div>
         </form>
     </section>
 </main>

@@ -12,6 +12,7 @@ use App\Models\PersonnelModel;
 use App\Models\StandardModel;
 use App\Models\UserModel;
 use App\Services\AuditLogger;
+use App\Services\PasswordPolicy;
 use Config\Database;
 
 class PersonnelController extends BaseController
@@ -245,7 +246,7 @@ class PersonnelController extends BaseController
             'personnel_type' => 'required|max_length[80]',
             'client_id' => 'permit_empty|integer',
             'approval_status' => 'required|max_length[40]',
-            'new_password' => 'permit_empty|min_length[8]|max_length[255]',
+            'new_password' => 'permit_empty|max_length[255]',
             'confirm_password' => 'permit_empty|max_length[255]',
         ];
     }
@@ -272,8 +273,8 @@ class PersonnelController extends BaseController
             return 'The password confirmation does not match.';
         }
 
-        if (($data['personnel_type'] ?? '') === 'client_representative' && (int) ($person['user_id'] ?? 0) <= 0 && $password === '') {
-            return 'Enter a password when enabling a new client portal login.';
+        if ($password !== '' && ! (new PasswordPolicy())->isStrong($password)) {
+            return PasswordPolicy::MESSAGE;
         }
 
         $duplicateQuery = $this->users
@@ -304,9 +305,11 @@ class PersonnelController extends BaseController
             'must_change_password' => $this->request->getPost('must_change_password') === '1' ? 1 : 0,
         ];
 
+        $policy = new PasswordPolicy();
         $password = trim((string) $this->request->getPost('new_password'));
         if ($password !== '') {
             $payload['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+            $payload['must_change_password'] = 1;
         }
 
         $this->users->update((int) $person['user_id'], $payload);
@@ -354,15 +357,18 @@ class PersonnelController extends BaseController
             'must_change_password' => $this->request->getPost('must_change_password') === '1' ? 1 : 0,
         ];
 
+        $policy = new PasswordPolicy();
         $password = trim((string) $this->request->getPost('new_password'));
         if ($password !== '') {
             $payload['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+            $payload['must_change_password'] = 1;
         }
 
         if ($userId > 0) {
             $this->users->update($userId, $payload);
         } else {
-            $payload['password_hash'] ??= password_hash('Password123!', PASSWORD_DEFAULT);
+            $payload['password_hash'] ??= password_hash($policy->temporaryPassword(), PASSWORD_DEFAULT);
+            $payload['must_change_password'] = 1;
             $userId = (int) $this->users->insert($payload);
             $this->personnel->update((int) $person['id'], ['user_id' => $userId]);
         }

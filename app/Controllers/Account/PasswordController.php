@@ -5,6 +5,7 @@ namespace App\Controllers\Account;
 use App\Controllers\BaseController;
 use App\Models\UserModel;
 use App\Services\AuditLogger;
+use App\Services\PasswordPolicy;
 
 class PasswordController extends BaseController
 {
@@ -29,8 +30,9 @@ class PasswordController extends BaseController
             return redirect()->back()->with('error', 'The new password confirmation does not match.');
         }
 
-        if (! $this->isStrongPassword($newPassword)) {
-            return redirect()->back()->with('error', 'Use at least 12 characters with uppercase, lowercase, number, and symbol.');
+        $policy = new PasswordPolicy();
+        if (! $policy->isStrong($newPassword)) {
+            return redirect()->back()->with('error', PasswordPolicy::MESSAGE);
         }
 
         $users = new UserModel();
@@ -58,12 +60,4 @@ class PasswordController extends BaseController
         return redirect()->to('/dashboard')->with('success', 'Password changed.');
     }
 
-    private function isStrongPassword(string $password): bool
-    {
-        return strlen($password) >= 12
-            && preg_match('/[a-z]/', $password) === 1
-            && preg_match('/[A-Z]/', $password) === 1
-            && preg_match('/[0-9]/', $password) === 1
-            && preg_match('/[^a-zA-Z0-9]/', $password) === 1;
-    }
 }

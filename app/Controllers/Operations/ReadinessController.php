@@ -54,6 +54,16 @@ class ReadinessController extends BaseController
                 $db->tableExists('user_role_assignments'),
                 'Multiple-role user administration is available.'
             ),
+            $this->check(
+                'Password reset flow',
+                $db->tableExists('password_reset_tokens') && class_exists(\App\Controllers\Auth\PasswordResetController::class),
+                'Password reset tokens and controller must be available before go-live.'
+            ),
+            $this->check(
+                'Automated test workflow',
+                is_file(ROOTPATH . '.github/workflows/phpunit.yml'),
+                'Add GitHub Actions so tests run on every push.'
+            ),
         ];
 
         $leadCount = $db->tableExists('website_leads')

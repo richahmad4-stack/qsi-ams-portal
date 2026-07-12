@@ -27,7 +27,8 @@
         </div>
         <div class="col-md-4">
             <label class="form-label" for="password"><?= $isNew ? 'Temporary password' : 'Reset password' ?></label>
-            <input class="form-control" id="password" type="password" name="password" autocomplete="new-password" placeholder="<?= $isNew ? 'Default: Password123!' : 'Leave blank to keep current password' ?>">
+            <input class="form-control" id="password" type="password" name="password" autocomplete="new-password" placeholder="<?= $isNew ? 'Leave blank to generate a secure temporary password' : 'Leave blank to keep current password' ?>">
+            <div class="form-text">Minimum 12 characters with uppercase, lowercase, number, and symbol.</div>
         </div>
         <div class="col-12">
             <div class="form-check">

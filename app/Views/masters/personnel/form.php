@@ -106,6 +106,7 @@ $clientLoginEnabled = old('enable_client_login', $hasClientLogin && ($person['lo
                     <div class="col-md-4">
                         <label class="form-label" for="new_password">Reset password</label>
                         <input id="new_password" name="new_password" type="password" class="form-control" autocomplete="new-password" placeholder="Leave blank to keep current password">
+                        <div class="form-text">Minimum 12 characters with uppercase, lowercase, number, and symbol.</div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label" for="confirm_password">Confirm password</label>
@@ -137,7 +138,8 @@ $clientLoginEnabled = old('enable_client_login', $hasClientLogin && ($person['lo
                     </div>
                     <div class="col-md-4">
                         <label class="form-label" for="new_password">Reset password</label>
-                        <input id="new_password" name="new_password" type="password" class="form-control" autocomplete="new-password" placeholder="<?= $hasClientLogin ? 'Leave blank to keep current password' : 'Required when enabling login' ?>">
+                        <input id="new_password" name="new_password" type="password" class="form-control" autocomplete="new-password" placeholder="<?= $hasClientLogin ? 'Leave blank to keep current password' : 'Leave blank to generate a secure temporary password' ?>">
+                        <div class="form-text">Minimum 12 characters with uppercase, lowercase, number, and symbol.</div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label" for="confirm_password">Confirm password</label>
