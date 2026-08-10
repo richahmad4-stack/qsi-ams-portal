@@ -85,7 +85,7 @@ $eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
         <div class="metric">
             <div class="text-secondary small">Report status</div>
             <div class="fw-semibold"><?= esc($report['status'] ?? 'draft') ?></div>
-            <div class="text-secondary small"><?= esc(count($sections)) ?> auto note(s), <?= esc(count($manualSections)) ?> manual note(s), <?= esc(count($ncrs)) ?> NCR(s)</div>
+            <div class="text-secondary small"><?= esc(count($sections)) ?> saved report section(s), <?= esc(count($manualSections)) ?> manual note(s), <?= esc(count($ncrs)) ?> NCR(s)</div>
         </div>
     </div>
 </div>
@@ -165,10 +165,94 @@ $eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
     </div>
 </section>
 
-<?php if ($clausesByStandard === []): ?>
+<?php if (($requirementResponses ?? []) !== []): ?>
+    <section class="panel mb-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div>
+                <div class="panel-title mb-1">Controlled integrated audit checklist</div>
+                <div class="text-secondary small">The same saved requirements, clause mappings, responses and evidence are used in the workflow file and PDF.</div>
+            </div>
+            <span class="badge text-bg-primary"><?= esc(count($requirementResponses)) ?> requirement(s)</span>
+        </div>
+        <div class="accordion" id="controlledRequirementAccordion">
+            <?php foreach ($requirementResponses as $index => $response): ?>
+                <?php $responseId = (int) $response['response_id']; ?>
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button <?= $index === 0 ? '' : 'collapsed' ?>" type="button" data-bs-toggle="collapse" data-bs-target="#controlledResponse<?= esc($responseId) ?>">
+                            <span class="me-2 fw-semibold"><?= esc($response['requirement_code']) ?></span>
+                            <span><?= esc($response['requirement_title']) ?></span>
+                            <span class="badge text-bg-<?= (int) $response['auditor_confirmed'] === 1 ? 'success' : 'warning' ?> ms-2">
+                                <?= (int) $response['auditor_confirmed'] === 1 ? 'Confirmed' : 'Needs confirmation' ?>
+                            </span>
+                            <?php if (($response['ncrs'] ?? []) !== []): ?><span class="badge text-bg-danger ms-2"><?= esc(count($response['ncrs'])) ?> NCR</span><?php endif; ?>
+                        </button>
+                    </h2>
+                    <div id="controlledResponse<?= esc($responseId) ?>" class="accordion-collapse collapse <?= $index === 0 ? 'show' : '' ?>" data-bs-parent="#controlledRequirementAccordion">
+                        <div class="accordion-body">
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm mb-0">
+                                    <thead><tr><th>Standard</th><th>Clause</th><th>Clause title</th></tr></thead>
+                                    <tbody>
+                                    <?php foreach ($response['mappings'] as $mapping): ?>
+                                        <tr><td><?= esc($mapping['standard_code']) ?></td><td><?= esc($mapping['clause_reference']) ?></td><td><?= esc($mapping['clause_title']) ?></td></tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="small text-secondary mb-1">Audit requirement / question</div>
+                            <div class="mb-3"><?= nl2br(esc($response['audit_question'])) ?></div>
+
+                            <div class="row g-3" data-controlled-response="<?= esc($responseId) ?>" data-autosave-url="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/responses/' . $responseId . '/autosave') ?>">
+                                <div class="col-lg-7">
+                                    <label class="form-label" for="controlled_response_<?= esc($responseId) ?>">Audit response / conformity statement</label>
+                                    <textarea class="form-control" id="controlled_response_<?= esc($responseId) ?>" data-response-text rows="7"><?= esc($response['response_text']) ?></textarea>
+                                </div>
+                                <div class="col-lg-5">
+                                    <label class="form-label" for="controlled_evidence_<?= esc($responseId) ?>">Objective evidence</label>
+                                    <textarea class="form-control" id="controlled_evidence_<?= esc($responseId) ?>" data-objective-evidence rows="7"><?= esc($response['objective_evidence']) ?></textarea>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="controlled_type_<?= esc($responseId) ?>">Finding type</label>
+                                    <select class="form-select" id="controlled_type_<?= esc($responseId) ?>" data-finding-type>
+                                        <?php foreach (['conformity' => 'Conformity', 'positive' => 'Positive finding', 'ofi' => 'Opportunity for improvement', 'minor' => 'Minor NC', 'major' => 'Major NC'] as $value => $label): ?>
+                                            <option value="<?= esc($value) ?>" <?= ($response['finding_type'] ?? '') === $value ? 'selected' : '' ?>><?= esc($label) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-8 d-flex align-items-end gap-2">
+                                    <span class="small text-secondary me-auto" data-controlled-status>Saved</span>
+                                    <form method="post" action="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/responses/' . $responseId . '/confirm') ?>">
+                                        <?= csrf_field() ?>
+                                        <button class="btn btn-success btn-sm" type="submit"><i class="fa-solid fa-check me-1" aria-hidden="true"></i>Confirm response</button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <div class="border-top mt-4 pt-3">
+                                <div class="fw-semibold mb-2">Raise NCR against this requirement</div>
+                                <form method="post" action="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/ncrs') ?>" class="row g-2">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="audit_requirement_response_id" value="<?= esc($responseId) ?>">
+                                    <input type="hidden" name="requirement" value="<?= esc($response['audit_question'], 'attr') ?>">
+                                    <div class="col-md-2"><select class="form-select" name="classification" required><option value="">Classification</option><option value="minor">Minor</option><option value="major">Major</option></select></div>
+                                    <div class="col-md-5"><textarea class="form-control" name="finding" rows="2" placeholder="Nonconformity statement" required></textarea></div>
+                                    <div class="col-md-5"><textarea class="form-control" name="objective_evidence" rows="2" placeholder="Exact objective evidence" required></textarea></div>
+                                    <div class="col-md-4"><input class="form-control" name="responsible_person" placeholder="Responsible person"></div>
+                                    <div class="col-md-3"><input class="form-control" type="date" name="target_date"></div>
+                                    <div class="col-md-5 text-end"><button class="btn btn-danger btn-sm" type="submit">Raise NCR</button></div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </section>
+<?php elseif ($clausesByStandard === []): ?>
     <section class="panel">
         <div class="panel-title">Audit checklist</div>
-        <div class="alert alert-warning mb-0">No clauses are available for this client's requested standards. Add standards to the client, then seed or maintain the Clause Library.</div>
+        <div class="alert alert-warning mb-0">No approved clause mappings are available for this client's requested standards. Audit execution remains blocked until controlled, source-validated mappings are approved.</div>
     </section>
 <?php else: ?>
     <?php $standardIndex = 0; ?>
@@ -278,7 +362,7 @@ $eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
                                                     <div class="border rounded p-3 h-100">
                                                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                                                             <label class="form-label mb-0" for="conformity_note_<?= esc($clauseId) ?>">Conformity note</label>
-                                                            <span class="small text-success" id="autosave_status_<?= esc($clauseId) ?>">Auto saved</span>
+                                                            <span class="small <?= $conformitySection === null ? 'text-secondary' : 'text-success' ?>" id="autosave_status_<?= esc($clauseId) ?>"><?= $conformitySection === null ? 'Draft not prepared' : 'Saved' ?></span>
                                                         </div>
                                                         <div class="alert alert-warning py-2 small mb-2">
                                                             System/AI text is a draft only. The auditor must verify the sampled evidence and edit this note before relying on it in the final report.
@@ -293,9 +377,10 @@ $eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
                                                         <?php endif; ?>
                                                         <textarea
                                                             class="form-control mb-2"
-                                                            id="conformity_note_<?= esc($clauseId) ?>"
-                                                            rows="7"
-                                                            data-autosave-url="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/findings/' . ($conformitySection['id'] ?? 0) . '/autosave') ?>"
+                                                             id="conformity_note_<?= esc($clauseId) ?>"
+                                                             rows="7"
+                                                             <?= $conformitySection === null ? 'readonly' : '' ?>
+                                                             <?php if ($conformitySection !== null): ?>data-autosave-url="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/findings/' . $conformitySection['id'] . '/autosave') ?>"<?php endif; ?>
                                                             data-autosave-status="autosave_status_<?= esc($clauseId) ?>"
                                                             data-default-text="<?= esc($smartConformityNote, 'attr') ?>"
                                                         ><?= esc($conformitySection['section_content'] ?? $smartConformityNote) ?></textarea>
@@ -482,6 +567,56 @@ $eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
 let csrfTokenName = <?= json_encode(csrf_token()) ?>;
 let csrfTokenValue = <?= json_encode(csrf_hash()) ?>;
 
+function autosaveControlledResponse(container) {
+    const status = container.querySelector('[data-controlled-status]');
+    const body = new URLSearchParams();
+    body.append(csrfTokenName, csrfTokenValue);
+    body.append('response_text', container.querySelector('[data-response-text]')?.value || '');
+    body.append('objective_evidence', container.querySelector('[data-objective-evidence]')?.value || '');
+    body.append('finding_type', container.querySelector('[data-finding-type]')?.value || 'conformity');
+    if (status) {
+        status.className = 'small text-secondary me-auto';
+        status.textContent = 'Saving...';
+    }
+    fetch(container.dataset.autosaveUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest'},
+        body
+    })
+        .then((response) => response.json())
+        .then((payload) => {
+            if (payload.csrfToken && payload.csrfHash) {
+                csrfTokenName = payload.csrfToken;
+                csrfTokenValue = payload.csrfHash;
+            }
+            if (status) {
+                status.className = payload.ok ? 'small text-success me-auto' : 'small text-danger me-auto';
+                status.textContent = payload.ok ? 'Saved; confirmation required' : (payload.message || 'Not saved');
+            }
+        })
+        .catch(() => {
+            if (status) {
+                status.className = 'small text-danger me-auto';
+                status.textContent = 'Not saved';
+            }
+        });
+}
+
+document.querySelectorAll('[data-controlled-response]').forEach((container) => {
+    let timer = null;
+    container.querySelectorAll('textarea, select').forEach((field) => {
+        field.addEventListener('input', () => {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(() => autosaveControlledResponse(container), 900);
+        });
+        field.addEventListener('change', () => {
+            window.clearTimeout(timer);
+            autosaveControlledResponse(container);
+        });
+    });
+});
+
 function autosaveConformityNote(textarea) {
     const status = document.getElementById(textarea.dataset.autosaveStatus);
     const body = new URLSearchParams();
@@ -582,6 +717,11 @@ document.querySelectorAll('[data-ai-url]').forEach((button) => {
                 }
 
                 target.value = payload.text || '';
+                if (payload.reload) {
+                    window.location.reload();
+                    return;
+                }
+
                 target.focus();
                 target.dispatchEvent(new Event('input'));
 

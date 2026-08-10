@@ -1,0 +1,14 @@
+.git
+.repo-git
+.env
+local-backups
+node_modules
+vendor
+writable/cache
+writable/debugbar
+writable/logs
+writable/session
+writable/uploads
+*.backup
+*.sql
+*.zip

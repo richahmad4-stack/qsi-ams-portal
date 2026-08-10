@@ -2,15 +2,16 @@
 
 namespace App\Services;
 
+use CodeIgniter\Database\BaseConnection;
 use Config\Database;
 
 class ClauseContentPoolService
 {
-    private $db;
+    private BaseConnection $db;
 
-    public function __construct()
+    public function __construct(?BaseConnection $db = null)
     {
-        $this->db = Database::connect();
+        $this->db = $db ?? Database::connect();
     }
 
     public function conformityNote(array $client, ?array $event, array $clause): ?string

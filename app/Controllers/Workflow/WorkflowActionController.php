@@ -26,6 +26,7 @@ use App\Services\AuditLogger;
 use App\Services\AuditAiDraftService;
 use App\Services\AuditDurationService;
 use App\Services\AuditReportNarrativeService;
+use App\Services\AuditReportProjectionService;
 use App\Services\CertificationApplicationDefaults;
 use App\Services\ClauseContentPoolService;
 use App\Services\CommercialTermsService;
@@ -63,6 +64,7 @@ class WorkflowActionController extends BaseController
     private AuditAiDraftService $aiDrafts;
     private AuditDurationService $durationService;
     private AuditReportNarrativeService $narratives;
+    private AuditReportProjectionService $reportProjection;
     private ClauseContentPoolService $contentPool;
     private SmartAuditContentEngine $contentEngine;
     private WorkflowRoleService $workflowRoles;
@@ -103,6 +105,7 @@ class WorkflowActionController extends BaseController
         $this->commercialTerms = new CommercialTermsService();
         $this->db = Database::connect();
         $this->workflowRoles = new WorkflowRoleService($this->db);
+        $this->reportProjection = new AuditReportProjectionService($this->db);
     }
 
     public function review(int $clientId)
@@ -824,10 +827,9 @@ class WorkflowActionController extends BaseController
         }
 
         $clauses = $this->clausesForClient($clientId);
-        $report = $this->ensureReport($eventId);
+        $report = $this->reportForEvent($eventId);
         $auditTeam = $this->eventTeamRows($eventId);
         $planItems = $this->eventPlanItemRows($eventId);
-        $this->ensureConformitySections((int) $report['id'], $clauses, $client, $event, $planItems, $auditTeam);
 
         return view('workflow/actions/audit_execute', [
             'title' => 'Audit Execution',
@@ -836,7 +838,8 @@ class WorkflowActionController extends BaseController
             'client' => $client,
             'event' => $event,
             'report' => $report,
-            'sections' => $this->reportSectionRows((int) $report['id']),
+            'sections' => $report === null ? [] : $this->reportSectionRows((int) $report['id']),
+            'requirementResponses' => $report === null ? [] : $this->reportProjection->responsesForReport((int) $report['id']),
             'ncrs' => $this->ncrRows($eventId),
             'clauses' => $clauses,
             'clientStandards' => $this->clientStandardRows($clientId),
@@ -855,15 +858,10 @@ class WorkflowActionController extends BaseController
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Audit event not found.');
         }
 
-        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
-            return redirect()->back()->withInput()->with('error', $roleError);
-        }
-
         $event = $this->events->find($eventId);
-        $report = $this->ensureReport($eventId);
+        $report = $this->reportForEvent($eventId);
         $auditTeam = $this->eventTeamRows($eventId);
         $planItems = $this->eventPlanItemRows($eventId);
-        $this->ensureConformitySections((int) $report['id'], $this->clausesForClient($clientId), $client, $event, $planItems, $auditTeam);
         $technicalReview = $this->technicalReviewForEvent($eventId);
 
         return view('workflow/audit_event_file', [
@@ -876,7 +874,8 @@ class WorkflowActionController extends BaseController
             'appointments' => $auditTeam,
             'planItems' => $planItems,
             'report' => $report,
-            'sections' => $this->reportSectionRows((int) $report['id']),
+            'sections' => $report === null ? [] : $this->reportProjection->responsesForReport((int) $report['id']),
+            'supplementaryNotes' => $report === null ? [] : $this->reportProjection->supplementaryNotesForReport((int) $report['id']),
             'ncrs' => $this->ncrRows($eventId),
             'capas' => $this->capaRowsForEvent($eventId),
             'technicalReview' => $technicalReview,
@@ -891,6 +890,10 @@ class WorkflowActionController extends BaseController
 
         if ($client === null || $program === null || ! $this->eventBelongsToProgram($eventId, (int) $program['id'])) {
             return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'Audit event not found.');
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
         }
 
         $event = $this->events->find($eventId);
@@ -1036,6 +1039,86 @@ class WorkflowActionController extends BaseController
         return redirect()->to('/workflow/certification/' . $clientId . '/audit-events/' . $eventId . '/execute')->with('success', 'Conformity note confirmed by auditor.');
     }
 
+    public function autosaveRequirementResponse(int $clientId, int $eventId, int $responseId)
+    {
+        $response = $this->controlledResponseForEvent($responseId, $eventId);
+        $event = $this->events->find($eventId);
+        if ($this->tenantClient($clientId) === null || $response === null || $event === null) {
+            return $this->response->setStatusCode(404)->setJSON([
+                'ok' => false,
+                'message' => 'Controlled audit response not found.',
+                'csrfToken' => csrf_token(),
+                'csrfHash' => csrf_hash(),
+            ]);
+        }
+
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return $this->jsonWorkflowDenied($roleError);
+        }
+        if (($lockMessage = $this->surveillanceLockMessage($event)) !== null) {
+            return $this->response->setStatusCode(423)->setJSON([
+                'ok' => false,
+                'message' => $lockMessage,
+                'csrfToken' => csrf_token(),
+                'csrfHash' => csrf_hash(),
+            ]);
+        }
+
+        $responseText = trim((string) $this->request->getPost('response_text'));
+        $objectiveEvidence = trim((string) $this->request->getPost('objective_evidence'));
+        if ($responseText === '') {
+            return $this->response->setStatusCode(422)->setJSON([
+                'ok' => false,
+                'message' => 'Audit response cannot be empty.',
+                'csrfToken' => csrf_token(),
+                'csrfHash' => csrf_hash(),
+            ]);
+        }
+
+        $payload = [
+            'response_text' => $responseText,
+            'objective_evidence' => $objectiveEvidence,
+            'finding_type' => $this->normalisedFindingType((string) $this->request->getPost('finding_type')),
+            'source_type' => 'manual_edit',
+            'auditor_confirmed' => 0,
+            'confirmed_by_user_id' => null,
+            'confirmed_at' => null,
+        ];
+        $this->db->table('audit_requirement_responses')->where('id', $responseId)->update($payload);
+        $this->auditLogger->record('update', 'reports', 'audit_requirement_responses', $responseId, $response, $payload);
+
+        return $this->response->setJSON([
+            'ok' => true,
+            'message' => 'Saved',
+            'csrfToken' => csrf_token(),
+            'csrfHash' => csrf_hash(),
+        ]);
+    }
+
+    public function confirmRequirementResponse(int $clientId, int $eventId, int $responseId)
+    {
+        $response = $this->controlledResponseForEvent($responseId, $eventId);
+        if ($this->tenantClient($clientId) === null || $response === null) {
+            return redirect()->back()->with('error', 'Controlled audit response not found.');
+        }
+        if (($roleError = $this->workflowRoles->denialReason('audit_execute', $eventId)) !== null) {
+            return redirect()->back()->with('error', $roleError);
+        }
+        if (trim((string) ($response['response_text'] ?? '')) === '') {
+            return redirect()->back()->with('error', 'The audit response cannot be confirmed while empty.');
+        }
+
+        $payload = [
+            'auditor_confirmed' => 1,
+            'confirmed_by_user_id' => (int) session()->get('user_id'),
+            'confirmed_at' => date('Y-m-d H:i:s'),
+        ];
+        $this->db->table('audit_requirement_responses')->where('id', $responseId)->update($payload);
+        $this->auditLogger->record('confirm', 'reports', 'audit_requirement_responses', $responseId, $response, $payload);
+
+        return redirect()->to('/workflow/certification/' . $clientId . '/audit-events/' . $eventId . '/execute')->with('success', 'Controlled audit response confirmed.');
+    }
+
     public function generateConformityDraft(int $clientId, int $eventId, int $clauseId)
     {
         $client = $this->tenantClient($clientId);
@@ -1093,10 +1176,41 @@ class WorkflowActionController extends BaseController
             'text' => $package['content'],
         ];
 
+        $report = $this->ensureReport($eventId);
+        $section = $this->reportSections
+            ->where('report_draft_id', (int) $report['id'])
+            ->where('clause_library_id', $clauseId)
+            ->where('section_key', 'conformity')
+            ->first();
+        $sectionPayload = [
+            'report_draft_id' => (int) $report['id'],
+            'clause_library_id' => $clauseId,
+            'section_key' => 'conformity',
+            'section_title' => trim((string) $clause['standard_code'] . ' ' . (string) $clause['clause_number'] . ' - ' . (string) $clause['clause_title']),
+            'section_content' => $draft['text'],
+            'source_type' => $draft['source'],
+            'auditor_confirmed' => 0,
+            'confirmed_by_user_id' => null,
+            'confirmed_at' => null,
+            'confirmation_note' => null,
+        ];
+
+        if ($section === null) {
+            $sectionPayload['sort_order'] = count($this->reportSectionRows((int) $report['id'])) + 1;
+            $sectionId = (int) $this->reportSections->insert($sectionPayload);
+            $this->auditLogger->record('create', 'reports', 'report_sections', $sectionId, null, $sectionPayload);
+        } else {
+            $sectionId = (int) $section['id'];
+            $this->reportSections->update($sectionId, $sectionPayload);
+            $this->auditLogger->record('update', 'reports', 'report_sections', $sectionId, $section, $sectionPayload);
+        }
+
         return $this->response->setJSON([
             'ok' => true,
             'source' => $draft['source'],
             'text' => $draft['text'],
+            'sectionId' => $sectionId,
+            'reload' => true,
             'csrfToken' => csrf_token(),
             'csrfHash' => csrf_hash(),
         ]);
@@ -1163,6 +1277,7 @@ class WorkflowActionController extends BaseController
             'tenant_id' => (int) session()->get('tenant_id'),
             'audit_event_id' => $eventId,
             'clause_library_id' => $this->intOrNull('ncr_clause_library_id'),
+            'audit_requirement_response_id' => $this->intOrNull('audit_requirement_response_id'),
             'ncr_number' => $this->number('NCR', $clientId),
             'requirement' => (string) $this->request->getPost('requirement'),
             'finding' => (string) $this->request->getPost('finding'),
@@ -1529,28 +1644,28 @@ class WorkflowActionController extends BaseController
 
         if (! $this->validate([
             'decision_maker_personnel_id' => 'required|is_natural_no_zero',
-            'decision' => 'required|max_length[40]',
-            'status' => 'required|max_length[40]',
+            'decision' => 'required|in_list[granted,not_granted,deferred,continue_to_stage2,maintain,renew]',
+            'status' => 'required|in_list[pending,decided,approved]',
         ])) {
             return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
         }
 
         $status = (string) $this->request->getPost('status');
-        if ($this->request->getPost('gm_approved') === '1') {
-            $status = 'gm_approved';
-        }
-
         $decisionValue = (string) $this->request->getPost('decision');
-        $decisionStage = $status === 'gm_approved' ? 'gm_approval' : 'decision';
-        $decisionPersonnelId = $status === 'gm_approved' ? null : (int) $this->request->getPost('decision_maker_personnel_id');
-        if (($roleError = $this->workflowRoles->denialReason($decisionStage, (int) ($review['audit_event_id'] ?? 0), $decisionPersonnelId)) !== null) {
+        $decisionPersonnelId = (int) $this->request->getPost('decision_maker_personnel_id');
+        if (($roleError = $this->workflowRoles->denialReason('decision', (int) ($review['audit_event_id'] ?? 0), $decisionPersonnelId)) !== null) {
             return redirect()->back()->withInput()->with('error', $roleError);
         }
 
-        if (in_array($status, ['approved', 'decided', 'gm_approved'], true) || in_array($decisionValue, ['approved', 'granted'], true)) {
+        $existing = $this->decisionForReview((int) $review['id']);
+        if ($existing !== null && in_array((string) ($existing['status'] ?? ''), ['decided', 'approved', 'gm_approved'], true)) {
+            return redirect()->back()->with('error', 'The certification decision is finalized and cannot be rewritten.');
+        }
+
+        if (in_array($status, ['approved', 'decided'], true) || in_array($decisionValue, ['granted', 'continue_to_stage2', 'maintain', 'renew'], true)) {
             $gateFailures = $this->decisionGateFailures(
                 $review,
-                (int) $this->request->getPost('decision_maker_personnel_id'),
+                $decisionPersonnelId,
                 $decisionValue,
                 $status
             );
@@ -1579,14 +1694,13 @@ class WorkflowActionController extends BaseController
                 'certification_decision_maker_date' => $this->dateOrNull('certification_decision_maker_date'),
                 'checklist_rows' => $this->checklistRowsFromPost('decision_checklist'),
             ], JSON_THROW_ON_ERROR),
-            'decided_at' => date('Y-m-d H:i:s'),
+            'decided_at' => in_array($status, ['decided', 'approved'], true) ? date('Y-m-d H:i:s') : null,
             'status' => $status,
-            'gm_approved_by_user_id' => $status === 'gm_approved' ? (int) session()->get('user_id') : null,
-            'gm_approval_notes' => $status === 'gm_approved' ? $this->nullableText('gm_approval_notes') : null,
-            'gm_approved_at' => $status === 'gm_approved' ? date('Y-m-d H:i:s') : null,
+            'gm_approved_by_user_id' => null,
+            'gm_approval_notes' => null,
+            'gm_approved_at' => null,
         ];
 
-        $existing = $this->decisionForReview((int) $review['id']);
         if ($existing === null) {
             $id = (int) $this->decisions->insert($payload);
             $this->auditLogger->record('create', 'certification_decisions', 'certification_decisions', $id, null, $payload);
@@ -1596,6 +1710,54 @@ class WorkflowActionController extends BaseController
         }
 
         return redirect()->to('/workflow/certification/' . $clientId)->with('success', 'Certification decision saved.');
+    }
+
+    public function saveGmApproval(int $clientId)
+    {
+        $client = $this->tenantClient($clientId);
+        $eventId = $this->intOrNull('event_id');
+        $review = $eventId === null ? $this->latestTechnicalReviewForClient($clientId) : $this->technicalReviewForEvent($eventId);
+        $decision = $review === null ? null : $this->decisionForReview((int) $review['id']);
+
+        if ($client === null || $review === null || $decision === null) {
+            return redirect()->to('/workflow/certification/' . $clientId)->with('error', 'A finalized certification decision is required first.');
+        }
+
+        if (($decision['status'] ?? '') === 'gm_approved') {
+            return redirect()->back()->with('error', 'General Manager approval is already recorded and cannot be rewritten.');
+        }
+
+        if (! in_array((string) ($decision['status'] ?? ''), ['decided', 'approved'], true)
+            || ! in_array((string) ($decision['decision'] ?? ''), ['granted', 'approved'], true)) {
+            return redirect()->back()->with('error', 'General Manager approval requires a finalized granted decision.');
+        }
+
+        $auditEventId = (int) ($review['audit_event_id'] ?? 0);
+        if (($roleError = $this->workflowRoles->denialReason('gm_approval', $auditEventId)) !== null) {
+            return redirect()->back()->withInput()->with('error', $roleError);
+        }
+
+        $currentPersonnelId = $this->workflowRoles->currentUserPersonnelId();
+        if ($currentPersonnelId === null) {
+            return redirect()->back()->with('error', 'General Manager approval requires a linked Personnel Master record.');
+        }
+
+        if ($currentPersonnelId === (int) $decision['decision_maker_personnel_id']
+            || $currentPersonnelId === (int) $review['reviewer_personnel_id']
+            || $this->personnelIsOnAuditTeam($currentPersonnelId, $auditEventId)) {
+            return redirect()->back()->with('error', 'General Manager approval must be independent from the audit, Technical Review, and certification decision.');
+        }
+
+        $payload = [
+            'status' => 'gm_approved',
+            'gm_approved_by_user_id' => (int) session()->get('user_id'),
+            'gm_approval_notes' => $this->nullableText('gm_approval_notes'),
+            'gm_approved_at' => date('Y-m-d H:i:s'),
+        ];
+        $this->decisions->update((int) $decision['id'], $payload);
+        $this->auditLogger->record('gm_approve', 'certification_decisions', 'certification_decisions', (int) $decision['id'], $decision, $payload);
+
+        return redirect()->to('/workflow/certification/' . $clientId)->with('success', 'General Manager approval recorded separately.');
     }
 
     public function certificates(int $clientId)
@@ -1971,14 +2133,16 @@ class WorkflowActionController extends BaseController
             return [];
         }
 
-        $rows = $this->db->table('clause_library')
+        $builder = $this->db->table('clause_library')
             ->select('standards.code AS standard, clause_library.clause_number, clause_library.clause_title')
             ->join('standards', 'standards.id = clause_library.standard_id')
             ->where('clause_library.tenant_id', (int) session()->get('tenant_id'))
             ->whereIn('clause_library.standard_id', $standardIds)
-            ->where('clause_library.active', 1)
-            ->get()
-            ->getResultArray();
+            ->where('clause_library.active', 1);
+        if ($this->db->fieldExists('validation_status', 'clause_library')) {
+            $builder->where('clause_library.validation_status', 'approved');
+        }
+        $rows = $builder->get()->getResultArray();
 
         usort($rows, static function (array $left, array $right): int {
             $standardCompare = strcmp((string) $left['standard'], (string) $right['standard']);
@@ -2680,7 +2844,7 @@ class WorkflowActionController extends BaseController
         $report = $this->reportForEvent($eventId);
         if ($report === null) {
             $failures[] = 'Audit report draft must exist before completion.';
-        } elseif ($this->reportSectionRows((int) $report['id']) === []) {
+        } elseif ($this->reportProjection->responsesForReport((int) $report['id']) === []) {
             $failures[] = 'Audit report checklist must contain saved clause records before completion.';
         } elseif ($this->unconfirmedConformitySectionCount((int) $report['id']) > 0) {
             $failures[] = 'All conformity notes must be explicitly confirmed by the auditor before audit completion.';
@@ -3084,11 +3248,15 @@ class WorkflowActionController extends BaseController
 
     private function decisionForReview(int $reviewId): ?array
     {
-        return $this->decisions
-            ->where('tenant_id', (int) session()->get('tenant_id'))
-            ->where('technical_review_id', $reviewId)
-            ->orderBy('id', 'DESC')
-            ->first();
+        return $this->db->table('certification_decisions decisions')
+            ->select('decisions.*, personnel.full_name AS decision_maker_name, users.full_name AS gm_approved_by_name')
+            ->join('personnel', 'personnel.id = decisions.decision_maker_personnel_id', 'left')
+            ->join('users', 'users.id = decisions.gm_approved_by_user_id', 'left')
+            ->where('decisions.tenant_id', (int) session()->get('tenant_id'))
+            ->where('decisions.technical_review_id', $reviewId)
+            ->orderBy('decisions.id', 'DESC')
+            ->get(1)
+            ->getRowArray() ?: null;
     }
 
     private function latestDecisionForClient(int $clientId): ?array
@@ -3308,6 +3476,21 @@ class WorkflowActionController extends BaseController
         if (! empty($review['review_payload'])) {
             $stored = json_decode((string) $review['review_payload'], true) ?: [];
         }
+        $applicationAnswers = $this->applicationAnswersByKey((int) ($application['id'] ?? 0));
+        $applicationValues = array_filter([
+            'communication_language' => $applicationAnswers['language_of_audit'] ?? null,
+            'effective_employees' => $applicationAnswers['certification_employee_count'] ?? $applicationAnswers['employee_count'] ?? null,
+            'haccp_plans_processes' => $applicationAnswers['haccp_plans_processes'] ?? null,
+            'shifts_auditing' => $applicationAnswers['number_of_shifts'] ?? null,
+            'seasonal_activity' => $applicationAnswers['seasonal_operations'] ?? null,
+            'legal_requirements' => $applicationAnswers['legal_statutory_requirements'] ?? null,
+            'product_process_risks' => $applicationAnswers['product_process_risks'] ?? null,
+            'technical_issues' => $applicationAnswers['technical_issues'] ?? null,
+            'safety_requirements' => $applicationAnswers['safety_requirements'] ?? null,
+            'technological_regulatory_context' => $applicationAnswers['technological_regulatory_context'] ?? null,
+            'outsourced_activity_details' => $applicationAnswers['outsourced_processes'] ?? null,
+            'incident' => $applicationAnswers['incident_accident_history'] ?? null,
+        ], static fn ($value): bool => $value !== null && trim((string) $value) !== '');
 
         $standardText = implode(', ', array_filter(array_map(
             static fn (array $row): string => (string) ($row['standard_code'] ?? ''),
@@ -3373,7 +3556,7 @@ class WorkflowActionController extends BaseController
             'reviewer_comments' => $review['review_notes'] ?? 'I reviewed the application with the best of my knowledge and now it is submitting to Quality Manager for approval.',
         ], $this->applicationDefaults->reviewDefaults($client, $standards));
 
-        $payload = array_merge($defaults, $stored);
+        $payload = array_merge($defaults, $applicationValues, $stored);
         foreach ($defaults as $key => $value) {
             if (trim((string) ($payload[$key] ?? '')) === '' && trim((string) $value) !== '') {
                 $payload[$key] = $value;
@@ -3412,6 +3595,29 @@ class WorkflowActionController extends BaseController
         $answer = trim((string) ($row['answer_text'] ?? ''));
 
         return $answer === '' ? null : $answer;
+    }
+
+    private function applicationAnswersByKey(int $applicationId): array
+    {
+        if ($applicationId <= 0 || ! $this->db->tableExists('application_answers')) {
+            return [];
+        }
+
+        $rows = $this->db->table('application_answers')
+            ->select('application_questions.question_key, application_answers.answer_text')
+            ->join('application_questions', 'application_questions.id = application_answers.application_question_id')
+            ->where('application_answers.application_id', $applicationId)
+            ->get()
+            ->getResultArray();
+        $answers = [];
+        foreach ($rows as $row) {
+            $value = trim((string) ($row['answer_text'] ?? ''));
+            if ($value !== '') {
+                $answers[(string) $row['question_key']] = $value;
+            }
+        }
+
+        return $answers;
     }
 
     private function applyDurationToReviewPayload(array $payload, array $duration): array
@@ -3894,40 +4100,6 @@ class WorkflowActionController extends BaseController
         return $payload;
     }
 
-    private function ensureConformitySections(int $reportId, array $clauses, array $client = [], ?array $event = null, array $planItems = [], array $auditTeam = []): void
-    {
-        foreach ($clauses as $index => $clause) {
-            $clauseId = (int) $clause['id'];
-            $existing = $this->reportSections
-                ->where('report_draft_id', $reportId)
-                ->where('clause_library_id', $clauseId)
-                ->where('section_key', 'conformity')
-                ->first();
-
-            if ($existing !== null) {
-                continue;
-            }
-
-            $package = $this->contentEngine->conformitySection($client, $event, $clause, $planItems, $auditTeam);
-            $payload = [
-                'report_draft_id' => $reportId,
-                'clause_library_id' => $clauseId,
-                'section_key' => 'conformity',
-                'section_title' => trim((string) $clause['standard_code'] . ' ' . (string) $clause['clause_number'] . ' - ' . (string) $clause['clause_title']),
-                'section_content' => $package['content'],
-                'source_type' => $package['source_type'],
-                'auditor_confirmed' => 1,
-                'confirmed_by_user_id' => $this->leadAuditorUserId($auditTeam) ?? (int) session()->get('user_id'),
-                'confirmed_at' => date('Y-m-d H:i:s'),
-                'confirmation_note' => $package['confirmation_note'],
-                'sort_order' => $index + 1,
-            ];
-
-            $id = (int) $this->reportSections->insert($payload);
-            $this->auditLogger->record('create', 'reports', 'report_sections', $id, null, $payload);
-        }
-    }
-
     private function smartConformityNotes(array $client, ?array $event, array $clauses, array $planItems, array $auditTeam): array
     {
         $notes = [];
@@ -3983,11 +4155,48 @@ class WorkflowActionController extends BaseController
 
     private function unconfirmedConformitySectionCount(int $reportId): int
     {
+        if ($this->db->tableExists('audit_requirement_responses')) {
+            $controlledCount = (int) $this->db->table('audit_requirement_responses')
+                ->where('report_draft_id', $reportId)
+                ->countAllResults();
+            if ($controlledCount > 0) {
+                return (int) $this->db->table('audit_requirement_responses')
+                    ->where('report_draft_id', $reportId)
+                    ->where('auditor_confirmed', 0)
+                    ->countAllResults();
+            }
+        }
+
         return (int) $this->db->table('report_sections')
             ->where('report_draft_id', $reportId)
             ->where('section_key', 'conformity')
             ->where('auditor_confirmed', 0)
             ->countAllResults();
+    }
+
+    private function controlledResponseForEvent(int $responseId, int $eventId): ?array
+    {
+        if (! $this->db->tableExists('audit_requirement_responses')) {
+            return null;
+        }
+
+        return $this->db->table('audit_requirement_responses responses')
+            ->select('responses.*')
+            ->join('report_drafts reports', 'reports.id = responses.report_draft_id')
+            ->where('responses.id', $responseId)
+            ->where('reports.audit_event_id', $eventId)
+            ->where('reports.tenant_id', (int) session()->get('tenant_id'))
+            ->get(1)
+            ->getRowArray() ?: null;
+    }
+
+    private function normalisedFindingType(string $findingType): string
+    {
+        $findingType = strtolower(trim($findingType));
+
+        return in_array($findingType, ['conformity', 'positive', 'ofi', 'minor', 'major'], true)
+            ? $findingType
+            : 'conformity';
     }
 
     private function ncrRows(int $eventId): array
@@ -4009,12 +4218,17 @@ class WorkflowActionController extends BaseController
             return [];
         }
 
-        return $this->clauses
+        $builder = $this->clauses
             ->select('clause_library.*, standards.code AS standard_code')
             ->join('standards', 'standards.id = clause_library.standard_id')
             ->where('clause_library.tenant_id', (int) session()->get('tenant_id'))
             ->whereIn('clause_library.standard_id', $standardIds)
-            ->where('clause_library.active', 1)
+            ->where('clause_library.active', 1);
+        if ($this->db->fieldExists('validation_status', 'clause_library')) {
+            $builder->where('clause_library.validation_status', 'approved');
+        }
+
+        return $builder
             ->orderBy('standards.code', 'ASC')
             ->orderBy('clause_library.clause_number', 'ASC')
             ->findAll();

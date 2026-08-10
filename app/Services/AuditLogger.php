@@ -2,11 +2,19 @@
 
 namespace App\Services;
 
-use App\Models\AuditLogModel;
+use CodeIgniter\Database\BaseConnection;
 use CodeIgniter\HTTP\IncomingRequest;
+use Config\Database;
 
 class AuditLogger
 {
+    private BaseConnection $db;
+
+    public function __construct(?BaseConnection $db = null)
+    {
+        $this->db = $db ?? Database::connect();
+    }
+
     public function record(
         string $action,
         string $module,
@@ -36,7 +44,7 @@ class AuditLogger
             $userAgent = substr((string) $request->getUserAgent(), 0, 500);
         }
 
-        (new AuditLogModel())->insert([
+        $this->db->table('audit_logs')->insert([
             'tenant_id'    => $tenantId,
             'user_id'      => $userId,
             'action'       => $action,

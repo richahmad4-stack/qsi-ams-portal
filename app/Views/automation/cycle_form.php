@@ -3,6 +3,7 @@
 <?= $this->section('content') ?>
 <section class="panel mb-3">
     <div class="panel-title">Batch upload</div>
+    <div class="text-secondary small mb-3">Super Admin controlled digitalization. Each row is validated independently and exact duplicate client/cycle records are rejected.</div>
     <form method="post" action="<?= site_url('automation/cycle-generator/upload') ?>" enctype="multipart/form-data">
         <?= csrf_field() ?>
         <div class="row g-3 align-items-end">
@@ -159,7 +160,7 @@
                 <select class="form-select" id="ncr_mode" name="ncr_mode">
                     <option value="sample_minor">Prepare 4 minor NCR/CAPA records</option>
                     <option value="none">No NCRs</option>
-                    <option value="major">Include major NCR sample</option>
+                    <option value="major">Include major NCR record</option>
                 </select>
             </div>
             <div class="col-md-4">

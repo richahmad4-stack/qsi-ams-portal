@@ -99,7 +99,8 @@ class WorkflowDocumentController extends BaseController
         $this->auditLogger->record('download', 'documents', 'generated_documents', (int) $document['id'], null, $document);
 
         return $this->response->download($document['storage_path'], null)
-            ->setFileName($this->downloadName($document['document_title']));
+            ->setFileName($this->downloadName($document['document_title'], 'docx'))
+            ->setContentType('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     }
 
     public function eventDocument(int $clientId, int $eventId, string $documentKey)

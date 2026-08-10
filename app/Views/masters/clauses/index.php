@@ -18,6 +18,7 @@
                 <th>Title</th>
                 <th>Risk</th>
                 <th>Stage</th>
+                <th>Source validation</th>
                 <th>Status</th>
                 <th class="text-end">Actions</th>
             </tr>
@@ -30,6 +31,7 @@
                     <td><?= esc($clause['clause_title']) ?></td>
                     <td><?= esc($clause['risk_rating'] ?? '') ?></td>
                     <td><?= esc($clause['stage_applicability'] ?? '') ?></td>
+                    <td><?= esc(str_replace('_', ' ', (string) ($clause['validation_status'] ?? 'legacy unverified'))) ?></td>
                     <td><?= (int) $clause['active'] === 1 ? 'Active' : 'Inactive' ?></td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-outline-primary" href="<?= site_url('masters/clauses/' . $clause['id'] . '/edit') ?>">

@@ -17,9 +17,13 @@ class WorkflowGateWiringTest extends TestCase
     {
         self::assertStringContainsString('unconfirmedConformitySectionCount', $this->controller);
         self::assertStringContainsString('competencyCoversAllScopeCategories', $this->controller);
-        self::assertStringContainsString('Confirmed by assigned auditor', file_get_contents(__DIR__ . '/../../app/Database/Migrations/2026-07-06-000012_ConfirmPreparedCycleReportSections.php') ?: '');
+        $correctiveMigration = file_get_contents(__DIR__ . '/../../app/Database/Migrations/2026-08-09-000002_UnconfirmProxyAuditEvidence.php') ?: '';
+        self::assertStringContainsString('Confirmed by assigned auditor', $correctiveMigration);
+        self::assertStringContainsString("'auditor_confirmed' => 0", $correctiveMigration);
+        self::assertStringContainsString("'confirmed_by_user_id' => null", $correctiveMigration);
         self::assertStringContainsString('clausePoolConformityNote', $this->controller);
-        self::assertStringContainsString('Confirmed on behalf of the assigned auditor', file_get_contents(__DIR__ . '/../../app/Services/SmartAuditContentEngine.php') ?: '');
+        self::assertStringContainsString('Confirmation by the appointed auditor is required.', file_get_contents(__DIR__ . '/../../app/Services/SmartAuditContentEngine.php') ?: '');
+        self::assertStringNotContainsString('Confirmed on behalf of the assigned auditor', file_get_contents(__DIR__ . '/../../app/Services/SmartAuditContentEngine.php') ?: '');
         self::assertStringContainsString('reportForEvent($eventId)', $this->controller);
         self::assertStringNotContainsString("reportSectionRows((int) \$this->ensureReport(\$eventId)['id'])", $this->controller);
     }
@@ -59,6 +63,22 @@ class WorkflowGateWiringTest extends TestCase
         self::assertStringContainsString('denialReason(', $this->controller);
         self::assertStringContainsString('masters/clause-pool', $routes);
         self::assertStringContainsString('Clause Pool', $layout);
+    }
+
+    public function testDecisionAndGeneralManagerApprovalAreSeparateImmutableActions(): void
+    {
+        $routes = file_get_contents(__DIR__ . '/../../app/Config/Routes.php') ?: '';
+        $view = file_get_contents(__DIR__ . '/../../app/Views/workflow/actions/decision.php') ?: '';
+
+        self::assertStringContainsString("decision/gm-approval', 'Workflow\\WorkflowActionController::saveGmApproval", $routes);
+        self::assertStringContainsString('function saveGmApproval(', $this->controller);
+        self::assertStringContainsString("denialReason('decision'", $this->controller);
+        self::assertStringContainsString("denialReason('gm_approval'", $this->controller);
+        self::assertStringContainsString('The certification decision is finalized and cannot be rewritten.', $this->controller);
+        self::assertStringContainsString('General Manager approval is already recorded and cannot be rewritten.', $this->controller);
+        self::assertStringContainsString("'gm_approve'", $this->controller);
+        self::assertStringNotContainsString('name="gm_approved"', $view);
+        self::assertStringContainsString('/decision/gm-approval', $view);
     }
 
     public function testLegacyImportFeatureIsNotRoutedOrVisible(): void

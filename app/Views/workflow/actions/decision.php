@@ -21,6 +21,7 @@ $rowValue = static fn (string $key, string $field, string $default = ''): string
 );
 $standardCodes = implode(', ', array_filter(array_column($standards, 'standard_code')));
 $defaultDeclaration = 'I confirm that all applicable ISO, IAF MD, sector scheme, ISO/IEC 17021-1 and accreditation body specific certification requirements have been verified prior to certificate issuance.';
+$decisionLocked = in_array((string) ($decision['status'] ?? ''), ['decided', 'approved', 'gm_approved'], true);
 
 $decisionChecklist = [
     'General certification verification' => [
@@ -70,8 +71,8 @@ $decisionChecklist = [
     <?php endif; ?>
     <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
         <div>
-            <div class="panel-title mb-1">Certification decision and GM approval</div>
-            <div class="text-secondary small">Record the independent decision, then final management approval.</div>
+            <div class="panel-title mb-1">Certification decision</div>
+            <div class="text-secondary small">Record the independent Decision Maker act. General Manager approval is recorded separately below.</div>
         </div>
         <div class="d-flex gap-2">
             <?php if (! empty($technicalReview['audit_event_id'])): ?>
@@ -87,6 +88,7 @@ $decisionChecklist = [
         </div>
     </div>
 
+    <fieldset <?= $decisionLocked ? 'disabled' : '' ?>>
     <div class="alert alert-info">
         Technical review status: <strong><?= esc($technicalReview['status']) ?></strong>
         <?php if (($technicalReview['recommendation'] ?? '') !== ''): ?>
@@ -167,7 +169,7 @@ $decisionChecklist = [
         <div class="col-md-4">
             <label class="form-label" for="decision">Decision</label>
             <select class="form-select" id="decision" name="decision" required>
-                <?php foreach (['granted' => 'Certification granted', 'not_granted' => 'Certification not granted', 'deferred' => 'Deferred'] as $value => $label): ?>
+                <?php foreach (['continue_to_stage2' => 'Proceed to Stage 2', 'granted' => 'Certification granted', 'maintain' => 'Maintain certification', 'renew' => 'Renew certification', 'not_granted' => 'Certification not granted', 'deferred' => 'Deferred'] as $value => $label): ?>
                     <option value="<?= esc($value) ?>" <?= ($decision['decision'] ?? '') === $value ? 'selected' : '' ?>><?= esc($label) ?></option>
                 <?php endforeach; ?>
             </select>
@@ -180,24 +182,13 @@ $decisionChecklist = [
                 <?php endforeach; ?>
             </select>
         </div>
-        <div class="col-md-6">
+        <div class="col-12">
             <label class="form-label" for="electronic_signature">Electronic signature</label>
             <input class="form-control" id="electronic_signature" name="electronic_signature" value="<?= esc(old('electronic_signature', $decision['electronic_signature'] ?? '')) ?>">
-        </div>
-        <div class="col-md-6">
-            <label class="form-label">General Manager approval</label>
-            <label class="border rounded p-2 w-100">
-                <input type="checkbox" name="gm_approved" value="1" <?= ($decision['status'] ?? '') === 'gm_approved' ? 'checked' : '' ?>>
-                Final approval granted by current logged-in user
-            </label>
         </div>
         <div class="col-12">
             <label class="form-label" for="reason">Decision reason</label>
             <textarea class="form-control" id="reason" name="reason" rows="4"><?= esc(old('reason', $decision['reason'] ?? '')) ?></textarea>
-        </div>
-        <div class="col-12">
-            <label class="form-label" for="gm_approval_notes">GM approval notes</label>
-            <textarea class="form-control" id="gm_approval_notes" name="gm_approval_notes" rows="3"><?= esc(old('gm_approval_notes', $decision['gm_approval_notes'] ?? '')) ?></textarea>
         </div>
     </div>
 
@@ -291,12 +282,41 @@ $decisionChecklist = [
             </div>
         </div>
     </div>
+    </fieldset>
 
     <div class="mt-3 d-flex justify-content-end">
-        <button class="btn btn-primary" type="submit">
-            <i class="fa-solid fa-stamp me-1" aria-hidden="true"></i>
-            Save decision
-        </button>
+        <?php if ($decisionLocked): ?>
+            <span class="text-secondary small">Finalized decision: read-only</span>
+        <?php else: ?>
+            <button class="btn btn-primary" type="submit">
+                <i class="fa-solid fa-stamp me-1" aria-hidden="true"></i>
+                Save decision
+            </button>
+        <?php endif; ?>
+    </div>
+</form>
+
+<form method="post" action="<?= site_url('workflow/certification/' . $client['id'] . '/decision/gm-approval') ?>" class="panel mt-3">
+    <?= csrf_field() ?>
+    <?php if (! empty($eventId)): ?>
+        <input type="hidden" name="event_id" value="<?= esc($eventId) ?>">
+    <?php endif; ?>
+    <div class="panel-title mb-1">General Manager final approval</div>
+    <div class="text-secondary small mb-3">This is a separate, traceable approval after the independent certification decision.</div>
+    <div class="mb-3">
+        <label class="form-label" for="gm_approval_notes">Approval notes</label>
+        <textarea class="form-control" id="gm_approval_notes" name="gm_approval_notes" rows="3" <?= ($decision['status'] ?? '') === 'gm_approved' ? 'readonly' : '' ?>><?= esc(old('gm_approval_notes', $decision['gm_approval_notes'] ?? '')) ?></textarea>
+    </div>
+    <div class="d-flex justify-content-between align-items-center">
+        <div class="text-secondary small">
+            <?= ($decision['status'] ?? '') === 'gm_approved' ? 'Approved at ' . esc($decision['gm_approved_at'] ?? '') : 'Requires the General Manager role and an independent linked personnel record.' ?>
+        </div>
+        <?php if (($decision['status'] ?? '') !== 'gm_approved'): ?>
+            <button class="btn btn-primary" type="submit">
+                <i class="fa-solid fa-stamp me-1" aria-hidden="true"></i>
+                Record GM approval
+            </button>
+        <?php endif; ?>
     </div>
 </form>
 <?= $this->endSection() ?>

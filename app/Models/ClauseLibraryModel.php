@@ -24,6 +24,10 @@ class ClauseLibraryModel extends Model
         'auditor_guidance',
         'risk_rating',
         'stage_applicability',
+        'validation_status',
+        'source_reference',
+        'validated_by_user_id',
+        'validated_at',
         'active',
     ];
     protected $useTimestamps = true;

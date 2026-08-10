@@ -20,7 +20,11 @@
             <h1 class="h4">Certificate not found</h1>
             <p class="text-secondary mb-0">No active certificate record matched this verification link.</p>
         <?php else: ?>
-            <h1 class="h4">Certificate verified</h1>
+            <?php $verificationStatus = (string) ($certificate['verification_status'] ?? 'not_valid'); ?>
+            <h1 class="h4"><?= $verificationStatus === 'valid' ? 'Valid certificate' : 'Certificate status: ' . esc(ucwords(str_replace('_', ' ', $verificationStatus))) ?></h1>
+            <div class="alert alert-<?= $verificationStatus === 'valid' ? 'success' : ($verificationStatus === 'suspended' ? 'warning' : 'danger') ?> mt-3">
+                <?= esc($certificate['verification_message'] ?? 'Certificate status could not be confirmed.') ?>
+            </div>
             <table class="table table-sm mt-3">
                 <tbody>
                 <tr><th>Client</th><td><?= esc($certificate['company']) ?></td></tr>

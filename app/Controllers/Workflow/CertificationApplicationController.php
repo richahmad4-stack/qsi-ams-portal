@@ -12,6 +12,7 @@ use App\Models\ClientModel;
 use App\Services\AuditLogger;
 use App\Services\CertificationApplicationDefaults;
 use Config\Database;
+use App\Support\CertificationBaseline;
 
 class CertificationApplicationController extends BaseController
 {
@@ -84,6 +85,8 @@ class CertificationApplicationController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Select at least one standard.');
         }
 
+        $db = Database::connect();
+        $db->transStart();
         $this->syncSelectedStandards((int) $application['id'], $selectedIds);
         $this->syncClientStandards($clientId, $selectedIds);
         $selected = $this->selectedStandardRows((int) $application['id']);
@@ -97,6 +100,8 @@ class CertificationApplicationController extends BaseController
 
             $value = trim((string) ($postedAnswers[$question['id']] ?? ''));
             if ($value === '') {
+                $db->transRollback();
+
                 return redirect()->back()->withInput()->with('error', $question['question_text'] . ' is required.');
             }
         }
@@ -122,15 +127,16 @@ class CertificationApplicationController extends BaseController
             'declaration_name' => trim((string) $this->request->getPost('declaration_name')),
             'declaration_position' => trim((string) $this->request->getPost('declaration_position')),
             'declaration_date' => (string) ($this->request->getPost('declaration_date') ?: date('Y-m-d')),
-            'cb_review_status' => trim((string) $this->request->getPost('cb_review_status')) ?: null,
-            'cb_review_notes' => trim((string) $this->request->getPost('cb_review_notes')) ?: null,
-            'reviewed_by' => $this->request->getPost('cb_review_status') ? (int) session()->get('user_id') : ($application['reviewed_by'] ?? null),
-            'reviewed_at' => $this->request->getPost('cb_review_status') ? date('Y-m-d H:i:s') : ($application['reviewed_at'] ?? null),
         ];
 
         $this->applications->update((int) $application['id'], $payload);
         $this->updateClientFromAnswers($clientId, $questions, $postedAnswers);
         $this->auditLogger->record('update', 'certification_applications', 'certification_applications', (int) $application['id'], $application, $payload);
+        $db->transComplete();
+
+        if (! $db->transStatus()) {
+            return redirect()->back()->withInput()->with('error', 'The application could not be saved. No changes were applied.');
+        }
 
         return redirect()->to('/workflow/certification/' . $clientId . '/application')->with('success', 'Certification application saved.');
     }
@@ -173,6 +179,7 @@ class CertificationApplicationController extends BaseController
     {
         return Database::connect()->table('standards')
             ->where('active', 1)
+            ->whereIn('code', CertificationBaseline::CODES)
             ->orderBy('code', 'ASC')
             ->get()
             ->getResultArray();
@@ -205,7 +212,12 @@ class CertificationApplicationController extends BaseController
             return;
         }
 
-        $standards = $db->table('standards')->whereIn('id', $standardIds)->get()->getResultArray();
+        $standards = $db->table('standards')
+            ->whereIn('id', $standardIds)
+            ->whereIn('code', CertificationBaseline::CODES)
+            ->where('active', 1)
+            ->get()
+            ->getResultArray();
         foreach ($standards as $standard) {
             $this->selectedStandards->insert([
                 'application_id' => $applicationId,
@@ -218,6 +230,18 @@ class CertificationApplicationController extends BaseController
     private function syncClientStandards(int $clientId, array $standardIds): void
     {
         $db = Database::connect();
+        $existingIds = array_map('intval', array_column(
+            $db->table('client_standards')->select('standard_id')->where('client_id', $clientId)->get()->getResultArray(),
+            'standard_id'
+        ));
+        $removedIds = array_values(array_diff($existingIds, $standardIds));
+        if ($removedIds !== []) {
+            $db->table('client_standards')
+                ->where('client_id', $clientId)
+                ->whereIn('standard_id', $removedIds)
+                ->delete();
+        }
+
         foreach ($standardIds as $standardId) {
             $exists = $db->table('client_standards')
                 ->where('client_id', $clientId)
@@ -287,13 +311,6 @@ class CertificationApplicationController extends BaseController
                 $payload['id'] = (int) $existing['id'];
                 $this->saveDefaultAnswerIfEmpty($applicationId, $payload, $client, $selected);
             }
-        }
-
-        $questionTable = $db->table('application_questions')->where('application_id', $applicationId);
-        if ($includedKeys === []) {
-            $questionTable->delete();
-        } else {
-            $questionTable->whereNotIn('question_key', $includedKeys)->delete();
         }
 
         return $this->applicationQuestions

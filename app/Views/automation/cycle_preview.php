@@ -27,12 +27,16 @@ $warnings = $preview['warnings'];
                 <input type="hidden" name="preview_payload" value="<?= esc($encodedPreview) ?>">
                 <button class="btn btn-primary" type="submit" <?= $preview['can_generate'] ? '' : 'disabled' ?>>
                     <i class="fa-solid fa-wand-magic-sparkles me-1" aria-hidden="true"></i>
-                    Prepare full cycle
+                    Prepare complete cycle
                 </button>
             </form>
         </div>
     </div>
 </section>
+
+<div class="alert alert-info">
+    Review the dates, duration, standards, staff assignments, report basis and NCR/CAPA setup. Confirming will prepare the complete traceable client cycle under the logged-in Super Admin account.
+</div>
 
 <?php if ($warnings !== []): ?>
     <section class="panel mb-3">

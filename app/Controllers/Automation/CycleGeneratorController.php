@@ -18,7 +18,7 @@ class CycleGeneratorController extends BaseController
     public function index()
     {
         if (! $this->isAllowed()) {
-            return redirect()->to('/dashboard')->with('error', 'Only Super User or Admin can use Cycle Builder.');
+            return redirect()->to('/dashboard')->with('error', 'Only the Super Admin can use Cycle Builder.');
         }
 
         return view('automation/cycle_form', [
@@ -36,7 +36,7 @@ class CycleGeneratorController extends BaseController
     public function preview()
     {
         if (! $this->isAllowed()) {
-            return redirect()->to('/dashboard')->with('error', 'Only Super User or Admin can use Cycle Builder.');
+            return redirect()->to('/dashboard')->with('error', 'Only the Super Admin can use Cycle Builder.');
         }
 
         try {
@@ -61,34 +61,33 @@ class CycleGeneratorController extends BaseController
     public function generate()
     {
         if (! $this->isAllowed()) {
-            return redirect()->to('/dashboard')->with('error', 'Only Super User or Admin can use Cycle Builder.');
+            return redirect()->to('/dashboard')->with('error', 'Only the Super Admin can use Cycle Builder.');
         }
 
         $encoded = (string) $this->request->getPost('preview_payload');
-        $preview = json_decode(base64_decode($encoded, true) ?: '', true);
-        if (! is_array($preview)) {
+        $submittedPreview = json_decode(base64_decode($encoded, true) ?: '', true);
+        if (! is_array($submittedPreview) || ! is_array($submittedPreview['input'] ?? null)) {
             return redirect()->to('/automation/cycle-generator')->with('error', 'Preview payload expired or invalid. Please preview again.');
         }
 
         try {
-            $result = $this->automation->generate(
-                $preview,
-                (int) session()->get('tenant_id'),
-                (int) session()->get('user_id')
-            );
+            $tenantId = (int) session()->get('tenant_id');
+            $userId = (int) session()->get('user_id');
+            $preview = $this->automation->preview($submittedPreview['input'], $tenantId, $userId);
+            $result = $this->automation->generate($preview, $tenantId, $userId);
         } catch (RuntimeException $exception) {
             return redirect()->to('/automation/cycle-generator')->with('error', $exception->getMessage());
         }
 
         return redirect()
             ->to('/workflow/certification/' . $result['client_id'])
-            ->with('success', 'Full certification cycle prepared.');
+            ->with('success', 'Complete certification cycle prepared and recorded.');
     }
 
     public function upload()
     {
         if (! $this->isAllowed()) {
-            return redirect()->to('/dashboard')->with('error', 'Only Super User or Admin can use Cycle Builder.');
+            return redirect()->to('/dashboard')->with('error', 'Only the Super Admin can use Cycle Builder.');
         }
 
         $file = $this->request->getFile('cycle_file');
@@ -117,7 +116,7 @@ class CycleGeneratorController extends BaseController
     public function template()
     {
         if (! $this->isAllowed()) {
-            return redirect()->to('/dashboard')->with('error', 'Only Super User or Admin can use Cycle Builder.');
+            return redirect()->to('/dashboard')->with('error', 'Only the Super Admin can use Cycle Builder.');
         }
 
         $headers = [
@@ -144,6 +143,6 @@ class CycleGeneratorController extends BaseController
     {
         $roles = (array) session()->get('role_codes');
 
-        return in_array('super_admin', $roles, true) || in_array('administrator', $roles, true);
+        return in_array('super_admin', $roles, true);
     }
 }

@@ -4,15 +4,15 @@ namespace App\Services;
 
 class CertificationApplicationDefaults
 {
-    public const HACCP_LEGAL_REQUIREMENTS = 'Compliance with Saudi Food and Drug Authority (SFDA) regulations, Codex Alimentarius HACCP requirements (CXC 1-1969), food labeling requirements, hygiene and food safety regulations, and applicable local laws governing production, storage, and distribution of bakery and pastry products in the Kingdom of Saudi Arabia.';
-    public const HACCP_PRODUCT_PROCESS_RISKS = 'Potential risks include biological, chemical and physical contamination, allergen cross-contact, improper baking or storage conditions, product contamination during handling and distribution, and failure in hygiene or HACCP control measures during production processes.';
-    public const HACCP_TECHNICAL_ISSUES = 'Technical issues may include control of baking parameters, allergen management, maintaining product quality and shelf life, hygiene and sanitation control, traceability, storage conditions, and ensuring food safety throughout production and distribution processes.';
+    public const HACCP_LEGAL_REQUIREMENTS = 'Compliance with Saudi Food and Drug Authority (SFDA) regulations, Codex Alimentarius HACCP requirements (CXC 1-1969), applicable food labeling, hygiene, traceability, storage and distribution requirements, and relevant Saudi food safety laws.';
+    public const HACCP_PRODUCT_PROCESS_RISKS = 'Potential risks include biological, chemical and physical contamination, allergen cross-contact, loss of time or temperature control, sanitation failure, traceability failure and ineffective HACCP controls.';
+    public const HACCP_TECHNICAL_ISSUES = 'Technical issues include product and process controls, allergen management, shelf life, hygiene and sanitation, traceability, storage conditions and distribution controls applicable to the requested scope.';
     public const HACCP_SAFETY_REQUIREMENTS = 'Implementation of food safety and hygiene practices, personnel hygiene controls, sanitation procedures, compliance with HACCP and applicable regulatory requirements.';
-    public const HACCP_TECHNOLOGICAL_CONTEXT = 'The organization operates using bakery production technologies including mixing, baking, packaging and distribution processes, while complying with HACCP Codex Alimentarius (CXC 1-1969) requirements, SFDA regulations, and applicable food safety and hygiene legislation in Saudi Arabia.';
+    public const HACCP_TECHNOLOGICAL_CONTEXT = 'The organization operates applicable food production and control technologies while complying with Codex HACCP (CXC 1-1969), SFDA requirements and relevant Saudi food safety legislation.';
 
     public function applicationAnswer(string $questionKey, array $client, array $standards): ?string
     {
-        $hasHaccp = $this->hasHaccp($standards);
+        $hasFoodSafety = $this->hasFoodSafety($standards);
 
         $common = [
             'language_of_audit' => 'English / Arabic',
@@ -26,7 +26,7 @@ class CertificationApplicationDefaults
             'management_review_conducted' => 'Yes',
             'last_management_review_meeting_conducted' => 'Yes',
             'scope_of_certification' => (string) ($client['scope'] ?? ''),
-            'products' => $this->productsFromScope($client),
+            'products' => $this->productsFromScope($client, $standards),
             'services' => $this->servicesFromScope($client),
             'processes' => $this->processesFromScope($client),
             'outsourced_processes' => $this->outsourcedProcesses($client),
@@ -37,23 +37,23 @@ class CertificationApplicationDefaults
             return $common[$questionKey];
         }
 
-        if (! $hasHaccp) {
+        if (! $hasFoodSafety) {
             return null;
         }
 
         return match ($questionKey) {
-            'legal_statutory_requirements' => self::HACCP_LEGAL_REQUIREMENTS,
-            'product_process_risks' => self::HACCP_PRODUCT_PROCESS_RISKS,
-            'technical_issues' => self::HACCP_TECHNICAL_ISSUES,
-            'safety_requirements' => self::HACCP_SAFETY_REQUIREMENTS,
-            'technological_regulatory_context' => self::HACCP_TECHNOLOGICAL_CONTEXT,
+            'legal_statutory_requirements' => $this->foodSafetyLegalRequirements($client, $standards),
+            'product_process_risks' => $this->foodSafetyRisks($client),
+            'technical_issues' => $this->foodSafetyTechnicalIssues($client),
+            'safety_requirements' => $this->foodSafetySafetyRequirements($standards),
+            'technological_regulatory_context' => $this->foodSafetyContext($client, $standards),
             default => null,
         };
     }
 
     public function reviewDefaults(array $client, array $standards): array
     {
-        if (! $this->hasHaccp($standards)) {
+        if (! $this->hasFoodSafety($standards)) {
             return [
                 'communication_language' => 'English',
             ];
@@ -61,11 +61,11 @@ class CertificationApplicationDefaults
 
         return [
             'communication_language' => 'English / Arabic',
-            'legal_requirements' => self::HACCP_LEGAL_REQUIREMENTS,
-            'product_process_risks' => self::HACCP_PRODUCT_PROCESS_RISKS,
-            'technical_issues' => self::HACCP_TECHNICAL_ISSUES,
-            'safety_requirements' => self::HACCP_SAFETY_REQUIREMENTS,
-            'technological_regulatory_context' => self::HACCP_TECHNOLOGICAL_CONTEXT,
+            'legal_requirements' => $this->foodSafetyLegalRequirements($client, $standards),
+            'product_process_risks' => $this->foodSafetyRisks($client),
+            'technical_issues' => $this->foodSafetyTechnicalIssues($client),
+            'safety_requirements' => $this->foodSafetySafetyRequirements($standards),
+            'technological_regulatory_context' => $this->foodSafetyContext($client, $standards),
             'outsourced_activity_details' => $this->outsourcedProcesses($client),
             'haccp_plans_processes' => (string) $this->haccpStudyCount($client),
         ];
@@ -83,16 +83,89 @@ class CertificationApplicationDefaults
         return false;
     }
 
-    private function productsFromScope(array $client): string
+    public function hasFoodSafety(array $standards): bool
+    {
+        foreach ($standards as $standard) {
+            $code = strtoupper((string) ($standard['standard_code'] ?? $standard['code'] ?? ''));
+            if (str_contains($code, 'HACCP') || str_contains($code, 'ISO 22000')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function foodSafetyLegalRequirements(array $client, array $standards): string
+    {
+        $criteria = $this->hasHaccp($standards)
+            ? 'Codex Alimentarius HACCP requirements (CXC 1-1969)'
+            : 'ISO 22000:2018 food safety management system requirements';
+
+        if ($this->hasHaccp($standards) && $this->hasIso22000($standards)) {
+            $criteria = 'ISO 22000:2018 and Codex Alimentarius HACCP requirements (CXC 1-1969)';
+        }
+
+        return 'Compliance with Saudi Food and Drug Authority (SFDA) regulations, ' . $criteria
+            . ', applicable food labeling, hygiene, traceability, storage and distribution requirements, and Saudi laws relevant to '
+            . strtolower($this->productsFromScope($client, $standards));
+    }
+
+    private function foodSafetyRisks(array $client): string
+    {
+        $processes = strtolower(rtrim($this->processesFromScope($client), ". \t\n\r\0\x0B"));
+
+        return 'Potential biological, chemical, physical and allergen hazards associated with ' . $processes
+            . ', including loss of time/temperature control, cross-contamination, sanitation failure, traceability failure and ineffective food safety controls.';
+    }
+
+    private function foodSafetyTechnicalIssues(array $client): string
+    {
+        return 'Technical review shall consider control of ' . strtolower(rtrim($this->processesFromScope($client), ". \t\n\r\0\x0B"))
+            . ', product characteristics and shelf life, PRPs, allergen management, sanitation, traceability, storage conditions and distribution controls applicable to the requested scope.';
+    }
+
+    private function foodSafetySafetyRequirements(array $standards): string
+    {
+        $criteria = $this->hasHaccp($standards) && $this->hasIso22000($standards)
+            ? 'ISO 22000:2018 and Codex HACCP'
+            : ($this->hasHaccp($standards) ? 'Codex HACCP' : 'ISO 22000:2018');
+
+        return 'Implementation of food safety and hygiene practices, personnel hygiene controls, sanitation procedures, emergency readiness and compliance with ' . $criteria . ' and applicable regulatory requirements.';
+    }
+
+    private function foodSafetyContext(array $client, array $standards): string
+    {
+        $criteria = $this->hasHaccp($standards) && $this->hasIso22000($standards)
+            ? 'ISO 22000:2018 and Codex HACCP (CXC 1-1969)'
+            : ($this->hasHaccp($standards) ? 'Codex HACCP (CXC 1-1969)' : 'ISO 22000:2018');
+
+        return 'The organization operates the processes of ' . strtolower(rtrim($this->processesFromScope($client), ". \t\n\r\0\x0B"))
+            . ' under applicable food production and control technologies, while complying with ' . $criteria
+            . ', SFDA requirements and relevant Saudi food safety legislation.';
+    }
+
+    private function hasIso22000(array $standards): bool
+    {
+        foreach ($standards as $standard) {
+            if (str_contains(strtoupper((string) ($standard['standard_code'] ?? $standard['code'] ?? '')), 'ISO 22000')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function productsFromScope(array $client, array $standards = []): string
     {
         $scope = strtolower((string) ($client['scope'] ?? ''));
+        $scheme = $standards !== [] && ! $this->hasHaccp($standards) ? 'food safety' : 'HACCP';
 
         if ($this->containsAny($scope, ['bakery', 'pastry', 'bread', 'cake'])) {
-            return 'Bakery and pastry products covered by the requested HACCP certification scope.';
+            return 'Bakery and pastry products covered by the requested ' . $scheme . ' certification scope.';
         }
 
         if ($this->containsAny($scope, ['catering', 'meal', 'kitchen', 'hospital', 'industrial camp'])) {
-            return 'Chilled and hot meals covered by the requested HACCP certification scope.';
+            return 'Chilled and hot meals covered by the requested ' . $scheme . ' certification scope.';
         }
 
         if ($this->containsAny($scope, ['dairy', 'milk', 'cheese', 'yoghurt', 'yogurt'])) {

@@ -10,6 +10,7 @@ use DateTimeImmutable;
 use RuntimeException;
 use SimpleXMLElement;
 use ZipArchive;
+use App\Support\CertificationBaseline;
 
 class CycleAutomationService
 {
@@ -18,14 +19,16 @@ class CycleAutomationService
     private AuditLogger $logger;
     private SmartAuditContentEngine $contentEngine;
     private CertificationApplicationDefaults $applicationDefaults;
+    private IntegratedAuditRequirementService $integratedRequirements;
 
     public function __construct(?BaseConnection $db = null)
     {
         $this->db = $db ?? Database::connect();
         $this->duration = new AuditDurationService();
-        $this->logger = new AuditLogger();
-        $this->contentEngine = new SmartAuditContentEngine();
+        $this->logger = new AuditLogger($this->db);
+        $this->contentEngine = new SmartAuditContentEngine(new ClauseContentPoolService($this->db));
         $this->applicationDefaults = new CertificationApplicationDefaults();
+        $this->integratedRequirements = new IntegratedAuditRequirementService($this->db);
     }
 
     public function preview(array $input, int $tenantId, int $userId): array
@@ -42,7 +45,7 @@ class CycleAutomationService
         ]);
         $assignments = $this->assignStaff($tenantId, $input, $standards);
         $events = $this->eventPlan($cycle, $timeline, $duration, $assignments);
-        $warnings = $this->warnings($input, $standards, $cycle, $timeline, $events, $assignments);
+        $warnings = $this->warnings($tenantId, $input, $standards, $cycle, $timeline, $events, $assignments);
 
         return [
             'input' => $input,
@@ -65,37 +68,57 @@ class CycleAutomationService
             throw new RuntimeException('Cycle Builder cannot prepare the file while critical preview controls are open.');
         }
 
-        $this->db->transStart();
+        $this->db->transBegin();
 
-        $input = $preview['input'];
-        $clientId = $this->createClient($tenantId, $userId, $input, $preview['cycle']);
-        $this->createClientRelatedRecords($clientId, $input, $preview['standards']);
-        $applicationId = $this->createApplication($tenantId, $clientId, $userId, $input, $preview);
-        $reviewId = $this->createApplicationReview($clientId, $applicationId, $preview);
-        $proposalId = $this->createProposal($tenantId, $clientId, $reviewId, $userId, $preview);
-        $contractId = $this->createContract($tenantId, $clientId, $proposalId, $userId, $preview);
-        $this->createInvoiceAndPayment($tenantId, $clientId, $preview);
-        $programId = $this->createAuditProgram($tenantId, $clientId, $contractId, $userId, $preview);
-        $eventIds = $this->createEventsAndFiles($tenantId, $clientId, $programId, $userId, $preview);
-        $certificateIds = $this->createCertificates($tenantId, $clientId, $eventIds['initial_stage2']['decision_id'] ?? null, $preview);
-        $feedbackId = $this->createFeedback($tenantId, $clientId, $programId, $certificateIds[0] ?? null, $preview);
-        $runId = $this->recordRun($tenantId, $clientId, $userId, $preview, [
-            'client_id' => $clientId,
-            'application_id' => $applicationId,
-            'review_id' => $reviewId,
-            'proposal_id' => $proposalId,
-            'contract_id' => $contractId,
-            'program_id' => $programId,
-            'events' => $eventIds,
-            'certificate_ids' => $certificateIds,
-            'feedback_id' => $feedbackId,
-        ]);
+        try {
+            $input = $preview['input'];
+            $clientId = $this->createClient($tenantId, $userId, $input, $preview['cycle']);
+            $this->assertTransactionStep('client record');
+            $this->createClientRelatedRecords($clientId, $input, $preview['standards']);
+            $this->assertTransactionStep('client standards, sites and processes');
+            $applicationId = $this->createApplication($tenantId, $clientId, $userId, $input, $preview);
+            $this->assertTransactionStep('certification application');
+            $reviewId = $this->createApplicationReview($clientId, $applicationId, $preview);
+            $this->assertTransactionStep('application review');
+            $proposalId = $this->createProposal($tenantId, $clientId, $reviewId, $userId, $preview);
+            $this->assertTransactionStep('proposal');
+            $contractId = $this->createContract($tenantId, $clientId, $proposalId, $userId, $preview);
+            $this->assertTransactionStep('contract');
+            $this->createInvoiceAndPayment($tenantId, $clientId, $preview);
+            $this->assertTransactionStep('invoice and payment');
+            $programId = $this->createAuditProgram($tenantId, $clientId, $contractId, $userId, $preview);
+            $this->assertTransactionStep('audit programme');
+            $eventIds = $this->createEventsAndFiles($tenantId, $clientId, $programId, $userId, $preview);
+            $this->assertTransactionStep('audit events and certification files');
+            $certificateIds = $this->createCertificates($tenantId, $clientId, $eventIds['initial_stage2']['decision_id'] ?? null, $preview);
+            $this->assertTransactionStep('certificates');
+            $feedbackId = $this->createFeedback($tenantId, $clientId, $programId, $certificateIds[0] ?? null, $userId, $preview);
+            $this->assertTransactionStep('client feedback');
+            $runId = $this->recordRun($tenantId, $clientId, $userId, $preview, [
+                'client_id' => $clientId,
+                'application_id' => $applicationId,
+                'review_id' => $reviewId,
+                'proposal_id' => $proposalId,
+                'contract_id' => $contractId,
+                'program_id' => $programId,
+                'events' => $eventIds,
+                'certificate_ids' => $certificateIds,
+                'feedback_id' => $feedbackId,
+            ]);
+            $this->assertTransactionStep('Cycle Builder run record');
 
-        $this->logAutomation($tenantId, $userId, $clientId, $runId, $preview);
-        $this->db->transComplete();
+            $this->logAutomation($tenantId, $userId, $clientId, $runId, $preview);
+            $this->assertTransactionStep('Cycle Builder audit trail');
 
-        if ($this->db->transStatus() === false) {
-            throw new RuntimeException('Cycle Builder could not complete the certification file preparation.');
+            if ($this->db->transStatus() === false || ! $this->db->transCommit()) {
+                throw new RuntimeException('Cycle Builder could not complete the certification file preparation.');
+            }
+        } catch (\Throwable $exception) {
+            $this->db->transRollback();
+
+            throw $exception instanceof RuntimeException
+                ? $exception
+                : new RuntimeException('Cycle Builder could not complete the certification file preparation.', 0, $exception);
         }
 
         return [
@@ -107,9 +130,21 @@ class CycleAutomationService
         ];
     }
 
+    private function assertTransactionStep(string $step): void
+    {
+        if ($this->db->transStatus() === false) {
+            throw new RuntimeException('Cycle Builder could not complete the ' . $step . ' step. The client cycle was rolled back.');
+        }
+    }
+
     public function standards(): array
     {
-        return $this->db->table('standards')->where('active', 1)->orderBy('code')->get()->getResultArray();
+        return $this->db->table('standards')
+            ->where('active', 1)
+            ->whereIn('code', CertificationBaseline::CODES)
+            ->orderBy('code')
+            ->get()
+            ->getResultArray();
     }
 
     public function iafCodes(): array
@@ -448,6 +483,7 @@ class CycleAutomationService
         return $this->db->table('standards')
             ->whereIn('id', $ids)
             ->where('active', 1)
+            ->whereIn('code', CertificationBaseline::CODES)
             ->orderBy('code')
             ->get()
             ->getResultArray();
@@ -658,7 +694,7 @@ class CycleAutomationService
         return true;
     }
 
-    private function warnings(array $input, array $standards, array $cycle, array $timeline, array $events, array $assignments): array
+    private function warnings(int $tenantId, array $input, array $standards, array $cycle, array $timeline, array $events, array $assignments): array
     {
         $warnings = [];
         foreach (['client_name', 'scope', 'certificate_issue_date'] as $field) {
@@ -668,6 +704,21 @@ class CycleAutomationService
         }
         if ($standards === []) {
             $warnings[] = ['level' => 'critical', 'message' => 'At least one active standard must be selected.'];
+        }
+        if ($input['client_name'] !== '') {
+            $duplicate = $this->db->table('clients')
+                ->select('id')
+                ->where('tenant_id', $tenantId)
+                ->where('company', $input['client_name'])
+                ->where('certificate_issue_date', $cycle['issue'])
+                ->get(1)
+                ->getRowArray();
+            if ($duplicate !== null) {
+                $warnings[] = [
+                    'level' => 'critical',
+                    'message' => 'This client and certificate issue date already exist as client #' . (int) $duplicate['id'] . '. Open the existing file instead of preparing a duplicate cycle.',
+                ];
+            }
         }
         foreach (['lead_auditor', 'technical_reviewer', 'decision_maker'] as $key) {
             if (($assignments[$key] ?? null) === null) {
@@ -901,10 +952,11 @@ class CycleAutomationService
         ];
 
         $order = 1;
+        $standardCodes = array_values(array_column($preview['standards'], 'code'));
         foreach ($rows as $section => $questions) {
             foreach ($questions as $question => $answer) {
-                $key = 'cycle_' . strtolower(preg_replace('/[^a-z0-9]+/i', '_', $section . '_' . $question));
-                $questionLibraryId = $this->ensureQuestionLibrary($key, $section, $question, $order);
+                $key = $this->applicationQuestionKey($section, $question);
+                $questionLibraryId = $this->ensureQuestionLibrary($key, $section, $question, $order, $standardCodes);
                 $this->db->table('application_questions')->insert([
                     'application_id' => $applicationId,
                     'question_library_id' => $questionLibraryId,
@@ -916,7 +968,7 @@ class CycleAutomationService
                     'mandatory' => 0,
                     'validation_rules' => json_encode([], JSON_THROW_ON_ERROR),
                     'help_text' => null,
-                    'standard_codes' => json_encode(array_values(array_column($preview['standards'], 'code')), JSON_THROW_ON_ERROR),
+                    'standard_codes' => json_encode($standardCodes, JSON_THROW_ON_ERROR),
                 ]);
                 $applicationQuestionId = (int) $this->db->insertID();
                 $this->db->table('application_answers')->insert([
@@ -932,10 +984,16 @@ class CycleAutomationService
         }
     }
 
-    private function ensureQuestionLibrary(string $key, string $section, string $question, int $order): int
+    private function ensureQuestionLibrary(string $key, string $section, string $question, int $order, array $standardCodes): int
     {
-        $existing = $this->db->table('question_library')->select('id')->where('question_key', $key)->get(1)->getRowArray();
+        $existing = $this->db->table('question_library')->select('id, applicable_standards')->where('question_key', $key)->get(1)->getRowArray();
         if ($existing !== null) {
+            $applicable = json_decode((string) ($existing['applicable_standards'] ?? '[]'), true) ?: [];
+            if ($applicable === []) {
+                $this->db->table('question_library')->where('id', (int) $existing['id'])->update([
+                    'applicable_standards' => json_encode($standardCodes, JSON_THROW_ON_ERROR),
+                ]);
+            }
             return (int) $existing['id'];
         }
 
@@ -943,7 +1001,7 @@ class CycleAutomationService
             'question_key' => $key,
             'question_text' => $question,
             'question_type' => 'text',
-            'applicable_standards' => json_encode([], JSON_THROW_ON_ERROR),
+            'applicable_standards' => json_encode($standardCodes, JSON_THROW_ON_ERROR),
             'mandatory' => 0,
             'section' => $section,
             'display_order' => $order,
@@ -954,6 +1012,66 @@ class CycleAutomationService
         ]);
 
         return (int) $this->db->insertID();
+    }
+
+    private function applicationQuestionKey(string $section, string $question): string
+    {
+        $keys = [
+            'Language of Audit' => 'language_of_audit',
+            'Has previous contact been made with QSI personnel?' => 'previous_qsi_contact',
+            'If yes, state the person name and meeting/visit details' => 'qsi_contact_details',
+            'Where did you hear about QSI?' => 'heard_about_qsi',
+            'Do you currently use any other QSI services?' => 'other_qsi_services',
+            'Integrated Management System' => 'integrated_management_system',
+            'Applicable Legal and Regulatory Requirement' => 'legal_statutory_requirements',
+            'Risks associated with products, processes or activities' => 'product_process_risks',
+            'Number of HACCP Studies / Plans' => 'haccp_plans_processes',
+            'Any incident / accident in the past?' => 'incident_accident_history',
+            '1a. Analysis of technical issues arising from the scope' => 'technical_issues',
+            '1b. Safety condition requirements' => 'safety_requirements',
+            '1c. Technological and Regulatory Context' => 'technological_regulatory_context',
+            'Scope of Certification' => 'scope_of_certification',
+            'Products' => 'products',
+            'Services' => 'services',
+            'Processes' => 'processes',
+            'Outsourced Processes' => 'outsourced_processes',
+            'Company Name' => 'company_name',
+            'Legal Name' => 'legal_name',
+            'Commercial Registration Number' => 'commercial_registration_number',
+            'VAT Number' => 'vat_number',
+            'License Number' => 'license_number',
+            'Address' => 'address',
+            'Country' => 'country',
+            'City' => 'city',
+            'Website' => 'website',
+            'Contact Person' => 'contact_person',
+            'Designation' => 'designation',
+            'Email' => 'email',
+            'Phone' => 'phone',
+            'Mobile' => 'mobile',
+            'Consultant Used' => 'consultant_used',
+            'Number of Employees' => 'employee_count',
+            'Number of employees in the activities to be certified' => 'certification_employee_count',
+            'Permanent Employees' => 'permanent_employees',
+            'Temporary Employees' => 'temporary_employees',
+            'Contract Workers' => 'contract_workers',
+            'Number of Shifts' => 'number_of_shifts',
+            'Working Hours' => 'working_hours',
+            'Seasonal Operations' => 'seasonal_operations',
+            'Number of Sites' => 'number_of_sites',
+            'Head Office' => 'head_office',
+            'Branches' => 'branches',
+            'Remote Locations' => 'remote_locations',
+            'Management System Status' => 'management_system_status',
+            'Implementation of the system completed?' => 'implementation_status',
+            'Internal Audit conducted?' => 'internal_audit_conducted',
+            'Management Review conducted?' => 'management_review_conducted',
+            'Last management review meeting conducted?' => 'last_management_review_meeting_conducted',
+            'Certification scope requested' => 'certification_scope_requested',
+        ];
+
+        return $keys[$question]
+            ?? 'cycle_' . strtolower(trim((string) preg_replace('/[^a-z0-9]+/i', '_', $section . '_' . $question), '_'));
     }
 
     private function createApplicationReview(int $clientId, int $applicationId, array $preview): int
@@ -1233,8 +1351,8 @@ class CycleAutomationService
             $eventId = (int) $this->db->insertID();
             $this->createAppointments($eventId, $event, $preview);
             $planId = $this->createAuditPlan($eventId, $type, $event, $preview);
-            $reportId = $this->createReport($tenantId, $eventId, $type, $event, $preview);
-            $ncrIds = $this->createNcrCapa($tenantId, $clientId, $eventId, $type, $event, $userId, $preview);
+            $reportId = $this->createReport($tenantId, $eventId, $type, $event, $userId, $preview);
+            $ncrIds = $this->createNcrCapa($tenantId, $clientId, $eventId, $reportId, $type, $event, $userId, $preview);
             $reviewId = $this->createTechnicalReview($tenantId, $eventId, $type, $event, $ncrIds, $preview);
             $decisionId = $this->createDecision($tenantId, $reviewId, $type, $event, $preview);
             $this->createReminders($eventId, $type, $event, $preview);
@@ -1309,7 +1427,7 @@ class CycleAutomationService
 
         for ($day = 0; $day < $calendarDays; $day++) {
             $date = (new DateTimeImmutable($event['start']))->add(new DateInterval('P' . $day . 'D'))->format('Y-m-d');
-            $slots = $this->auditPlanSlots($type, $day, $processes);
+            $slots = $this->auditPlanSlots($type, $day, $processes, $preview['standards']);
             foreach ($slots as $index => [$start, $end, $activity, $department, $process, $clauses]) {
                 $auditor = $auditors[$index % max(1, count($auditors))] ?? null;
                 if (stripos($activity, 'lunch') !== false) {
@@ -1332,19 +1450,20 @@ class CycleAutomationService
         }
     }
 
-    private function auditPlanSlots(string $type, int $day, array $processes): array
+    private function auditPlanSlots(string $type, int $day, array $processes, array $standards): array
     {
         $core1 = trim($processes[$day % max(1, count($processes))] ?? 'Core process');
         $core2 = trim($processes[($day + 1) % max(1, count($processes))] ?? 'Support process');
+        $criteria = $this->auditPlanCriteria($standards);
 
         if ($type === 'initial_stage1') {
             return [
                 ['09:00:00', '09:30:00', 'Opening meeting', 'Top Management', 'Audit objectives, scope, criteria, confidentiality and communication', 'ISO/IEC 17021-1 planning requirements'],
-                ['09:30:00', '10:45:00', 'Document and scope review', 'Management system', 'Scope, boundaries, sites, processes and exclusions', '4.1, 4.2, 4.3, 4.4'],
-                ['10:45:00', '12:30:00', 'Readiness review', 'Management / process owners', 'Policy, objectives, responsibilities, legal and customer requirements', '5.1, 5.2, 5.3, 6.1, 6.2'],
+                ['09:30:00', '10:45:00', 'Document and scope review', 'Management system', 'Scope, boundaries, sites, products, processes and certification criteria', $criteria['context']],
+                ['10:45:00', '12:30:00', 'Readiness review', 'Management / process owners', 'Policy, objectives, responsibilities, legal, customer and scheme requirements', $criteria['planning']],
                 ['12:30:00', '13:30:00', 'Lunch break', '', '', ''],
-                ['13:30:00', '14:45:00', 'Internal audit and management review review', 'Quality / food safety / HSE', 'Internal audit, management review and corrective action readiness', '9.2, 9.3, 10.2'],
-                ['14:45:00', '15:45:00', 'Site tour and Stage 2 readiness confirmation', 'Operational areas', $core1, '7.1, 7.2, 7.5, 8.1'],
+                ['13:30:00', '14:45:00', 'Internal audit and management review review', 'Quality / food safety / HSE', 'Internal audit, management review and corrective action readiness', $criteria['review']],
+                ['14:45:00', '15:45:00', 'Site tour and Stage 2 readiness confirmation', 'Operational areas', $core1, $criteria['operations']],
                 ['15:45:00', '16:30:00', 'Stage 1 conclusions and Stage 2 planning inputs', 'Audit team', 'Readiness issues, Stage 2 focus, audit programme confirmation', 'Stage 1 conclusion'],
                 ['16:30:00', '17:00:00', 'Closing meeting', 'Top Management', 'Stage 1 result and actions before Stage 2', 'Audit conclusion'],
             ];
@@ -1352,18 +1471,53 @@ class CycleAutomationService
 
         return [
             ['09:00:00', '09:30:00', 'Opening meeting', 'Top Management', 'Audit objectives, scope, criteria, audit team and plan confirmation', 'ISO/IEC 17021-1 planning requirements'],
-            ['09:30:00', '10:45:00', 'Process audit', 'Operations', $core1, '8.1 and applicable operational controls'],
-            ['10:45:00', '12:30:00', 'Process audit and record sampling', 'Operations / support', $core2, '7.1, 7.2, 7.5, 8.x'],
+            ['09:30:00', '10:45:00', 'Process audit', 'Operations', $core1, $criteria['operations']],
+            ['10:45:00', '12:30:00', 'Process audit and record sampling', 'Operations / support', $core2, $criteria['support']],
             ['12:30:00', '13:30:00', 'Lunch break', '', '', ''],
-            ['13:30:00', '14:30:00', 'Performance evaluation', 'Quality / food safety / HSE', 'Monitoring, measurement, analysis and evaluation', '9.1'],
-            ['14:30:00', '15:30:00', 'Internal audit and management review', 'Management system', 'Audit programme, audit results, management review outputs and actions', '9.2, 9.3'],
-            ['15:30:00', '16:15:00', 'Improvement and NCR/CAPA review', 'Process owners', 'Nonconformity, correction, root cause, corrective action and effectiveness', '10.1, 10.2, 10.3'],
+            ['13:30:00', '14:30:00', 'Performance evaluation', 'Quality / food safety / HSE', 'Monitoring, measurement, analysis and evaluation', $criteria['performance']],
+            ['14:30:00', '15:30:00', 'Internal audit and management review', 'Management system', 'Audit programme, audit results, management review outputs and actions', $criteria['review']],
+            ['15:30:00', '16:15:00', 'Improvement and NCR/CAPA review', 'Process owners', 'Nonconformity, correction, root cause, corrective action and effectiveness', $criteria['improvement']],
             ['16:15:00', '16:40:00', 'Audit team meeting', 'Audit team', 'Review evidence, agree findings and conclusions', 'Audit conclusion'],
             ['16:40:00', '17:00:00', 'Closing meeting', 'Top Management', 'Audit findings, conclusion, NCR/CAPA timeline and next steps', 'Audit conclusion'],
         ];
     }
 
-    private function createReport(int $tenantId, int $eventId, string $type, array $event, array $preview): int
+    private function auditPlanCriteria(array $standards): array
+    {
+        $codes = array_map(static fn (array $standard): string => strtoupper((string) ($standard['code'] ?? $standard['standard_code'] ?? '')), $standards);
+        $hasHaccp = count(array_filter($codes, static fn (string $code): bool => str_contains($code, 'HACCP'))) > 0;
+        $hasIso22000 = count(array_filter($codes, static fn (string $code): bool => str_contains($code, 'ISO 22000'))) > 0;
+
+        if ($hasHaccp || $hasIso22000) {
+            $prefix = $hasHaccp && $hasIso22000
+                ? 'ISO 22000:2018 and Codex HACCP'
+                : ($hasIso22000 ? 'ISO 22000:2018' : 'Codex HACCP CXC 1-1969');
+
+            return [
+                'context' => $prefix . ': scope, food-chain context, products, intended use and process flow',
+                'planning' => $prefix . ': leadership, food safety policy, objectives, legal requirements, HACCP team and hazard-control planning',
+                'support' => $prefix . ': competence, communication, documented information, PRPs and traceability records',
+                'operations' => $prefix . ': PRPs/GHPs, hazard analysis, OPRP/CCP controls, monitoring, correction and product disposition',
+                'performance' => $prefix . ': verification, validation, monitoring, analysis and food safety performance evaluation',
+                'review' => $prefix . ': internal audit, management review, verification results and controlled records',
+                'improvement' => $prefix . ': deviations, nonconformity, corrective action, effectiveness and HACCP/FSMS update',
+            ];
+        }
+
+        $scheme = implode(', ', array_filter($codes)) ?: 'Applicable management system standard';
+
+        return [
+            'context' => $scheme . ' clauses 4.1-4.4',
+            'planning' => $scheme . ' clauses 5.1-6.3',
+            'support' => $scheme . ' clauses 7.1-7.5',
+            'operations' => $scheme . ' applicable clause 8 controls',
+            'performance' => $scheme . ' clause 9.1',
+            'review' => $scheme . ' clauses 9.2-9.3',
+            'improvement' => $scheme . ' clauses 10.1-10.3',
+        ];
+    }
+
+    private function createReport(int $tenantId, int $eventId, string $type, array $event, int $userId, array $preview): int
     {
         $lead = $preview['assignments']['lead_auditor'] ?? null;
         $reviewer = $preview['assignments']['technical_reviewer'] ?? null;
@@ -1397,23 +1551,63 @@ class CycleAutomationService
             'created_at' => $event['end'] . ' 10:00:00',
         ]);
         $reportId = (int) $this->db->insertID();
-        $poolClient = $this->poolClient($tenantId, $preview);
-        $poolEvent = ['event_type' => $type, 'audit_number' => $event['audit_number'] ?? ''];
-        foreach ($this->clauses($preview['standards'], 12) as $sort => $clause) {
-            $package = $this->contentEngine->conformitySection($poolClient, $poolEvent, $clause);
+        $requirements = $this->auditRows($tenantId, $preview['standards'], $type);
+        foreach ($requirements as $sort => $clause) {
+            $content = isset($clause['integrated_requirement_id'])
+                ? $this->integratedSectionContent($preview['input'], $type, $clause, $confirmed)
+                : ($confirmed
+                    ? $this->contentEngine->conformitySection(
+                        $this->poolClient($tenantId, $preview),
+                        ['event_type' => $type, 'audit_number' => $event['audit_number'] ?? ''],
+                        $clause
+                    )['content']
+                    : $this->draftConformityText($preview['input']['client_name'], $clause, $type));
+
+            $responseId = null;
+            if (isset($clause['integrated_requirement_id'])) {
+                $this->db->table('audit_requirement_responses')->insert([
+                    'report_draft_id' => $reportId,
+                    'audit_requirement_id' => (int) $clause['integrated_requirement_id'],
+                    'response_text' => $content,
+                    'objective_evidence' => (string) ($clause['evidence_guidance'] ?? ''),
+                    'finding_type' => 'conformity',
+                    'source_type' => 'super_admin_cycle_builder',
+                    'auditor_confirmed' => $confirmed ? 1 : 0,
+                    'confirmed_by_user_id' => $confirmed ? $userId : null,
+                    'confirmed_at' => $confirmed ? $event['end'] . ' 14:30:00' : null,
+                    'created_by' => $userId,
+                    'created_at' => $event['end'] . ' 10:30:00',
+                ]);
+                $responseId = (int) $this->db->insertID();
+
+                foreach ($clause['mappings'] as $mapping) {
+                    $this->db->table('audit_response_clause_snapshots')->insert([
+                        'audit_requirement_response_id' => $responseId,
+                        'standard_id' => (int) $mapping['standard_id'],
+                        'clause_library_id' => $mapping['clause_library_id'],
+                        'standard_code_snapshot' => (string) $mapping['standard_code'],
+                        'clause_reference_snapshot' => (string) $mapping['clause_reference'],
+                        'clause_title_snapshot' => $mapping['clause_title'],
+                        'mapping_role' => (string) $mapping['mapping_role'],
+                    ]);
+                }
+            }
+
             $this->db->table('report_sections')->insert([
                 'report_draft_id' => $reportId,
                 'clause_library_id' => empty($clause['id']) ? null : (int) $clause['id'],
                 'section_key' => 'conformity',
-                'section_title' => $clause['standard_code'] . ' ' . $clause['clause_number'] . ' - ' . $clause['clause_title'],
-                'section_content' => $confirmed
-                    ? $package['content']
-                    : $this->draftConformityText($preview['input']['client_name'], $clause, $type),
-                'source_type' => $confirmed ? $package['source_type'] : 'system_prepared',
+                'section_title' => isset($clause['integrated_requirement_id'])
+                    ? $clause['requirement_code'] . ' - ' . $clause['clause_title'] . ' [' . $clause['clause_number'] . ']'
+                    : $clause['standard_code'] . ' ' . $clause['clause_number'] . ' - ' . $clause['clause_title'],
+                'section_content' => $content,
+                'source_type' => isset($clause['integrated_requirement_id']) ? 'qsi_integrated_catalogue' : ($confirmed ? 'system_clause_engine' : 'system_prepared'),
                 'auditor_confirmed' => $confirmed ? 1 : 0,
-                'confirmed_by_user_id' => $confirmed ? ($lead['user_id'] ?? null) : null,
+                'confirmed_by_user_id' => $confirmed ? $userId : null,
                 'confirmed_at' => $confirmed ? $event['end'] . ' 14:30:00' : null,
-                'confirmation_note' => $confirmed ? $package['confirmation_note'] : 'Auditor confirmation required before report submission.',
+                'confirmation_note' => $confirmed
+                    ? 'Confirmed through the Super Admin Cycle Builder digitalization record for the assigned lead auditor ' . ($lead['full_name'] ?? 'recorded in the audit appointment') . '.'
+                    : 'Auditor confirmation required before report submission.',
                 'sort_order' => $sort + 1,
             ]);
         }
@@ -1421,7 +1615,7 @@ class CycleAutomationService
         return $reportId;
     }
 
-    private function createNcrCapa(int $tenantId, int $clientId, int $eventId, string $type, array $event, int $userId, array $preview): array
+    private function createNcrCapa(int $tenantId, int $clientId, int $eventId, int $reportId, string $type, array $event, int $userId, array $preview): array
     {
         $mode = $preview['input']['ncr_mode'];
         $confirmed = $this->workflowPackComplete($preview['input']);
@@ -1438,18 +1632,35 @@ class CycleAutomationService
             default => in_array($type, ['initial_stage2', 'surveillance1', 'surveillance2', 'recertification'], true) ? 4 : 0,
         };
         $ids = [];
-        $clauses = $this->clauses($preview['standards'], max(1, $count));
+        $clauses = $this->findingRows(
+            $this->auditRows($tenantId, $preview['standards'], $type),
+            max(1, $count),
+            $type,
+            $clientId
+        );
+        $responseIds = array_column(
+            $this->db->table('audit_requirement_responses')
+                ->select('id, audit_requirement_id')
+                ->where('report_draft_id', $reportId)
+                ->get()
+                ->getResultArray(),
+            'id',
+            'audit_requirement_id'
+        );
         for ($i = 1; $i <= $count; $i++) {
             $clause = $clauses[($i - 1) % count($clauses)];
             $severity = $mode === 'major' && $i === 1 ? 'major' : 'minor';
             $closed = $confirmed && $event['status'] !== 'planned';
-            $ncrNumber = $this->number('NCR-AUTO-' . strtoupper(str_replace('_', '-', $type)), $clientId) . '-' . str_pad((string) $i, 2, '0', STR_PAD_LEFT);
+            $ncrNumber = $this->number('NCR-' . strtoupper(str_replace('_', '-', $type)), $clientId) . '-' . str_pad((string) $i, 2, '0', STR_PAD_LEFT);
             $target = (new DateTimeImmutable($event['end']))->add(new DateInterval('P21D'))->format('Y-m-d');
             $package = $this->contentEngine->ncrCapaPackage($poolClient, $poolEvent, $clause, $severity, $i);
             $this->db->table('ncrs')->insert([
                 'tenant_id' => $tenantId,
                 'audit_event_id' => $eventId,
                 'clause_library_id' => empty($clause['id']) ? null : (int) $clause['id'],
+                'audit_requirement_response_id' => isset($clause['integrated_requirement_id'])
+                    ? ($responseIds[(int) $clause['integrated_requirement_id']] ?? null)
+                    : null,
                 'ncr_number' => $ncrNumber,
                 'requirement' => $package['requirement'],
                 'finding' => $package['finding'],
@@ -1461,7 +1672,7 @@ class CycleAutomationService
                 'responsible_person' => $preview['input']['contact_person'],
                 'target_date' => $target,
                 'verification' => $closed ? $package['verification'] : 'Pending auditor verification.',
-                'closure_notes' => $closed ? 'Closed from the prepared cycle file with linked correction, root cause, action and verification evidence.' : 'Open for client action.',
+                'closure_notes' => $closed ? 'Closed in the controlled cycle file with linked correction, root cause, action and verification evidence.' : 'Open for client action.',
                 'status' => $closed ? 'closed' : 'open',
                 'closed_at' => $closed ? (new DateTimeImmutable($target))->add(new DateInterval('P3D'))->format('Y-m-d 15:00:00') : null,
                 'created_by' => $userId,
@@ -1469,6 +1680,17 @@ class CycleAutomationService
             ]);
             $ncrId = (int) $this->db->insertID();
             $ids[] = $ncrId;
+            $linkedResponseId = isset($clause['integrated_requirement_id'])
+                ? ($responseIds[(int) $clause['integrated_requirement_id']] ?? null)
+                : null;
+            if ($linkedResponseId !== null) {
+                $this->db->table('audit_requirement_responses')
+                    ->where('id', (int) $linkedResponseId)
+                    ->update([
+                        'finding_type' => $severity,
+                        'response_text' => (string) $package['finding'],
+                    ]);
+            }
             $this->db->table('capas')->insert([
                 'tenant_id' => $tenantId,
                 'ncr_id' => $ncrId,
@@ -1515,6 +1737,9 @@ class CycleAutomationService
                     ? $reviewNotes
                     : 'Technical review requires competent reviewer verification of the actual audit file.',
                 'audit_evidence_summary' => $evidenceSummary,
+                'checklist_rows' => $this->technicalReviewChecklistRows(),
+                'audit_result' => $approved ? 'The complete audit file supports independent certification decision making.' : 'Pending competent Technical Reviewer completion.',
+                'outstanding_items' => $approved ? 'No outstanding item preventing the recorded decision.' : 'Technical Review confirmation remains outstanding.',
             ], JSON_THROW_ON_ERROR),
             'competency_confirmed' => $approved ? 1 : 0,
             'duration_confirmed' => $approved ? 1 : 0,
@@ -1539,7 +1764,7 @@ class CycleAutomationService
         $decisionBasis = $this->decisionBasis($preview['input'], $type);
         $decision = match ($type) {
             'initial_stage1' => 'continue_to_stage2',
-            'initial_stage2' => 'grant',
+            'initial_stage2' => 'granted',
             'surveillance1', 'surveillance2' => 'maintain',
             'recertification' => 'renew',
             default => 'approve',
@@ -1557,6 +1782,8 @@ class CycleAutomationService
                 'event_type' => $type,
                 'declaration_confirmed' => $approved,
                 'decision_basis' => $decisionBasis,
+                'checklist_rows' => $this->decisionChecklistRows(),
+                'declaration_text' => 'The decision is independent from the audit team and is based on review of the complete certification file.',
             ], JSON_THROW_ON_ERROR),
             'decided_at' => $approved ? (new DateTimeImmutable($event['end']))->add(new DateInterval('P3D'))->format('Y-m-d 11:00:00') : null,
             'status' => $approved ? 'approved' : 'pending',
@@ -1567,6 +1794,25 @@ class CycleAutomationService
         ]);
 
         return (int) $this->db->insertID();
+    }
+
+    private function technicalReviewChecklistRows(): array
+    {
+        return [
+            ['group' => 'File completeness', 'ref' => 'TR-01', 'action_by' => 'Technical Reviewer', 'requirement' => 'Application, proposal, contract and audit programme are consistent.', 'result' => 'Conforming', 'evidence' => 'Controlled client file records reviewed.'],
+            ['group' => 'Audit delivery', 'ref' => 'TR-02', 'action_by' => 'Technical Reviewer', 'requirement' => 'Audit team competence, duration, plan and report coverage are adequate.', 'result' => 'Conforming', 'evidence' => 'Appointments, competence, audit plan and report reviewed.'],
+            ['group' => 'Findings', 'ref' => 'TR-03', 'action_by' => 'Technical Reviewer', 'requirement' => 'NCR/CAPA records are complete and closure evidence is adequate.', 'result' => 'Conforming', 'evidence' => 'NCR and CAPA records reviewed against audit evidence.'],
+            ['group' => 'Recommendation', 'ref' => 'TR-04', 'action_by' => 'Technical Reviewer', 'requirement' => 'The audit conclusion supports an independent certification decision.', 'result' => 'Conforming', 'evidence' => 'Audit conclusion and complete file found suitable for decision.'],
+        ];
+    }
+
+    private function decisionChecklistRows(): array
+    {
+        return [
+            ['group' => 'Independence', 'ref' => 'DM-01', 'requirement' => 'Decision maker is independent from the audit team.', 'result' => 'Conforming', 'evidence' => 'Personnel assignment and conflict controls reviewed.'],
+            ['group' => 'Technical review', 'ref' => 'DM-02', 'requirement' => 'Technical Review is complete and supports the recommendation.', 'result' => 'Conforming', 'evidence' => 'Approved Technical Review record checked.'],
+            ['group' => 'Certification basis', 'ref' => 'DM-03', 'requirement' => 'Scope, standard, audit evidence and NCR/CAPA status support the decision.', 'result' => 'Conforming', 'evidence' => 'Complete certification file and closure status reviewed.'],
+        ];
     }
 
     private function createCertificates(int $tenantId, int $clientId, ?int $decisionId, array $preview): array
@@ -1607,7 +1853,7 @@ class CycleAutomationService
         return $ids;
     }
 
-    private function createFeedback(int $tenantId, int $clientId, int $programId, ?int $certificateId, array $preview): int
+    private function createFeedback(int $tenantId, int $clientId, int $programId, ?int $certificateId, int $userId, array $preview): int
     {
         $confirmed = $this->workflowPackComplete($preview['input']);
         $this->db->table('client_feedback')->insert([
@@ -1625,7 +1871,7 @@ class CycleAutomationService
             'comments' => $confirmed ? 'Client feedback record opened and marked satisfactory for the completed certification cycle.' : 'Feedback record prepared. Actual client feedback must be collected and entered.',
             'improvement_suggestion' => $confirmed ? 'Continue monitoring response time, report clarity and auditor communication during surveillance activities.' : null,
             'status' => $confirmed ? 'submitted' : 'draft',
-            'created_by' => (int) service('session')->get('user_id'),
+            'created_by' => $userId,
             'created_at' => (new DateTimeImmutable($preview['cycle']['issue']))->add(new DateInterval('P7D'))->format('Y-m-d 12:00:00'),
         ]);
 
@@ -1684,6 +1930,117 @@ class CycleAutomationService
                 'warnings' => $preview['warnings'],
             ], $tenantId, $userId);
         }
+    }
+
+    private function auditRows(int $tenantId, array $standards, string $auditStage): array
+    {
+        $requirements = $this->integratedRequirements->requirementsForStandards(
+            $tenantId,
+            array_column($standards, 'id'),
+            $auditStage
+        );
+        if ($requirements === []) {
+            return $this->clauses($standards, 40);
+        }
+
+        return array_map(static function (array $requirement): array {
+            $standardCodes = array_values(array_unique(array_column($requirement['mappings'], 'standard_code')));
+            $criteria = array_map(
+                static fn (array $mapping): string => trim($mapping['standard_code'] . ' ' . $mapping['clause_reference']),
+                $requirement['mappings']
+            );
+            $clauseLibraryIds = array_values(array_filter(array_column($requirement['mappings'], 'clause_library_id')));
+
+            return [
+                'id' => $clauseLibraryIds[0] ?? null,
+                'integrated_requirement_id' => (int) $requirement['id'],
+                'requirement_code' => (string) $requirement['requirement_code'],
+                'standard_code' => implode(' / ', $standardCodes),
+                'clause_number' => implode(', ', $criteria),
+                'clause_title' => (string) $requirement['title'],
+                'requirement' => (string) $requirement['audit_question'],
+                'evidence_guidance' => (string) ($requirement['evidence_guidance'] ?? ''),
+                'requirement_family' => (string) $requirement['requirement_family'],
+                'mappings' => $requirement['mappings'],
+            ];
+        }, $requirements);
+    }
+
+    private function integratedSectionContent(array $input, string $auditStage, array $requirement, bool $confirmed): string
+    {
+        $question = trim((string) $requirement['requirement']);
+        $evidenceItems = array_values(array_filter(array_map(
+            'trim',
+            preg_split('/,\s*/', (string) ($requirement['evidence_guidance'] ?? '')) ?: []
+        )));
+        $referenceBase = $this->docPrefix((string) $input['client_name']) . '-'
+            . preg_replace('/[^A-Z0-9.]+/', '-', strtoupper((string) ($requirement['requirement_code'] ?? 'REQ')));
+        $evidenceLines = [];
+        foreach (array_slice($evidenceItems, 0, 6) as $index => $item) {
+            $evidenceLines[] = '- ' . rtrim($item, '.') . ' (Ref: ' . $referenceBase . '-' . str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT) . ')';
+        }
+        if ($evidenceLines === []) {
+            $evidenceLines[] = '- Applicable documented information and implementation records (Ref: ' . $referenceBase . '-001)';
+        }
+
+        if (! $confirmed) {
+            return "Audit question:\n{$question}\n\nEvidence to record:\n" . implode("\n", $evidenceLines)
+                . "\n\nStatus: Awaiting appointed auditor completion and confirmation.";
+        }
+
+        $title = strtolower((string) $requirement['clause_title']);
+        $criteria = (string) $requirement['clause_number'];
+
+        return 'Conformity recorded. Controls relating to ' . $title
+            . ' were reviewed against ' . $criteria . ' during ' . strtolower($this->stageLabel($auditStage)) . '. '
+            . 'The recorded implementation and sampled objective evidence support conformity for this requirement.';
+    }
+
+    private function findingRows(array $rows, int $count, string $auditStage, int $clientId): array
+    {
+        if ($rows === []) {
+            return [];
+        }
+
+        $candidates = array_values(array_filter($rows, static function (array $row): bool {
+            if (($row['requirement_family'] ?? 'integrated_management') !== 'integrated_management') {
+                return true;
+            }
+
+            $title = strtolower((string) ($row['clause_title'] ?? ''));
+            foreach (['operational', 'competence', 'documented', 'internal audit', 'corrective action', 'monitoring'] as $keyword) {
+                if (str_contains($title, $keyword)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }));
+        if (count($candidates) < $count) {
+            $candidates = $rows;
+        }
+
+        usort($candidates, static function (array $left, array $right) use ($clientId): int {
+            $leftKey = sprintf('%u', crc32((string) ($left['requirement_code'] ?? $left['clause_title'] ?? '') . ':' . $clientId));
+            $rightKey = sprintf('%u', crc32((string) ($right['requirement_code'] ?? $right['clause_title'] ?? '') . ':' . $clientId));
+
+            return $leftKey <=> $rightKey;
+        });
+        $stageIndex = match ($auditStage) {
+            'initial_stage2' => 0,
+            'surveillance1' => 1,
+            'surveillance2' => 2,
+            'recertification' => 3,
+            default => 4,
+        };
+        $selected = [];
+        $offset = ($stageIndex * $count) % count($candidates);
+        for ($index = 0; $index < $count; $index++) {
+            $candidateIndex = ($offset + $index) % count($candidates);
+            $selected[] = $candidates[$candidateIndex];
+        }
+
+        return $selected;
     }
 
     private function clauses(array $standards, int $limit): array
@@ -1888,8 +2245,8 @@ class CycleAutomationService
             return $summary;
         }
 
-        $scope = $this->nonEmpty($input['scope'] ?? '', 'the approved certification scope');
-        $stage = ucwords(str_replace('_', ' ', $eventType));
+        $scope = rtrim($this->nonEmpty($input['scope'] ?? '', 'the approved certification scope'), ". \t\n\r\0\x0B");
+        $stage = $this->stageLabel($eventType);
 
         return $stage . ' evidence was built around the approved scope: ' . $scope
             . '. Records reviewed include application and contract scope, audit programme, auditor appointment, audit plan, clause checklist, process records, management system records, sampled implementation evidence, NCR/CAPA records where applicable, and report conclusions.';
@@ -1902,8 +2259,8 @@ class CycleAutomationService
             return $notes;
         }
 
-        $scope = $this->nonEmpty($input['scope'] ?? '', 'the approved scope');
-        $stage = ucwords(str_replace('_', ' ', $eventType));
+        $scope = rtrim($this->nonEmpty($input['scope'] ?? '', 'the approved scope'), ". \t\n\r\0\x0B");
+        $stage = $this->stageLabel($eventType);
         $ncrText = $ncrCount === 0
             ? 'No open NCR requiring closure was identified for this stage.'
             : $ncrCount . ' NCR/CAPA record(s) were checked for correction, root cause, corrective action, evidence, verification and closure status.';
@@ -1920,8 +2277,8 @@ class CycleAutomationService
             return $basis;
         }
 
-        $scope = $this->nonEmpty($input['scope'] ?? '', 'the approved certification scope');
-        $stage = ucwords(str_replace('_', ' ', $eventType));
+        $scope = rtrim($this->nonEmpty($input['scope'] ?? '', 'the approved certification scope'), ". \t\n\r\0\x0B");
+        $stage = $this->stageLabel($eventType);
 
         return $stage . ' decision based on accepted application review, signed contract, approved audit programme, competent auditor appointment, completed audit plan/report, verified NCR/CAPA status, approved technical review, impartiality confirmation and conformity evidence for ' . $scope . '.';
     }
@@ -1931,6 +2288,11 @@ class CycleAutomationService
         $value = trim((string) $value);
 
         return $value === '' ? $fallback : $value;
+    }
+
+    private function stageLabel(string $eventType): string
+    {
+        return preg_replace('/\bStage\s*(\d)\b/i', 'Stage $1', ucwords(str_replace('_', ' ', $eventType)));
     }
 
     private function docPrefix(string $clientName): string

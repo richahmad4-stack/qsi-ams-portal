@@ -345,11 +345,9 @@ class ClientPortalController extends BaseController
 
         return match ($documentKey) {
             'auditor_appointment' => $db->table('auditor_appointments')
-                ->where('tenant_id', $tenantId)
                 ->where('audit_event_id', $eventId)
                 ->countAllResults() > 0,
             'audit_plan' => $db->table('audit_plans')
-                ->where('tenant_id', $tenantId)
                 ->where('audit_event_id', $eventId)
                 ->countAllResults() > 0,
             'audit_report' => $db->table('report_drafts')

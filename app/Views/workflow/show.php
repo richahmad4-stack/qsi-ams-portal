@@ -57,6 +57,7 @@ $stateClasses = [
 $records = $workflow['records'];
 $responsible = $workflow['responsible'] ?? [];
 $currentRoles = (array) session()->get('role_codes');
+$isSuperAdmin = in_array('super_admin', $currentRoles, true);
 $isComplianceAuditViewer = in_array('compliance_auditor', $currentRoles, true);
 $canEditWorkflow = can('clients', 'edit')
     || can('application_reviews', 'edit')
@@ -85,7 +86,7 @@ $nameText = static function ($value): string {
 
     return trim((string) $value) !== '' ? (string) $value : 'Not assigned';
 };
-$eventRoute = static function (?array $event, string $target) use ($client, $viewOnlyReports): ?string {
+$eventRoute = static function (?array $event, string $target) use ($client, $viewOnlyReports, $isSuperAdmin): ?string {
     if ($event === null) {
         return null;
     }
@@ -93,12 +94,29 @@ $eventRoute = static function (?array $event, string $target) use ($client, $vie
     $id = (int) $event['id'];
     if ($viewOnlyReports) {
         return match ($target) {
-            'report', 'ncr_capa', 'file' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/file'),
+            'report' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/file#tab-audit-report'),
+            'ncr_capa' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/file#tab-ncr-capa'),
+            'file' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/file'),
             'plan' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/documents/audit_plan'),
             'technical_review' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/documents/technical_review'),
             'decision' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/documents/decision_report'),
             default => null,
         };
+    }
+
+    if ($isSuperAdmin) {
+        $readOnlyRoute = match ($target) {
+            'report' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/file#tab-audit-report'),
+            'ncr_capa' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/file#tab-ncr-capa'),
+            'technical_review' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/file#tab-technical-review'),
+            'decision' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/file#tab-decision'),
+            'file' => site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $id . '/file'),
+            default => null,
+        };
+
+        if ($readOnlyRoute !== null) {
+            return $readOnlyRoute;
+        }
     }
 
     return match ($target) {
@@ -169,7 +187,7 @@ $actionButton = static function (string $label, string $icon, ?string $url, bool
 $eventDocumentUrl = static function (?array $event, string $documentKey) use ($client): ?string {
     return $event === null ? null : site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/documents/' . $documentKey);
 };
-$renderEventFileTable = static function (?array $event, string $emptyText, bool $enabled = true) use ($client, $actionButton, $eventDocumentUrl, $viewOnlyReports): void {
+$renderEventFileTable = static function (?array $event, string $emptyText, bool $enabled = true) use ($client, $actionButton, $eventDocumentUrl, $viewOnlyReports, $isSuperAdmin): void {
     if ($event === null) {
         echo '<div class="text-secondary">' . esc($emptyText) . '</div>';
         return;
@@ -184,14 +202,14 @@ $renderEventFileTable = static function (?array $event, string $emptyText, bool 
         . '<div class="d-flex flex-wrap justify-content-end gap-2">'
         . ($viewOnlyReports ? '' : $actionButton('Appointment', 'fa-user-check', site_url('workflow/certification/' . $client['id'] . '/appointments?event_id=' . $event['id']), $enabled))
         . ($viewOnlyReports ? '' : $actionButton('Plan', 'fa-list-check', site_url('workflow/certification/' . $client['id'] . '/audit-plan?event_id=' . $event['id']), $enabled))
-        . ($viewOnlyReports ? '' : $actionButton('Report', 'fa-clipboard-list', site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/execute'), $enabled))
+        . (($viewOnlyReports || $isSuperAdmin) ? '' : $actionButton('Report', 'fa-clipboard-list', site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/execute'), $enabled))
         . $actionButton('File', 'fa-folder-open', site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/file'), $enabled)
         . $actionButton('Plan PDF', 'fa-file-pdf', $eventDocumentUrl($event, 'audit_plan'), $enabled, 'danger')
         . $actionButton('Report PDF', 'fa-file-pdf', $eventDocumentUrl($event, 'audit_report'), $enabled, 'danger')
         . $actionButton('NCR/CAPA PDF', 'fa-file-pdf', $eventDocumentUrl($event, 'ncr_capa'), $enabled, 'danger')
         . '</div>';
 };
-$renderExecutionTable = static function (array $executionEvents, string $emptyText) use ($client, $viewOnlyReports): void {
+$renderExecutionTable = static function (array $executionEvents, string $emptyText) use ($client, $viewOnlyReports, $isSuperAdmin): void {
     echo '<div class="table-responsive"><table class="table table-striped align-middle">'
         . '<thead><tr><th>Audit</th><th>Type</th><th>Planned dates</th><th>Status</th><th class="text-end">Action</th></tr></thead><tbody>';
 
@@ -203,7 +221,7 @@ $renderExecutionTable = static function (array $executionEvents, string $emptyTe
             . '<td>' . esc($auditEvent['status']) . '</td>'
             . '<td class="text-end">'
             . '<a class="btn btn-outline-secondary btn-sm" href="' . esc(site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $auditEvent['id'] . '/file'), 'attr') . '"><i class="fa-solid fa-folder-open me-1" aria-hidden="true"></i>File</a> '
-            . ($viewOnlyReports ? '' : '<a class="btn btn-outline-primary btn-sm" href="' . esc(site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $auditEvent['id'] . '/execute'), 'attr') . '"><i class="fa-solid fa-clipboard-list me-1" aria-hidden="true"></i>Execute</a> ')
+            . (($viewOnlyReports || $isSuperAdmin) ? '' : '<a class="btn btn-outline-primary btn-sm" href="' . esc(site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $auditEvent['id'] . '/execute'), 'attr') . '"><i class="fa-solid fa-clipboard-list me-1" aria-hidden="true"></i>Execute</a> ')
             . '<a class="btn btn-outline-danger btn-sm" href="' . esc(site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $auditEvent['id'] . '/documents/audit_plan'), 'attr') . '"><i class="fa-solid fa-file-pdf me-1" aria-hidden="true"></i>Plan PDF</a>'
             . ' <a class="btn btn-outline-danger btn-sm" href="' . esc(site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $auditEvent['id'] . '/documents/audit_report'), 'attr') . '"><i class="fa-solid fa-file-pdf me-1" aria-hidden="true"></i>Report PDF</a>'
             . '</td></tr>';

@@ -5,6 +5,7 @@ namespace App\Controllers\Masters;
 use App\Controllers\BaseController;
 use App\Models\ClauseLibraryModel;
 use App\Models\StandardModel;
+use App\Support\CertificationBaseline;
 use App\Services\AuditLogger;
 
 class ClauseLibraryController extends BaseController
@@ -58,11 +59,12 @@ class ClauseLibraryController extends BaseController
 
         $data = $this->payload();
         $data['tenant_id'] = (int) session()->get('tenant_id');
+        $data = $this->invalidateForControlledReview($data);
 
         $id = (int) $this->clauses->insert($data);
         $this->auditLogger->record('create', 'clause_library', 'clause_library', $id, null, $data);
 
-        return redirect()->to('/masters/clauses')->with('success', 'Clause created.');
+        return redirect()->to('/masters/clauses')->with('success', 'Clause saved as inactive pending controlled source validation.');
     }
 
     public function edit(int $id)
@@ -96,10 +98,11 @@ class ClauseLibraryController extends BaseController
         }
 
         $data = $this->payload();
+        $data = $this->invalidateForControlledReview($data);
         $this->clauses->update($id, $data);
         $this->auditLogger->record('update', 'clause_library', 'clause_library', $id, $clause, $data);
 
-        return redirect()->to('/masters/clauses')->with('success', 'Clause updated.');
+        return redirect()->to('/masters/clauses')->with('success', 'Clause updated and returned to inactive source-validation status.');
     }
 
     public function deactivate(int $id)
@@ -129,7 +132,7 @@ class ClauseLibraryController extends BaseController
 
     private function activeStandards(): array
     {
-        return $this->standards->where('active', 1)->orderBy('code', 'ASC')->findAll();
+        return $this->standards->where('active', 1)->whereIn('code', CertificationBaseline::CODES)->orderBy('code', 'ASC')->findAll();
     }
 
     private function rules(): array
@@ -180,5 +183,20 @@ class ClauseLibraryController extends BaseController
             'stage_applicability' => '',
             'active' => 1,
         ];
+    }
+
+    private function invalidateForControlledReview(array $data): array
+    {
+        if (! db_connect()->fieldExists('validation_status', 'clause_library')) {
+            return $data;
+        }
+
+        $data['active'] = 0;
+        $data['validation_status'] = 'unverified';
+        $data['source_reference'] = null;
+        $data['validated_by_user_id'] = null;
+        $data['validated_at'] = null;
+
+        return $data;
     }
 }

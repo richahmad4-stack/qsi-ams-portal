@@ -85,7 +85,7 @@ class SmartAuditContentEngineTest extends TestCase
         self::assertNotSame('', $package['verification']);
     }
 
-    public function testFoodNcrPackagesRotateThemesForGenericClauses(): void
+    public function testFoodNcrPackagesKeepGenericFindingsAlignedToTheirClauses(): void
     {
         $engine = new SmartAuditContentEngine($this->emptyPool());
         $client = [
@@ -105,12 +105,38 @@ class SmartAuditContentEngineTest extends TestCase
             $packages[] = $engine->ncrCapaPackage($client, $event, $clause, 'minor', $index + 1);
         }
 
-        self::assertCount(4, array_unique(array_column($packages, 'finding')));
-        self::assertCount(4, array_unique(array_column($packages, 'root_cause')));
-        self::assertStringContainsString('traceability', strtolower($packages[0]['finding']));
-        self::assertStringContainsString('prp', strtolower($packages[1]['finding']));
-        self::assertStringContainsString('ccp/oprp', strtolower($packages[2]['finding']));
-        self::assertStringContainsString('supplier', strtolower($packages[3]['finding']));
+        foreach ($packages as $index => $package) {
+            self::assertStringContainsString(strtolower($clauses[$index]['clause_title']), strtolower($package['finding']));
+            self::assertStringNotContainsString('traceability sample', strtolower($package['finding']));
+            self::assertStringNotContainsString('prp verification', strtolower($package['finding']));
+            self::assertStringNotContainsString('ccp/oprp', strtolower($package['finding']));
+            self::assertStringNotContainsString('supplier/material', strtolower($package['finding']));
+        }
+    }
+
+    public function testHaccpStandardNameDoesNotMisclassifyEveryClauseAsCcpMonitoring(): void
+    {
+        $engine = new SmartAuditContentEngine($this->emptyPool());
+        $client = ['company' => 'Demo Catering', 'scope' => 'Preparation and delivery of chilled and hot meals.'];
+        $event = ['event_type' => 'initial_stage2'];
+
+        $team = $engine->ncrCapaPackage($client, $event, [
+            'standard_code' => 'HACCP',
+            'clause_number' => 'HACCP Step 1',
+            'clause_title' => 'Assemble HACCP team and define scope',
+            'requirement' => 'A multidisciplinary team shall be appointed with suitable competence and authority.',
+        ], 'minor', 1);
+        $product = $engine->ncrCapaPackage($client, $event, [
+            'standard_code' => 'HACCP',
+            'clause_number' => 'HACCP Step 2',
+            'clause_title' => 'Describe product',
+            'requirement' => 'The HACCP study shall contain current product information.',
+        ], 'minor', 2);
+
+        self::assertStringContainsString('competence or authorization', strtolower($team['finding']));
+        self::assertStringContainsString('describe product', strtolower($product['finding']));
+        self::assertStringNotContainsString('ccp/oprp', strtolower($team['finding'] . ' ' . $product['finding']));
+        self::assertStringNotContainsString('prp verification', strtolower($product['finding']));
     }
 
     private function emptyPool(): ClauseContentPoolService

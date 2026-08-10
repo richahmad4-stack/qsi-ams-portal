@@ -35,7 +35,8 @@ class WorkflowRoleService
 
     public function denialReason(string $stage, ?int $eventId = null, ?int $selectedPersonnelId = null): ?string
     {
-        if ($this->isSuperUser()) {
+        $regulatedActorStages = ['audit_execute', 'technical_review', 'decision', 'gm_approval'];
+        if ($this->isSuperUser() && ! in_array($stage, $regulatedActorStages, true)) {
             return null;
         }
 

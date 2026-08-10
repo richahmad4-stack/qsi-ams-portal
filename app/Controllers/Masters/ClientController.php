@@ -13,6 +13,7 @@ use App\Models\IafCodeModel;
 use App\Models\MedicalDeviceCategoryModel;
 use App\Models\NaceCodeModel;
 use App\Models\StandardModel;
+use App\Support\CertificationBaseline;
 use App\Services\AuditLogger;
 
 class ClientController extends BaseController
@@ -139,7 +140,7 @@ class ClientController extends BaseController
             'sites' => $this->clientSites->where('client_id', $id)->orderBy('site_name', 'ASC')->findAll(),
             'processes' => $this->clientProcesses->where('client_id', $id)->orderBy('process_name', 'ASC')->findAll(),
             'attachments' => $this->clientAttachments->where('client_id', $id)->orderBy('created_at', 'DESC')->findAll(),
-            'standards' => (new StandardModel())->where('active', 1)->orderBy('code', 'ASC')->findAll(),
+            'standards' => (new StandardModel())->where('active', 1)->whereIn('code', CertificationBaseline::CODES)->orderBy('code', 'ASC')->findAll(),
             'iafCodes' => (new IafCodeModel())->where('active', 1)->orderBy('code', 'ASC')->findAll(),
             'naceCodes' => (new NaceCodeModel())->where('active', 1)->orderBy('code', 'ASC')->findAll(),
             'foodCategories' => (new FoodChainCategoryModel())->where('active', 1)->orderBy('code', 'ASC')->findAll(),
@@ -474,7 +475,7 @@ class ClientController extends BaseController
 
     private function activeStandards(): array
     {
-        return (new StandardModel())->where('active', 1)->orderBy('code', 'ASC')->findAll();
+        return (new StandardModel())->where('active', 1)->whereIn('code', CertificationBaseline::CODES)->orderBy('code', 'ASC')->findAll();
     }
 
     private function selectedStandardIds(int $clientId): array

@@ -41,11 +41,36 @@ class InitialAdminSeeder extends Seeder
             [(int) $tenant['id'], $email]
         )->getRowArray();
 
+        $this->db->transStart();
+
         if ($existing !== null) {
+            $userId = (int) $existing['id'];
+            $this->db->table('users')->where('id', $userId)->update([
+                'primary_role_id'      => (int) $role['id'],
+                'full_name'            => $fullName,
+                'password_hash'        => password_hash($password, PASSWORD_DEFAULT),
+                'status'               => 'active',
+                'must_change_password' => 0,
+                'updated_at'           => date('Y-m-d H:i:s'),
+            ]);
+
+            $assignment = $this->db->table('user_role_assignments')
+                ->where('user_id', $userId)
+                ->where('role_id', (int) $role['id'])
+                ->get()
+                ->getRowArray();
+            if ($assignment === null) {
+                $this->db->table('user_role_assignments')->insert([
+                    'user_id'    => $userId,
+                    'role_id'    => (int) $role['id'],
+                    'created_at' => date('Y-m-d H:i:s'),
+                ]);
+            }
+
+            $this->db->transComplete();
+
             return;
         }
-
-        $this->db->transStart();
 
         $this->db->table('users')->insert([
             'tenant_id'             => (int) $tenant['id'],

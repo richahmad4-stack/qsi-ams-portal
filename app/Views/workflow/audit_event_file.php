@@ -1,9 +1,37 @@
 <?= $this->extend('layouts/main') ?>
 
 <?php
-$eventLabel = ucwords(str_replace('_', ' ', (string) $event['event_type']));
+$eventLabel = preg_replace('/\bStage\s*(\d)\b/i', 'Stage $1', ucwords(str_replace('_', ' ', (string) $event['event_type'])));
 $pdfBase = 'workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/documents/';
 $tabId = static fn (string $key): string => 'tab-' . preg_replace('/[^a-z0-9]+/', '-', strtolower($key));
+$currentRoles = (array) session()->get('role_codes');
+$regulatedReadOnly = in_array('compliance_auditor', $currentRoles, true)
+    && ! in_array('super_admin', $currentRoles, true);
+$decodeJson = static fn (?string $json): array => $json !== null && trim($json) !== ''
+    ? (json_decode($json, true) ?: [])
+    : [];
+$jsonRows = static function (array $payload): array {
+    $rows = [];
+    foreach ($payload as $key => $value) {
+        if (in_array($key, ['checklist_rows', 'system_prepared', 'automation_mode', 'created_from', 'event_type', 'decision_basis'], true)) {
+            continue;
+        }
+
+        $label = $key === 'application_id' ? 'Application reference' : ucwords(str_replace('_', ' ', (string) $key));
+        if (is_bool($value) || str_ends_with((string) $key, '_confirmed')) {
+            $rows[$label] = (bool) $value ? 'Yes' : 'No';
+            continue;
+        }
+
+        $rows[$label] = is_array($value)
+            ? json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            : (string) $value;
+    }
+
+    return $rows;
+};
+$technicalPayload = $decodeJson($technicalReview['checklist_payload'] ?? null);
+$decisionPayload = $decodeJson($decision['decision_payload'] ?? null);
 ?>
 
 <?= $this->section('content') ?>
@@ -126,7 +154,9 @@ $tabId = static fn (string $key): string => 'tab-' . preg_replace('/[^a-z0-9]+/'
 
         <div class="tab-pane fade" id="<?= esc($tabId('Audit Report')) ?>" role="tabpanel">
             <div class="d-flex justify-content-end gap-2 mb-2">
-                <a class="btn btn-outline-primary btn-sm" href="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/execute') ?>">Edit report</a>
+                <?php if (! $regulatedReadOnly): ?>
+                    <a class="btn btn-outline-primary btn-sm" href="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/execute') ?>">Edit report</a>
+                <?php endif; ?>
                 <a class="btn btn-outline-danger btn-sm" href="<?= site_url($pdfBase . 'audit_report') ?>">Generate PDF</a>
             </div>
             <div class="row g-2 mb-3">
@@ -143,24 +173,81 @@ $tabId = static fn (string $key): string => 'tab-' . preg_replace('/[^a-z0-9]+/'
                     </div>
                 </div>
             </div>
-            <table class="table table-sm">
-                <thead><tr><th>Type</th><th>Clause</th><th>Content</th></tr></thead>
-                <tbody>
-                <?php foreach ($sections as $section): ?>
-                    <tr>
-                        <td><?= esc(str_replace('_', ' ', $section['section_key'])) ?></td>
-                        <td><?= esc(trim(($section['clause_number'] ?? '') . ' ' . ($section['clause_title'] ?? ''))) ?></td>
-                        <td><?= esc(mb_strimwidth($section['section_content'], 0, 180, '...')) ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                <?php if ($sections === []): ?><tr><td colspan="3" class="text-secondary">No checklist/report entries saved for this stage.</td></tr><?php endif; ?>
-                </tbody>
-            </table>
+            <?php foreach ($sections as $index => $section): ?>
+                <article class="border rounded mb-3 overflow-hidden">
+                    <div class="bg-light border-bottom p-3 d-flex flex-wrap justify-content-between gap-2">
+                        <div>
+                            <div class="fw-semibold"><?= esc($section['section_title'] ?? ('Checklist item ' . ($index + 1))) ?></div>
+                            <div class="text-secondary small"><?= esc($section['requirement_family'] ?? 'Audit requirement') ?></div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-1 align-items-start">
+                            <span class="badge text-bg-<?= (int) ($section['auditor_confirmed'] ?? 0) === 1 ? 'success' : 'warning' ?>">
+                                <?= (int) ($section['auditor_confirmed'] ?? 0) === 1 ? 'Auditor confirmed' : 'Confirmation pending' ?>
+                            </span>
+                            <span class="badge text-bg-light border"><?= esc(ucwords(str_replace('_', ' ', (string) ($section['finding_type'] ?? $section['section_key'] ?? 'note')))) ?></span>
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <?php if (! empty($section['mappings'])): ?>
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm mb-0">
+                                    <thead><tr><th>Standard</th><th>Clause</th><th>Clause title</th></tr></thead>
+                                    <tbody>
+                                    <?php foreach ($section['mappings'] as $mapping): ?>
+                                        <tr>
+                                            <td><?= esc($mapping['standard_code']) ?></td>
+                                            <td><?= esc($mapping['clause_reference']) ?></td>
+                                            <td><?= esc($mapping['clause_title']) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (! empty($section['audit_question'])): ?>
+                            <div class="small text-secondary mb-1">Audit requirement / question</div>
+                            <div class="mb-3"><?= nl2br(esc($section['audit_question'])) ?></div>
+                        <?php endif; ?>
+                        <div class="small text-secondary mb-1">Audit response / conformity statement</div>
+                        <div class="mb-3"><?= nl2br(esc($section['response_text'] ?? $section['section_content'] ?? '')) ?></div>
+                        <?php if (! empty($section['objective_evidence'])): ?>
+                            <div class="small text-secondary mb-1">Objective evidence</div>
+                            <div class="mb-3"><?= nl2br(esc($section['objective_evidence'])) ?></div>
+                        <?php endif; ?>
+                        <?php if (! empty($section['confirmed_by_name']) || ! empty($section['confirmed_at'])): ?>
+                            <div class="small text-secondary">Confirmed by <?= esc($section['confirmed_by_name'] ?? 'auditor') ?><?= ! empty($section['confirmed_at']) ? ' on ' . esc($section['confirmed_at']) : '' ?></div>
+                        <?php endif; ?>
+                        <?php if (! empty($section['ncrs'])): ?>
+                            <div class="mt-3 border-start border-danger ps-3">
+                                <div class="fw-semibold mb-1">Linked NCR</div>
+                                <?php foreach ($section['ncrs'] as $ncr): ?>
+                                    <div><?= esc(($ncr['ncr_number'] ?? '') . ' - ' . strtoupper((string) ($ncr['classification'] ?? '')) . ' - ' . ($ncr['status'] ?? '')) ?></div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+            <?php if ($sections === []): ?><div class="text-secondary">No checklist/report entries saved for this stage.</div><?php endif; ?>
+
+            <?php if (($supplementaryNotes ?? []) !== []): ?>
+                <h3 class="h6 mt-4">Supplementary notes</h3>
+                <table class="table table-sm">
+                    <thead><tr><th>Type</th><th>Title</th><th>Content</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($supplementaryNotes as $note): ?>
+                        <tr><td><?= esc(str_replace('_', ' ', $note['section_key'])) ?></td><td><?= esc($note['section_title']) ?></td><td><?= nl2br(esc($note['section_content'])) ?></td></tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
         </div>
 
         <div class="tab-pane fade" id="<?= esc($tabId('NCR / CAPA')) ?>" role="tabpanel">
             <div class="d-flex justify-content-end gap-2 mb-2">
-                <a class="btn btn-outline-primary btn-sm" href="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/execute') ?>">Manage NCRs</a>
+                <?php if (! $regulatedReadOnly): ?>
+                    <a class="btn btn-outline-primary btn-sm" href="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/execute') ?>">Manage NCRs</a>
+                <?php endif; ?>
                 <a class="btn btn-outline-danger btn-sm" href="<?= site_url($pdfBase . 'ncr_capa') ?>">Generate PDF</a>
             </div>
             <h3 class="h6">NCRs</h3>
@@ -174,11 +261,14 @@ $tabId = static fn (string $key): string => 'tab-' . preg_replace('/[^a-z0-9]+/'
                         <td><?= esc($ncr['status']) ?></td>
                         <td><?= esc(mb_strimwidth($ncr['finding'], 0, 160, '...')) ?></td>
                         <td class="text-end">
-                            <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#capaForm<?= esc($ncr['id']) ?>">
-                                Create CAPA
-                            </button>
+                            <?php if (! $regulatedReadOnly): ?>
+                                <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#capaForm<?= esc($ncr['id']) ?>">
+                                    Create CAPA
+                                </button>
+                            <?php endif; ?>
                         </td>
                     </tr>
+                    <?php if (! $regulatedReadOnly): ?>
                     <tr class="collapse" id="capaForm<?= esc($ncr['id']) ?>">
                         <td colspan="5">
                             <form method="post" action="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/capas') ?>" class="border rounded p-3">
@@ -224,6 +314,7 @@ $tabId = static fn (string $key): string => 'tab-' . preg_replace('/[^a-z0-9]+/'
                             </form>
                         </td>
                     </tr>
+                    <?php endif; ?>
                 <?php endforeach; ?>
                 <?php if ($ncrs === []): ?><tr><td colspan="5" class="text-secondary">No NCRs recorded.</td></tr><?php endif; ?>
                 </tbody>
@@ -262,7 +353,7 @@ $tabId = static fn (string $key): string => 'tab-' . preg_replace('/[^a-z0-9]+/'
                                     <div class="col-md-3"><strong>Responsible:</strong><br><?= esc($capa['responsible_person'] ?? '') ?></div>
                                     <div class="col-md-3"><strong>Closed:</strong><br><?= esc($capa['closed_at'] ?? '') ?></div>
                                 </div>
-                                <?php if (! in_array($capa['status'], ['closed', 'verified_closed'], true)): ?>
+                                <?php if (! $regulatedReadOnly && ! in_array($capa['status'], ['closed', 'verified_closed'], true)): ?>
                                     <form method="post" action="<?= site_url('workflow/certification/' . $client['id'] . '/audit-events/' . $event['id'] . '/capas/' . $capa['id'] . '/close') ?>" class="row g-3">
                                         <?= csrf_field() ?>
                                         <div class="col-md-6">
@@ -304,7 +395,9 @@ $tabId = static fn (string $key): string => 'tab-' . preg_replace('/[^a-z0-9]+/'
 
         <div class="tab-pane fade" id="<?= esc($tabId('Technical Review')) ?>" role="tabpanel">
             <div class="d-flex justify-content-end gap-2 mb-2">
-                <a class="btn btn-outline-primary btn-sm" href="<?= site_url('workflow/certification/' . $client['id'] . '/technical-review?event_id=' . $event['id']) ?>">Edit review</a>
+                <?php if (! $regulatedReadOnly): ?>
+                    <a class="btn btn-outline-primary btn-sm" href="<?= site_url('workflow/certification/' . $client['id'] . '/technical-review?event_id=' . $event['id']) ?>">Edit review</a>
+                <?php endif; ?>
                 <a class="btn btn-outline-danger btn-sm" href="<?= site_url($pdfBase . 'technical_review') ?>">Generate PDF</a>
             </div>
             <?php if ($technicalReview === null): ?>
@@ -315,14 +408,38 @@ $tabId = static fn (string $key): string => 'tab-' . preg_replace('/[^a-z0-9]+/'
                     <tr><th>Status</th><td><?= esc($technicalReview['status']) ?></td></tr>
                     <tr><th>Recommendation</th><td><?= esc(str_replace('_', ' ', (string) $technicalReview['recommendation'])) ?></td></tr>
                     <tr><th>Reviewed at</th><td><?= esc($technicalReview['reviewed_at']) ?></td></tr>
+                    <?php foreach ($jsonRows($technicalPayload) as $label => $value): ?>
+                        <tr><th><?= esc($label) ?></th><td><?= nl2br(esc($value)) ?></td></tr>
+                    <?php endforeach; ?>
                     </tbody>
                 </table>
+                <?php if (($technicalPayload['checklist_rows'] ?? []) !== []): ?>
+                    <h3 class="h6 mt-4">Technical Review checklist</h3>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle">
+                            <thead><tr><th>Reference</th><th>Review area</th><th>Requirement</th><th>Result</th><th>Evidence reviewed</th></tr></thead>
+                            <tbody>
+                            <?php foreach ($technicalPayload['checklist_rows'] as $row): ?>
+                                <tr>
+                                    <td><?= esc($row['ref'] ?? '') ?></td>
+                                    <td><?= esc($row['group'] ?? '') ?></td>
+                                    <td><?= esc($row['requirement'] ?? '') ?></td>
+                                    <td><?= esc($row['result'] ?? '') ?></td>
+                                    <td><?= esc($row['evidence'] ?? '') ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
 
         <div class="tab-pane fade" id="<?= esc($tabId('Decision')) ?>" role="tabpanel">
             <div class="d-flex justify-content-end gap-2 mb-2">
-                <a class="btn btn-outline-primary btn-sm" href="<?= site_url('workflow/certification/' . $client['id'] . '/decision?event_id=' . $event['id']) ?>">Edit decision</a>
+                <?php if (! $regulatedReadOnly): ?>
+                    <a class="btn btn-outline-primary btn-sm" href="<?= site_url('workflow/certification/' . $client['id'] . '/decision?event_id=' . $event['id']) ?>">Edit decision</a>
+                <?php endif; ?>
                 <a class="btn btn-outline-danger btn-sm" href="<?= site_url($pdfBase . 'decision_report') ?>">Generate PDF</a>
             </div>
             <?php if ($decision === null): ?>
@@ -333,8 +450,33 @@ $tabId = static fn (string $key): string => 'tab-' . preg_replace('/[^a-z0-9]+/'
                     <tr><th>Decision</th><td><?= esc(str_replace('_', ' ', $decision['decision'])) ?></td></tr>
                     <tr><th>Status</th><td><?= esc($decision['status']) ?></td></tr>
                     <tr><th>Reason</th><td><?= esc($decision['reason']) ?></td></tr>
+                    <tr><th>Decision maker</th><td><?= esc($decision['decision_maker_name'] ?? '') ?></td></tr>
+                    <tr><th>Decided at</th><td><?= esc($decision['decided_at'] ?? '') ?></td></tr>
+                    <tr><th>GM approval</th><td><?= esc($decision['gm_approved_at'] ?? 'Not recorded') ?></td></tr>
+                    <?php foreach ($jsonRows($decisionPayload) as $label => $value): ?>
+                        <tr><th><?= esc($label) ?></th><td><?= nl2br(esc($value)) ?></td></tr>
+                    <?php endforeach; ?>
                     </tbody>
                 </table>
+                <?php if (($decisionPayload['checklist_rows'] ?? []) !== []): ?>
+                    <h3 class="h6 mt-4">Decision Making checklist</h3>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle">
+                            <thead><tr><th>Reference</th><th>Decision area</th><th>Requirement</th><th>Result</th><th>Evidence reviewed</th></tr></thead>
+                            <tbody>
+                            <?php foreach ($decisionPayload['checklist_rows'] as $row): ?>
+                                <tr>
+                                    <td><?= esc($row['ref'] ?? '') ?></td>
+                                    <td><?= esc($row['group'] ?? '') ?></td>
+                                    <td><?= esc($row['requirement'] ?? '') ?></td>
+                                    <td><?= esc($row['result'] ?? '') ?></td>
+                                    <td><?= esc($row['evidence'] ?? '') ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
 

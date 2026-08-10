@@ -20,6 +20,7 @@ class DocumentGeneratorService
     private BaseConnection $db;
     private GeneratedDocumentModel $documents;
     private AuditReportNarrativeService $narratives;
+    private AuditReportProjectionService $reportProjection;
     private CertificationApplicationDefaults $applicationDefaults;
     private CommercialTermsService $commercialTerms;
 
@@ -28,6 +29,7 @@ class DocumentGeneratorService
         $this->db = Database::connect();
         $this->documents = new GeneratedDocumentModel();
         $this->narratives = new AuditReportNarrativeService();
+        $this->reportProjection = new AuditReportProjectionService($this->db);
         $this->applicationDefaults = new CertificationApplicationDefaults();
         $this->commercialTerms = new CommercialTermsService();
     }
@@ -45,9 +47,6 @@ class DocumentGeneratorService
     public function generateEventDocument(int $tenantId, int $clientId, int $eventId, string $documentKey, int $userId): array
     {
         $client = $this->client($tenantId, $clientId);
-        if ($documentKey === 'audit_report') {
-            $this->ensureEventChecklist($tenantId, $clientId, $eventId, $userId);
-        }
         $data = $this->dataForEventDocument($tenantId, $clientId, $eventId);
         $eventLabel = ucwords(str_replace('_', ' ', (string) ($data['event']['event_type'] ?? 'Audit')));
         $title = $eventLabel . ' ' . ucwords(str_replace('_', ' ', $documentKey)) . ' - ' . $client['company'];
@@ -94,7 +93,17 @@ class DocumentGeneratorService
 
     public function generateCertificateWord(int $tenantId, int $certificateId, int $userId): array
     {
-        return $this->generateCertificatePrintable($tenantId, $certificateId, $userId);
+        $certificate = $this->certificateRecord($tenantId, $certificateId);
+        $title = 'Certificate - ' . $certificate['certificate_number'];
+
+        return $this->writeCertificateDocx(
+            $tenantId,
+            (int) $certificate['client_id'],
+            $title,
+            $certificateId,
+            $certificate,
+            $userId
+        );
     }
 
     private function certificateRecord(int $tenantId, int $certificateId): array
@@ -194,89 +203,6 @@ class DocumentGeneratorService
             'certificates' => $this->certificateRows($tenantId, $clientId),
             'feedback' => $this->latestFeedback($tenantId, $clientId),
         ];
-    }
-
-    private function ensureEventChecklist(int $tenantId, int $clientId, int $eventId, int $userId): void
-    {
-        $report = $this->latest('report_drafts', [
-            'tenant_id' => $tenantId,
-            'audit_event_id' => $eventId,
-            'report_type' => 'audit_execution',
-        ]);
-
-        if ($report === null) {
-            $this->db->table('report_drafts')->insert([
-                'tenant_id' => $tenantId,
-                'audit_event_id' => $eventId,
-                'report_type' => 'audit_execution',
-                'version_number' => 1,
-                'status' => 'draft',
-                'generated_payload' => json_encode(['source' => 'event_pdf_generation'], JSON_THROW_ON_ERROR),
-                'editable_payload' => json_encode([], JSON_THROW_ON_ERROR),
-                'prepared_by' => $userId,
-                'created_at' => date('Y-m-d H:i:s'),
-            ]);
-            $report = ['id' => $this->db->insertID()];
-        }
-
-        $client = $this->client($tenantId, $clientId);
-        $event = $this->db->table('audit_events')->where('id', $eventId)->get(1)->getRowArray();
-        $planItems = $this->auditPlanItemsForEvent($eventId);
-        $auditTeam = $this->appointmentsForEvent($eventId);
-        $clauses = $this->db->table('clause_library')
-            ->select('clause_library.*, standards.code AS standard_code')
-            ->join('standards', 'standards.id = clause_library.standard_id')
-            ->join('client_standards', 'client_standards.standard_id = clause_library.standard_id')
-            ->where('clause_library.tenant_id', $tenantId)
-            ->where('client_standards.client_id', $clientId)
-            ->where('clause_library.active', 1)
-            ->orderBy('standards.code', 'ASC')
-            ->orderBy('clause_library.clause_number', 'ASC')
-            ->get()
-            ->getResultArray();
-
-        foreach ($clauses as $index => $clause) {
-            $exists = $this->db->table('report_sections')
-                ->where('report_draft_id', (int) $report['id'])
-                ->where('clause_library_id', (int) $clause['id'])
-                ->where('section_key', 'conformity')
-                ->countAllResults();
-
-            if ($exists > 0) {
-                continue;
-            }
-
-            $this->db->table('report_sections')->insert([
-                'report_draft_id' => (int) $report['id'],
-                'clause_library_id' => (int) $clause['id'],
-                'section_key' => 'conformity',
-                'section_title' => trim((string) $clause['standard_code'] . ' ' . (string) $clause['clause_number'] . ' - ' . (string) $clause['clause_title']),
-                'section_content' => $this->narratives->conformityNote($client, $event, $clause, $planItems, $auditTeam),
-                'source_type' => 'clause_pool',
-                'auditor_confirmed' => 1,
-                'confirmed_by_user_id' => $this->leadAuditorUserId($auditTeam),
-                'confirmed_at' => date('Y-m-d H:i:s'),
-                'confirmation_note' => 'Auto-confirmed on behalf of the assigned auditor from approved Clause Pool / system content.',
-                'sort_order' => $index + 1,
-            ]);
-        }
-    }
-
-    private function leadAuditorUserId(array $auditTeam): ?int
-    {
-        foreach ($auditTeam as $member) {
-            if (($member['appointment_role'] ?? '') === 'lead_auditor' && ! empty($member['user_id'])) {
-                return (int) $member['user_id'];
-            }
-        }
-
-        foreach ($auditTeam as $member) {
-            if (! empty($member['user_id'])) {
-                return (int) $member['user_id'];
-            }
-        }
-
-        return null;
     }
 
     private function renderHtml(string $documentKey, string $title, array $client, array $data): string
@@ -3164,9 +3090,19 @@ class DocumentGeneratorService
 
     private function auditReportIdentification(array $data): string
     {
+        $report = $data['reports'][0] ?? [];
+        $generated = ! empty($report['generated_payload'])
+            ? (json_decode((string) $report['generated_payload'], true) ?: [])
+            : [];
+
         return $this->keyValueTable([
             'Audited by' => $this->auditTeamDisplay($data['appointments'] ?? []),
             'Report submitted to client representative' => $this->clientRepresentativeDisplay($data),
+            'Audit objectives' => $generated['audit_objectives'] ?? '',
+            'Audit criteria' => $generated['audit_criteria'] ?? '',
+            'Audit scope' => $generated['audit_scope'] ?? ($data['client']['scope'] ?? ''),
+            'Audit recommendation' => $generated['recommendation'] ?? '',
+            'Evidence summary' => $generated['audit_evidence_summary'] ?? '',
         ]);
     }
 
@@ -3254,31 +3190,60 @@ class DocumentGeneratorService
             return '<p class="muted">No checklist notes available.</p>';
         }
 
-        $scope = trim((string) ($client['scope'] ?? $client['business_activity'] ?? ''));
         $html = '';
         foreach ($sections as $index => $section) {
             $standard = trim((string) ($section['standard_code'] ?? ''));
             $clauseNumber = trim((string) ($section['clause_number'] ?? ''));
             $clauseTitle = trim((string) ($section['clause_title'] ?? ''));
-            $sectionKey = trim((string) ($section['section_key'] ?? 'Audit note'));
-            $content = trim((string) ($section['section_content'] ?? ''));
+            $sectionKey = trim((string) ($section['finding_type'] ?? $section['section_key'] ?? 'Audit note'));
+            $content = trim((string) ($section['response_text'] ?? $section['section_content'] ?? ''));
+            $question = trim((string) ($section['audit_question'] ?? ''));
+            $objectiveEvidence = trim((string) ($section['objective_evidence'] ?? ''));
             $headingParts = array_filter([$standard, $clauseNumber, $clauseTitle], static fn (string $value): bool => $value !== '');
             $heading = $headingParts !== [] ? implode(' - ', $headingParts) : 'Checklist item ' . ($index + 1);
 
             $html .= '<div class="report-note">';
             $html .= '<div class="report-note-heading">' . esc($heading) . '</div>';
-            $html .= '<table class="report-note-meta"><tbody><tr>';
-            $html .= '<th>Standard</th><td>' . esc($standard !== '' ? $standard : 'N/A') . '</td>';
-            $html .= '<th>Clause</th><td>' . esc($clauseNumber !== '' ? $clauseNumber : 'N/A') . '</td>';
-            $html .= '<th>Record Type</th><td>' . esc(ucwords(str_replace('_', ' ', $sectionKey))) . '</td>';
-            $html .= '</tr></tbody></table>';
-            if ($scope !== '') {
-                $html .= '<table class="report-note-meta"><tbody><tr><th>Scope</th><td>' . esc($scope) . '</td></tr></tbody></table>';
+            if (! empty($section['mappings']) && is_array($section['mappings'])) {
+                $html .= '<table class="report-note-meta"><thead><tr><th>Standard</th><th>Clause</th><th>Clause title</th><th>Record type</th></tr></thead><tbody>';
+                foreach ($section['mappings'] as $mapping) {
+                    $html .= '<tr><td>' . esc((string) ($mapping['standard_code'] ?? '')) . '</td><td>' . esc((string) ($mapping['clause_reference'] ?? '')) . '</td><td>' . esc((string) ($mapping['clause_title'] ?? '')) . '</td><td>' . esc(ucwords(str_replace('_', ' ', $sectionKey))) . '</td></tr>';
+                }
+                $html .= '</tbody></table>';
+            } else {
+                $html .= '<table class="report-note-meta"><tbody><tr>';
+                $html .= '<th>Standard</th><td>' . esc($standard !== '' ? $standard : 'N/A') . '</td>';
+                $html .= '<th>Clause</th><td>' . esc($clauseNumber !== '' ? $clauseNumber : 'N/A') . '</td>';
+                $html .= '<th>Record Type</th><td>' . esc(ucwords(str_replace('_', ' ', $sectionKey))) . '</td>';
+                $html .= '</tr></tbody></table>';
             }
             $html .= '<div class="report-note-body">';
-            $html .= '<div class="report-note-label">Conformity statement and objective evidence</div>';
+            if ($question !== '') {
+                $html .= '<div class="report-note-label">Audit requirement / question</div>';
+                $html .= '<div class="mb-2">' . nl2br(esc($question)) . '</div>';
+            }
+            $responseLabel = in_array(strtolower($sectionKey), ['minor', 'major', 'nonconformity', 'nc'], true)
+                ? 'Audit finding / nonconformity statement'
+                : 'Audit response / conformity statement';
+            $html .= '<div class="report-note-label">' . esc($responseLabel) . '</div>';
             $content = $this->cleanReportNoteContent($content);
             $html .= $content !== '' ? nl2br(esc($content)) : '<span class="muted">No note recorded.</span>';
+            if ($objectiveEvidence !== '') {
+                $html .= '<div class="report-note-label mt-2">Objective evidence</div>';
+                $html .= nl2br(esc($objectiveEvidence));
+            }
+            if (array_key_exists('auditor_confirmed', $section)) {
+                $confirmation = (int) $section['auditor_confirmed'] === 1
+                    ? 'Confirmed' . (! empty($section['confirmed_by_name']) ? ' by ' . $section['confirmed_by_name'] : '') . (! empty($section['confirmed_at']) ? ' on ' . $section['confirmed_at'] : '')
+                    : 'Pending auditor confirmation';
+                $html .= '<div class="report-note-label mt-2">Confirmation</div>' . esc($confirmation);
+            }
+            if (! empty($section['ncrs']) && is_array($section['ncrs'])) {
+                $html .= '<div class="report-note-label mt-2">Linked NCR</div>';
+                foreach ($section['ncrs'] as $ncr) {
+                    $html .= '<div>' . esc((string) ($ncr['ncr_number'] ?? '')) . ' - ' . esc(strtoupper((string) ($ncr['classification'] ?? ''))) . ' - ' . esc((string) ($ncr['status'] ?? '')) . '</div>';
+                }
+            }
             $html .= '</div></div>';
         }
 
@@ -3677,13 +3642,18 @@ class DocumentGeneratorService
 
     private function clientClauses(int $tenantId, int $clientId): array
     {
-        return $this->db->table('clause_library')
+        $builder = $this->db->table('clause_library')
             ->select('clause_library.*, standards.code AS standard_code')
             ->join('standards', 'standards.id = clause_library.standard_id')
             ->join('client_standards', 'client_standards.standard_id = clause_library.standard_id')
             ->where('clause_library.tenant_id', $tenantId)
             ->where('client_standards.client_id', $clientId)
-            ->where('clause_library.active', 1)
+            ->where('clause_library.active', 1);
+        if ($this->db->fieldExists('validation_status', 'clause_library')) {
+            $builder->where('clause_library.validation_status', 'approved');
+        }
+
+        return $builder
             ->orderBy('standards.code', 'ASC')
             ->orderBy('clause_library.clause_number', 'ASC')
             ->get()
@@ -3846,17 +3816,7 @@ class DocumentGeneratorService
 
     private function reportSectionsForEvent(int $tenantId, int $eventId): array
     {
-        return $this->db->table('report_sections')
-            ->select('report_sections.*, clause_library.clause_number, clause_library.clause_title, standards.code AS standard_code')
-            ->join('report_drafts', 'report_drafts.id = report_sections.report_draft_id')
-            ->join('clause_library', 'clause_library.id = report_sections.clause_library_id', 'left')
-            ->join('standards', 'standards.id = clause_library.standard_id', 'left')
-            ->where('report_drafts.tenant_id', $tenantId)
-            ->where('report_drafts.audit_event_id', $eventId)
-            ->orderBy('report_sections.sort_order', 'ASC')
-            ->orderBy('report_sections.id', 'ASC')
-            ->get()
-            ->getResultArray();
+        return $this->reportProjection->responsesForEvent($tenantId, $eventId);
     }
 
     private function capasForEvent(int $tenantId, int $eventId): array

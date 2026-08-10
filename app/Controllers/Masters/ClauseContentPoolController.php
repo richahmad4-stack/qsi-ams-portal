@@ -6,6 +6,7 @@ use App\Controllers\BaseController;
 use App\Models\ClauseContentPoolModel;
 use App\Models\ClauseLibraryModel;
 use App\Models\StandardModel;
+use App\Support\CertificationBaseline;
 use App\Services\AuditLogger;
 
 class ClauseContentPoolController extends BaseController
@@ -228,7 +229,7 @@ class ClauseContentPoolController extends BaseController
 
     private function activeStandards(): array
     {
-        return $this->standards->where('active', 1)->orderBy('code', 'ASC')->findAll();
+        return $this->standards->where('active', 1)->whereIn('code', CertificationBaseline::CODES)->orderBy('code', 'ASC')->findAll();
     }
 
     private function tenantClauses(): array

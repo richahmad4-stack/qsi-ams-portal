@@ -28,7 +28,7 @@ class SmartAuditContentEngine
         return [
             'content' => $content,
             'source_type' => $pool === null ? 'system_clause_engine' : 'clause_pool',
-            'confirmation_note' => 'Confirmed on behalf of the assigned auditor from approved Clause Pool and clause-aligned evidence references.',
+            'confirmation_note' => 'System-prepared clause draft. Confirmation by the appointed auditor is required.',
         ];
     }
 
@@ -61,8 +61,8 @@ class SmartAuditContentEngine
     private function themedNcrCapaPackage(array $client, ?array $event, array $clause, string $severity, int $sequence): array
     {
         $family = $this->issueFamily($client, $clause, $sequence);
-        $stage = str_replace('_', ' ', (string) ($event['event_type'] ?? 'audit'));
-        $scope = trim((string) ($client['scope'] ?? $client['business_activity'] ?? 'the audited scope'));
+        $stage = preg_replace('/\bstage\s*(\d)\b/i', 'stage $1', str_replace('_', ' ', (string) ($event['event_type'] ?? 'audit')));
+        $scope = rtrim(trim((string) ($client['scope'] ?? $client['business_activity'] ?? 'the audited scope')), ". \t\n\r\0\x0B");
         $title = (string) ($clause['clause_title'] ?? 'applicable requirement');
         $prefix = ucfirst($severity) . ' nonconformity raised during ' . $stage . ': ';
 
@@ -144,24 +144,33 @@ class SmartAuditContentEngine
 
     private function issueFamily(array $client, array $clause, int $sequence): string
     {
-        $clauseText = strtolower((string) ($clause['standard_code'] ?? '') . ' ' . (string) ($clause['clause_number'] ?? '') . ' ' . (string) ($clause['clause_title'] ?? '') . ' ' . (string) ($clause['requirement'] ?? ''));
-        $text = $clauseText . ' ' . strtolower((string) ($client['scope'] ?? ''));
+        $standardText = strtolower((string) ($clause['standard_code'] ?? ''));
+        $clauseText = strtolower((string) ($clause['clause_number'] ?? '') . ' ' . (string) ($clause['clause_title'] ?? '') . ' ' . (string) ($clause['requirement'] ?? ''));
+        $clauseMatchText = preg_replace('/\bhaccp\b/', '', $clauseText) ?? $clauseText;
+        $text = $standardText . ' ' . $clauseText . ' ' . strtolower((string) ($client['scope'] ?? ''));
         $isFood = str_contains($text, 'haccp') || str_contains($text, '22000') || str_contains($text, 'fssc') || str_contains($text, 'food') || str_contains($text, 'dairy') || str_contains($text, 'catering') || str_contains($text, 'kitchen');
 
         if ($isFood) {
-            if ($this->containsAny($clauseText, ['traceability', 'recall', 'withdrawal', 'dispatch'])) {
+            if ($this->containsAny($clauseMatchText, ['traceability', 'recall', 'withdrawal', 'dispatch'])) {
                 return 'food_traceability';
             }
-            if ($this->containsAny($clauseText, ['prp', 'clean', 'hygiene', 'pest', 'temperature', 'storage'])) {
+            if ($this->containsAny($clauseMatchText, ['prp', 'clean', 'hygiene', 'pest', 'temperature control'])) {
                 return 'food_prp';
             }
-            if ($this->containsAny($clauseText, ['hazard', 'ccp', 'oprp', 'monitoring'])) {
+            if ($this->containsAny($clauseMatchText, ['hazard', 'ccp', 'oprp', 'monitoring'])) {
                 return 'food_monitoring';
             }
+            if ($this->containsAny($clauseMatchText, ['supplier', 'purchas', 'external provider'])) {
+                return 'food_supplier';
+            }
+            if ($this->containsAny($clauseMatchText, ['allergen', 'label', 'release'])) {
+                return 'food_allergen_release';
+            }
+            if ($this->containsAny($clauseMatchText, ['competence', 'training', 'team', 'authorization'])) {
+                return 'competence';
+            }
 
-            $families = ['food_traceability', 'food_prp', 'food_monitoring', 'food_supplier', 'food_allergen_release', 'competence'];
-
-            return $families[($sequence - 1) % count($families)];
+            return 'system_control';
         }
 
         if ($this->containsAny($text, ['competence', 'training', 'awareness'])) {
@@ -176,7 +185,7 @@ class SmartAuditContentEngine
         $pool = $this->poolText($client, $event, $clause, 'objective_evidence', $severity);
         $references = $this->sampleReferences($client, $clause, $sequence);
         $trail = $this->clauseEvidenceTrail($client, $clause);
-        $stage = ucwords(str_replace('_', ' ', (string) ($event['event_type'] ?? 'audit')));
+        $stage = preg_replace('/\bStage\s*(\d)\b/i', 'Stage $1', ucwords(str_replace('_', ' ', (string) ($event['event_type'] ?? 'audit'))));
 
         $text = "Objective evidence sampled during {$stage}:\n";
         foreach ($trail as $index => $item) {
@@ -274,10 +283,12 @@ class SmartAuditContentEngine
 
     private function clauseEvidenceTrail(array $client, array $clause): array
     {
-        $text = strtolower((string) ($clause['standard_code'] ?? '') . ' ' . (string) ($clause['clause_number'] ?? '') . ' ' . (string) ($clause['clause_title'] ?? '') . ' ' . (string) ($clause['requirement'] ?? '') . ' ' . (string) ($client['scope'] ?? ''));
-        $isFood = str_contains($text, 'haccp') || str_contains($text, '22000') || str_contains($text, 'food') || str_contains($text, 'meal') || str_contains($text, 'catering') || str_contains($text, 'kitchen');
+        $standardText = strtolower((string) ($clause['standard_code'] ?? ''));
+        $text = strtolower((string) ($clause['clause_number'] ?? '') . ' ' . (string) ($clause['clause_title'] ?? '') . ' ' . (string) ($clause['requirement'] ?? '') . ' ' . (string) ($client['scope'] ?? ''));
+        $matchText = preg_replace('/\bhaccp\b/', '', $text) ?? $text;
+        $isFood = str_contains($standardText, 'haccp') || str_contains($standardText, '22000') || str_contains($text, 'food') || str_contains($text, 'meal') || str_contains($text, 'catering') || str_contains($text, 'kitchen');
 
-        if ($isFood && $this->containsAny($text, ['hazard', 'haccp', 'ccp', 'oprp'])) {
+        if ($isFood && $this->containsAny($matchText, ['hazard', 'ccp', 'oprp'])) {
             return [
                 'hazard analysis or HACCP plan sample checked for control measure selection and validation/verification basis',
                 'CCP/OPRP monitoring record sampled against defined limit or action criteria',
@@ -285,7 +296,7 @@ class SmartAuditContentEngine
             ];
         }
 
-        if ($isFood && $this->containsAny($text, ['traceability', 'recall', 'withdrawal', 'dispatch'])) {
+        if ($isFood && $this->containsAny($matchText, ['traceability', 'recall', 'withdrawal', 'dispatch'])) {
             return [
                 'traceability sample followed from receiving through preparation or processing to dispatch',
                 'withdrawal or recall test record checked for response time, linkage and follow-up action',
@@ -293,7 +304,7 @@ class SmartAuditContentEngine
             ];
         }
 
-        if ($isFood && $this->containsAny($text, ['prp', 'clean', 'hygiene', 'pest', 'temperature', 'storage'])) {
+        if ($isFood && $this->containsAny($matchText, ['prp', 'clean', 'hygiene', 'pest', 'temperature control'])) {
             return [
                 'PRP record sampled for cleaning, pest control, personal hygiene, maintenance or temperature control',
                 'area observation checked for hygiene, segregation, storage condition and housekeeping controls',
@@ -301,7 +312,7 @@ class SmartAuditContentEngine
             ];
         }
 
-        if ($this->containsAny($text, ['competence', 'training', 'awareness'])) {
+        if ($this->containsAny($matchText, ['competence', 'training', 'awareness', 'team'])) {
             return [
                 'competence matrix sampled against assigned responsibility and audited activity',
                 'training or evaluation record checked for completion and effectiveness review',

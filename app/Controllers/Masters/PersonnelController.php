@@ -10,6 +10,7 @@ use App\Models\MedicalDeviceCategoryModel;
 use App\Models\PersonnelCompetencyModel;
 use App\Models\PersonnelModel;
 use App\Models\StandardModel;
+use App\Support\CertificationBaseline;
 use App\Models\UserModel;
 use App\Services\AuditLogger;
 use App\Services\PasswordPolicy;
@@ -122,7 +123,7 @@ class PersonnelController extends BaseController
                 ->where('personnel_competencies.personnel_id', $id)
                 ->orderBy('standards.code', 'ASC')
                 ->findAll(),
-            'standards' => (new StandardModel())->where('active', 1)->orderBy('code', 'ASC')->findAll(),
+            'standards' => (new StandardModel())->where('active', 1)->whereIn('code', CertificationBaseline::CODES)->orderBy('code', 'ASC')->findAll(),
             'iafCodes' => (new IafCodeModel())->where('active', 1)->orderBy('code', 'ASC')->findAll(),
             'foodCategories' => (new FoodChainCategoryModel())->where('active', 1)->orderBy('code', 'ASC')->findAll(),
             'medicalCategories' => (new MedicalDeviceCategoryModel())->where('active', 1)->orderBy('code', 'ASC')->findAll(),
