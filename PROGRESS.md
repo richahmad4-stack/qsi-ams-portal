@@ -18,11 +18,12 @@ QSI AMS is a CodeIgniter 4 / PHP / MariaDB Certification Body Audit Management S
 - HACCP catering application verified with correct scope-specific content, 2 HACCP plans in Application and Review, Saudi Arabia/Riyadh identity fields, and no bakery or unselected-standard contamination.
 - Professional QSI PDF headers/layouts and certificate PDF/DOCX outputs retained. Latest Application, Application Review, and Stage 2 Audit Report were rendered and visually inspected.
 - Deployment baseline includes PHP 8.3/Apache, MariaDB, Caddy, persistent storage, health checks, and deployment documentation.
+- Local Windows startup is repaired and verified: the launcher resolves the current repository, starts the preserved `.mysql-data` MariaDB instance on port 3307, and serves the real CodeIgniter AMS on port 8080. The Super Admin seeder and browser login were verified end to end.
 - Automated suite: **45 tests / 340 assertions passing**.
 
 ## Current Focus
 
-The application-review-report connection and Super Admin full-file access repair are complete. Continue systematic workflow/PDF validation on the ISO 22000-only and combined food-safety demo cycles, then repeat the same E2E checks for surveillance and recertification stages.
+The canonical report connection, Super Admin full-file access, and local login/startup repair are complete. Continue systematic workflow/PDF validation on the ISO 22000-only and combined food-safety demo cycles, then repeat the same E2E checks for surveillance and recertification stages.
 
 ## Next
 

@@ -1,27 +1,21 @@
 $ErrorActionPreference = 'Stop'
 
-$amsRoot = 'C:\Users\pc\Documents\Codex\qsi-ams-portal'
-$databaseScript = Join-Path $amsRoot 'scripts\run-local-database.ps1'
-$appScript = Join-Path $amsRoot 'scripts\run-local-app.ps1'
+$amsRoot = $PSScriptRoot
+$startScript = Join-Path $amsRoot 'scripts\start-local.ps1'
 
 if (-not (Test-Path $amsRoot)) {
     throw "AMS folder not found: $amsRoot"
 }
 
-if (-not (Test-Path $databaseScript)) {
-    throw "AMS database launcher not found: $databaseScript"
+if (-not (Test-Path $startScript)) {
+    throw "AMS launcher not found: $startScript"
 }
 
-Write-Host 'Starting QSI AMS MySQL on 127.0.0.1:3308...' -ForegroundColor Cyan
-Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $databaseScript) -WorkingDirectory $amsRoot
-
-Start-Sleep -Seconds 6
-
-Write-Host 'Starting QSI AMS on http://127.0.0.1:8080/login ...' -ForegroundColor Cyan
-Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $appScript) -WorkingDirectory $amsRoot
+Write-Host 'Starting QSI AMS database and application...' -ForegroundColor Cyan
+& $startScript
 
 Start-Sleep -Seconds 3
-Start-Process 'http://127.0.0.1:8080/login'
+Start-Process 'http://localhost:8080/login'
 
 Write-Host ''
-Write-Host 'Keep both command windows open while using AMS.' -ForegroundColor Yellow
+Write-Host 'QSI AMS is available at http://localhost:8080/login' -ForegroundColor Green
