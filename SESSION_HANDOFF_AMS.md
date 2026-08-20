@@ -1,4 +1,6 @@
-# QSI AMS - Complete Session Handoff
+# QSI AMS - Superseded Session Handoff
+
+> **Superseded:** Use `AMS_HANDOVER_CURRENT.md` for the authoritative handover dated 2026-08-20. This file is retained only as historical context.
 
 > Last updated: 2026-07-11
 > Workspace: `C:\Users\PCD\Documents\AMS`

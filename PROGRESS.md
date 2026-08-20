@@ -19,6 +19,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MariaDB Certification Body Audit Management S
 - Professional QSI PDF headers/layouts and certificate PDF/DOCX outputs retained. Latest Application, Application Review, and Stage 2 Audit Report were rendered and visually inspected.
 - Deployment baseline includes PHP 8.3/Apache, MariaDB, Caddy, persistent storage, health checks, and deployment documentation.
 - Local Windows startup is repaired and verified: the launcher resolves the current repository, starts the preserved `.mysql-data` MariaDB instance on port 3307, and serves the real CodeIgniter AMS on port 8080. The Super Admin seeder and browser login were verified end to end.
+- Cross-computer continuation is documented in `AMS_HANDOVER_CURRENT.md`; the older `SESSION_HANDOFF_AMS.md` is retained as superseded historical context.
 - Automated suite: **45 tests / 340 assertions passing**.
 
 ## Current Focus
