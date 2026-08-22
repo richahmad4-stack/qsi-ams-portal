@@ -109,6 +109,7 @@
     async function show(page) {
       state.page = page;
       nav();
+      renderLoading(page);
       try {
         if (BOOTSTRAP.user.error) return renderError(BOOTSTRAP.user.error);
         if (page === 'dashboard') {
@@ -138,6 +139,12 @@
       } catch (err) {
         renderError(err.message || err);
       }
+    }
+
+    function renderLoading(page) {
+      const titles = { dashboard: 'Dashboard', clients: 'Clients', workflow: 'Certification Workflow', finance: 'Finance', admin: 'Admin', audit: 'Audit Trail' };
+      document.getElementById('app').innerHTML = `<h1>${html(titles[page] || 'QSI AMS')}</h1><div class="card muted">Loading...</div>`;
+      if (page === 'dashboard') renderDashboard();
     }
 
     function html(s) {

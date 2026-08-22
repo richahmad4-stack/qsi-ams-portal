@@ -1,5 +1,5 @@
 const AMS = {
-  VERSION: '1.1.0-sheets',
+  VERSION: '1.1.1-sheets',
   TIMEZONE: 'Asia/Riyadh',
   MODULES: ['dashboard', 'clients', 'standards', 'personnel', 'application_reviews', 'proposals', 'contracts', 'audit_programs', 'auditor_appointments', 'audit_plans', 'reports', 'ncrs', 'capas', 'technical_reviews', 'certification_decisions', 'certificates', 'document_templates', 'finance', 'users', 'audit_trail', 'settings'],
   ACTIONS: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'download', 'print'],
@@ -121,13 +121,17 @@ function props_() {
 
 function store_() {
   if (globalThis.__AMS_STORE) return globalThis.__AMS_STORE;
-  let id = props_().getProperty('AMS_DATA_SPREADSHEET_ID');
+  const scriptProps = props_();
+  let id = scriptProps.getProperty('AMS_DATA_SPREADSHEET_ID');
+  const created = !id;
   let ss = id ? SpreadsheetApp.openById(id) : SpreadsheetApp.create('QSI AMS Data');
-  if (!id) props_().setProperty('AMS_DATA_SPREADSHEET_ID', ss.getId());
-  if (!globalThis.__AMS_SHEETS_READY) {
+  if (!id) scriptProps.setProperty('AMS_DATA_SPREADSHEET_ID', ss.getId());
+  if (created && !globalThis.__AMS_SHEETS_READY) {
     ensureSheets_(ss);
+    scriptProps.setProperty('AMS_SCHEMA_READY', '1');
     globalThis.__AMS_SHEETS_READY = true;
   }
+  if (!created && !scriptProps.getProperty('AMS_SCHEMA_READY')) scriptProps.setProperty('AMS_SCHEMA_READY', '1');
   globalThis.__AMS_STORE = ss;
   return ss;
 }
