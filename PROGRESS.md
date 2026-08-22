@@ -26,20 +26,18 @@ QSI AMS is a CodeIgniter 4 / PHP / MariaDB Certification Body Audit Management S
 - Google Apps Script AMS blank-load issue fixed in the live Version 5 deployment: the UI now renders dashboard/navigation immediately and skips repeated schema checks for existing Google Sheets storage.
 - Google Apps Script AMS live deployment now includes an idempotent demo-client seeder and displays the seeded `DEMO-001` client file with ISO 22000:2018 and HACCP standards.
 - Google Apps Script AMS live Version 10 now seeds and displays a full demo certification cycle: application, application review, proposal, contract, audit programme/event/plan/timetable, appointment, requirement responses, NCR/CAPA, technical review, certification decision, certificate, invoice, payment, and richer per-tab workflow tables.
-- Google Apps Script full-parity plan documented in `docs/google-appscript-full-ams-parity-plan.md`: one client workflow with tabs, full Stage 1/Stage 2/Surveillance 1/Surveillance 2/Recertification audit files and reports, Super Admin Cycle Builder, professional UI design, document generation, gates, demo data, and verification requirements.
 
 ## Current Focus
 
-The canonical report connection, Super Admin full-file access, and local login/startup repair are complete. The current Google Apps Script AMS package is a starter/demo deployment; continue by implementing the full-parity plan, beginning with one-client workflow tabs, Cycle Builder, and complete audit-stage files/reports.
+The canonical report connection, Super Admin full-file access, local login/startup repair, and Google Apps Script AMS package are complete. Continue systematic workflow/PDF validation on the ISO 22000-only and combined food-safety demo cycles, then repeat the same E2E checks for surveillance and recertification stages.
 
 ## Next
 
-1. Implement Google Apps Script full parity from `docs/google-appscript-full-ams-parity-plan.md`: schema, one-client workflow tabs, Cycle Builder, complete audit-stage files/reports, gates, documents, client portal, demo data, and browser verification.
-2. Add database-backed feature/E2E tests for all role conflicts and full certification/surveillance/recertification gates in the CodeIgniter AMS.
-3. Add immutable approval/document snapshots and hashes, complaints/appeals, suspension/withdrawal/reinstatement, and replacement-certificate history.
-4. Complete batch migration controls for the 700-client import: approval, downloadable errors, resume/retry, and reconciliation report.
-5. Configure and test SMTP, appointment/reminder emails, scheduler, website-lead conversion, backups/restore drill, monitoring, and management/accreditation registers.
-6. Validate the Docker deployment on a test VPS; Docker is not installed on this Windows machine.
+1. Add database-backed feature/E2E tests for all role conflicts and full certification/surveillance/recertification gates.
+2. Add immutable approval/document snapshots and hashes, complaints/appeals, suspension/withdrawal/reinstatement, and replacement-certificate history.
+3. Complete batch migration controls for the 700-client import: approval, downloadable errors, resume/retry, and reconciliation report.
+4. Configure and test SMTP, appointment/reminder emails, scheduler, website-lead conversion, backups/restore drill, monitoring, and management/accreditation registers.
+5. Validate the Docker deployment on a test VPS; Docker is not installed on this Windows machine.
 
 ## Safety
 

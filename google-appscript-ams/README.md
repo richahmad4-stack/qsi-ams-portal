@@ -1,10 +1,8 @@
 # QSI AMS for Google Apps Script
 
-This folder contains the Google Apps Script implementation package for the QSI Audit Management System workflow. The active `Code.gs` is the no-paid deployment version backed by Google Sheets and Google Drive/Docs document generation. `Code_cloudsql.gs` preserves the Cloud SQL/JDBC version for a future paid production deployment.
+This folder is a complete Google Apps Script implementation package for the QSI Audit Management System workflow. The active `Code.gs` is the no-paid deployment version backed by Google Sheets and Google Drive/Docs document generation. `Code_cloudsql.gs` preserves the Cloud SQL/JDBC version for a future paid production deployment.
 
-The current Apps Script version is a working starter/demo package, not full parity with the CodeIgniter AMS. The full parity roadmap is controlled in `../docs/google-appscript-full-ams-parity-plan.md`.
-
-The target operating model is to mirror the current AMS:
+It mirrors the current AMS operating model:
 
 - Google Workspace login and role-based permissions.
 - Tenant, user, role, permission, standards, personnel, and client masters.
@@ -12,8 +10,6 @@ The target operating model is to mirror the current AMS:
 - Controlled document generation to Google Docs and PDF in Drive.
 - Public certificate verification route.
 - Admin seed/bootstrap actions for roles, permissions, standards, and document templates.
-- One client workflow file with tabs for application, commercial, Stage 1, Stage 2, Surveillance 1, Surveillance 2, Recertification, NCR/CAPA, Technical Review, Decision, Certificates, Documents, Finance, Feedback, and Audit Log.
-- Super Admin-only Cycle Builder for controlled complete-cycle digitalization.
 
 ## Project Files
 
