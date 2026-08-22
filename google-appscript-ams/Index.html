@@ -71,10 +71,9 @@
   </div>
   <script>
     const BOOTSTRAP = <?!= bootstrap ?>;
-    const state = { page: 'dashboard', clientFile: null, clients: [], dashboard: null, finance: null, admin: null, clause: null, ncrBuilder: null, tab: 'summary' };
+    const state = { page: 'dashboard', clientFile: null, clients: [], dashboard: null, finance: null, admin: null, tab: 'summary' };
     const pages = [
       ['dashboard', 'Dashboard'], ['clients', 'Clients'], ['workflow', 'Workflow'],
-      ['clause_builder', 'Clause Builder'], ['ncr_builder', 'NCR Builder'],
       ['finance', 'Finance'], ['admin', 'Admin'], ['audit', 'Audit Trail']
     ];
 
@@ -97,8 +96,6 @@
       el.innerHTML = '';
       pages.forEach(([id, label]) => {
         if (id === 'finance' && !can('finance', 'view')) return;
-        if (id === 'clause_builder' && !can('clause_builder', 'view')) return;
-        if (id === 'ncr_builder' && !can('ncr_builder', 'view')) return;
         if (id === 'admin' && !can('users', 'view')) return;
         if (id === 'audit' && !can('audit_trail', 'view')) return;
         const b = document.createElement('button');
@@ -131,14 +128,6 @@
           state.finance = await server('finance');
           renderFinance();
         }
-        if (page === 'clause_builder') {
-          state.clause = await server('clauseBuilder');
-          renderClauseBuilder();
-        }
-        if (page === 'ncr_builder') {
-          state.ncrBuilder = await server('ncrBuilder');
-          renderNcrBuilder();
-        }
         if (page === 'admin') {
           state.admin = await server('adminData');
           renderAdmin();
@@ -153,7 +142,7 @@
     }
 
     function renderLoading(page) {
-      const titles = { dashboard: 'Dashboard', clients: 'Clients', workflow: 'Certification Workflow', clause_builder: 'Clause Builder', ncr_builder: 'NCR Builder', finance: 'Finance', admin: 'Admin', audit: 'Audit Trail' };
+      const titles = { dashboard: 'Dashboard', clients: 'Clients', workflow: 'Certification Workflow', finance: 'Finance', admin: 'Admin', audit: 'Audit Trail' };
       document.getElementById('app').innerHTML = `<h1>${html(titles[page] || 'QSI AMS')}</h1><div class="card muted">Loading...</div>`;
       if (page === 'dashboard') renderDashboard();
     }
@@ -297,21 +286,11 @@
       document.getElementById('app').innerHTML = `
         <div class="row"><h1 style="flex:1">${html(c.company)}</h1><span class="pill">${html(c.current_stage)}</span><span class="pill">${html(c.status)}</span></div>
         <div class="muted">${html((f.standards || []).map(s => s.code).join(', '))}</div>
-        <div class="tabs">${clientTabs().map(([id, label]) => `<button class="${state.tab === id ? 'active' : ''}" onclick="state.tab='${id}';renderClientFile()">${html(label)}</button>`).join('')}</div>
+        <div class="tabs">
+          ${['summary','application','commercial','audit','ncr','technical','certificate','documents'].map(t => `<button class="${state.tab === t ? 'active' : ''}" onclick="state.tab='${t}';renderClientFile()">${t}</button>`).join('')}
+        </div>
         <div id="fileTab">${tabHtml(f, state.tab)}</div>
       `;
-    }
-
-    function clientTabs() {
-      return [
-        ['summary','Summary'], ['client_master','Client Master'], ['sites_processes','Sites & Processes'],
-        ['application','Application'], ['application_review','Application Review'], ['proposal','Proposal'],
-        ['contract','Contract'], ['audit_program','Audit Program'], ['stage1','Stage 1'], ['stage2','Stage 2'],
-        ['technical','Technical Review'], ['decision','Decision & GM'], ['certificate','Certificates'],
-        ['surveillance1','Surveillance 1'], ['surveillance2','Surveillance 2'], ['recertification','Recertification'],
-        ['ncr','NCR/CAPA'], ['clause_builder','Clause Builder'], ['ncr_builder','NCR Builder'],
-        ['documents','Documents'], ['finance','Finance'], ['feedback','Feedback'], ['audit_log','Audit Log']
-      ];
     }
 
     function tabHtml(f, tab) {
@@ -325,42 +304,27 @@
         <h2>File Snapshot</h2>
         ${table([{ application: statusOf(f.application), review: statusOf(f.review), proposal: statusOf(f.proposal), contract: statusOf(f.contract), technical_review: statusOf(f.technicalReview), decision: statusOf(f.decision) }], ['application','review','proposal','contract','technical_review','decision'])}
         <h2>Audit Events</h2>${table(f.events, ['id','event_type','audit_number','planned_start_date','actual_end_date','status'])}`;
-      if (tab === 'client_master') return `<div class="card">${clientForm(f.client)}</div>`;
-      if (tab === 'sites_processes') return `<div class="card muted">Sites and processes are part of the full parity schema. Current no-paid screen keeps master client scope here until dedicated site/process CRUD is implemented.</div><h2>Scope</h2><div class="card">${html(f.client.scope)}</div>`;
       if (tab === 'application') return workflowForm('Application', 'saveApplication', [
         ['received_date','date','Received date'], ['status','text','Status'], ['scope_notes','textarea','Scope notes'], ['haccp_plans','number','HACCP plans']
-      ], { clientId: f.client.id, application: {} }) + '<h2>Current Application</h2>' + table(f.application ? [f.application] : [], ['application_number','received_date','status','submitted_at']);
-      if (tab === 'application_review') return workflowForm('Application Review', 'saveApplicationReview', [
+      ], { clientId: f.client.id, application: {} }) + workflowForm('Application Review', 'saveApplicationReview', [
         ['review_date','date','Review date'], ['decision','text','Decision'], ['calculated_days','number','Calculated days'], ['review_notes','textarea','Review notes']
-      ], { clientId: f.client.id, review: {} }) + '<h2>Current Review</h2>' + table(f.review ? [f.review] : [], ['review_date','calculated_days','decision','status']);
-      if (tab === 'proposal') return workflowForm('Proposal', 'saveProposal', [
+      ], { clientId: f.client.id, review: {} }) + '<h2>Current Application</h2>' + table(f.application ? [f.application] : [], ['application_number','received_date','status','submitted_at']) + '<h2>Current Review</h2>' + table(f.review ? [f.review] : [], ['review_date','calculated_days','decision','status']);
+      if (tab === 'commercial') return workflowForm('Proposal', 'saveProposal', [
         ['proposal_number','text','Proposal number'], ['proposal_date','date','Proposal date'], ['valid_until','date','Valid until'], ['subtotal','number','Subtotal'], ['vat','number','VAT'], ['grand_total','number','Grand total'], ['status','text','Status']
-      ], { clientId: f.client.id }) + '<h2>Proposal</h2>' + table(f.proposal ? [f.proposal] : [], ['proposal_number','proposal_date','valid_until','currency','grand_total','status']);
-      if (tab === 'contract') return workflowForm('Contract', 'saveContract', [
+      ], { clientId: f.client.id }) + workflowForm('Contract', 'saveContract', [
         ['contract_number','text','Contract number'], ['signed_date','date','Signed date'], ['status','text','Status']
-      ], { clientId: f.client.id }) + '<h2>Contract</h2>' + table(f.contract ? [f.contract] : [], ['contract_number','signed_date','status']);
-      if (tab === 'audit_program') return auditProgramTab(f);
-      if (tab === 'stage1') return stageTab(f, 'stage1', 'Stage 1');
-      if (tab === 'stage2') return stageTab(f, 'stage2', 'Stage 2');
-      if (tab === 'surveillance1') return stageTab(f, 'surveillance1', 'Surveillance 1');
-      if (tab === 'surveillance2') return stageTab(f, 'surveillance2', 'Surveillance 2');
-      if (tab === 'recertification') return stageTab(f, 'recertification', 'Recertification');
+      ], { clientId: f.client.id }) + '<h2>Proposal</h2>' + table(f.proposal ? [f.proposal] : [], ['proposal_number','proposal_date','valid_until','currency','grand_total','status']) + '<h2>Contract</h2>' + table(f.contract ? [f.contract] : [], ['contract_number','signed_date','status']);
+      if (tab === 'audit') return auditTab(f);
       if (tab === 'ncr') return ncrTab(f);
-      if (tab === 'clause_builder') return clientClauseBuilderTab(f);
-      if (tab === 'ncr_builder') return clientNcrBuilderTab(f);
       if (tab === 'technical') return workflowForm('Technical Review', 'saveTechnicalReview', [
         ['audit_event_id','number','Audit event ID'], ['review_date','date','Review date'], ['recommendation','text','Recommendation'], ['status','text','Status'], ['review_notes','textarea','Review notes']
-      ], { clientId: f.client.id, checklist: {} }) + '<h2>Technical Review</h2>' + table(f.technicalReview ? [f.technicalReview] : [], ['id','audit_event_id','review_date','recommendation','status','review_notes']);
-      if (tab === 'decision') return workflowForm('Decision', 'saveDecision', [
+      ], { clientId: f.client.id, checklist: {} }) + workflowForm('Decision', 'saveDecision', [
         ['technical_review_id','number','Technical review ID'], ['decision_date','date','Decision date'], ['decision','text','Decision'], ['gm_approval','text','GM approval'], ['status','text','Status'], ['decision_notes','textarea','Decision notes']
-      ], { clientId: f.client.id }) + '<h2>Certification Decision</h2>' + table(f.decision ? [f.decision] : [], ['id','decision_date','decision','gm_approval','status','decision_notes']);
+      ], { clientId: f.client.id }) + '<h2>Technical Review</h2>' + table(f.technicalReview ? [f.technicalReview] : [], ['id','review_date','recommendation','status','review_notes']) + '<h2>Certification Decision</h2>' + table(f.decision ? [f.decision] : [], ['id','decision_date','decision','gm_approval','status','decision_notes']);
       if (tab === 'certificate') return workflowForm('Issue Certificate', 'issueCertificate', [
         ['certification_decision_id','number','Decision ID'], ['certificate_number','text','Certificate number'], ['standard_code','text','Standard'], ['issue_date','date','Issue date'], ['expiry_date','date','Expiry date'], ['scope','textarea','Scope']
       ], { clientId: f.client.id }) + table(f.certificates, ['certificate_number','standard_code','issue_date','expiry_date','status','verification_token']);
       if (tab === 'documents') return documentTab(f);
-      if (tab === 'finance') return table(f.invoices, ['invoice_number','invoice_date','due_date','total','status']);
-      if (tab === 'feedback') return '<div class="card muted">Feedback capture belongs in this client workflow tab and will feed F36 document generation in the full parity build.</div>';
-      if (tab === 'audit_log') return '<div class="card muted">Open Audit Trail from the sidebar for tenant activity. Client-filtered audit log is planned for this tab.</div>';
       return '';
     }
 
@@ -382,47 +346,20 @@
       renderClientFile();
     }
 
-    function auditProgramTab(f) {
+    function auditTab(f) {
       return `
         ${workflowForm('Create Audit Program', 'createAuditProgram', [['program_number','text','Program number'],['cycle_type','text','Cycle type'],['start_date','date','Start date'],['expiry_date','date','Expiry date'],['status','text','Status']], { clientId: f.client.id })}
         ${workflowForm('Audit Event', 'saveAuditEvent', [['audit_program_id','number','Program ID'],['audit_number','text','Audit number'],['event_type','text','Event type'],['planned_start_date','date','Planned start'],['planned_end_date','date','Planned end'],['status','text','Status']], { clientId: f.client.id })}
+        ${workflowForm('Audit Plan', 'saveAuditPlan', [['audit_event_id','number','Audit event ID'],['objective','textarea','Objective'],['criteria','textarea','Criteria'],['scope','textarea','Scope'],['status','text','Status']], { clientId: f.client.id })}
         <h2>Audit Programmes</h2>${table(f.programs, ['id','program_number','cycle_type','start_date','expiry_date','status'])}
         <h2>Audit Events</h2>${table(f.events, ['id','audit_number','event_type','planned_start_date','actual_end_date','status'])}
+        <h2>Appointments</h2>${table(f.appointments || [], ['audit_event_id','role_in_audit','appointment_status','conflict_checked'])}
+        <h2>Audit Plans</h2>${table(f.plans, ['id','audit_event_id','status','objective','criteria'])}
+        <h2>Plan Timetable</h2>${table(f.planItems || [], ['audit_date','start_time','end_time','process_area','clause_reference','auditor_name'])}
+        <h2>Requirement Responses</h2>
+        <div class="card"><label>Audit event ID</label><input id="rr_event"><label>Requirement</label><select id="rr_req">${f.requirements.map(r => `<option value="${r.id}">${html(r.requirement_code)} - ${html(r.title)}</option>`).join('')}</select><label>Status</label><select id="rr_status"><option>conforming</option><option>minor_nc</option><option>major_nc</option><option>opportunity</option></select><label>Objective evidence</label><textarea id="rr_ev"></textarea><label>Finding</label><textarea id="rr_find"></textarea><label><input id="rr_confirm" type="checkbox" style="width:auto"> Auditor confirmed</label><button class="primary" onclick="saveResponse()">Save response</button></div>
+        ${table(f.responses, ['audit_event_id','requirement_code','conformity_status','auditor_confirmed','objective_evidence'])}
       `;
-    }
-
-    function stageTab(f, eventType, label) {
-      const event = (f.events || []).find(e => e.event_type === eventType) || {};
-      const eventId = event.id || '';
-      const plans = (f.plans || []).filter(p => String(p.audit_event_id) === String(eventId));
-      const planIds = plans.map(p => String(p.id));
-      const appointments = (f.appointments || []).filter(a => String(a.audit_event_id) === String(eventId));
-      const items = (f.planItems || []).filter(i => planIds.indexOf(String(i.audit_plan_id)) !== -1);
-      const responses = (f.responses || []).filter(r => String(r.audit_event_id) === String(eventId));
-      const ncrs = (f.ncrs || []).filter(n => String(n.audit_event_id) === String(eventId));
-      const ncrIds = ncrs.map(n => String(n.id));
-      const capas = (f.capas || []).filter(c => String(c.audit_event_id) === String(eventId) || ncrIds.indexOf(String(c.ncr_id)) !== -1);
-      const reports = (f.auditReports || []).filter(r => String(r.audit_event_id) === String(eventId));
-      const lock = eventId ? '' : `<div class="notice">${html(label)} audit event is not created yet. Create it from Audit Program or Cycle Builder.</div>`;
-      return `
-        ${lock}
-        <h2>${html(label)} File</h2>
-        ${table(eventId ? [event] : [], ['id','audit_number','event_type','planned_start_date','planned_end_date','actual_end_date','status'])}
-        ${eventId ? workflowForm(label + ' Appointment', 'saveAppointment', [['audit_event_id','number','Audit event ID'],['user_id','number','User ID'],['role_in_audit','text','Role'],['appointment_status','text','Status']], { clientId: f.client.id, audit_event_id: eventId }) : ''}
-        ${eventId ? workflowForm(label + ' Audit Plan', 'saveAuditPlan', [['audit_event_id','number','Audit event ID'],['objective','textarea','Objective'],['criteria','textarea','Criteria'],['scope','textarea','Scope'],['status','text','Status']], { clientId: f.client.id, audit_event_id: eventId }) : ''}
-        <h2>Appointment and Team</h2>${table(appointments, ['audit_event_id','role_in_audit','appointment_status','conflict_checked'])}
-        <h2>Plan</h2>${table(plans, ['id','audit_event_id','status','objective','criteria'])}
-        <h2>Timetable</h2>${table(items, ['audit_date','start_time','end_time','process_area','clause_reference','auditor_name'])}
-        <h2>Requirement Checklist</h2>
-        ${eventId ? requirementResponseForm(f, eventId) : ''}
-        ${table(responses, ['id','requirement_code','title','conformity_status','auditor_confirmed','objective_evidence','finding_text'])}
-        <h2>Audit Report</h2>${table(reports, ['report_number','stage_type','summary','conclusion','recommendation','status','submitted_at'])}
-        <h2>NCR/CAPA For ${html(label)}</h2>${table(ncrs, ['id','ncr_number','severity','status','statement','due_date'])}${table(capas, ['id','ncr_id','status','action_plan','responsible_person','due_date'])}
-      `;
-    }
-
-    function requirementResponseForm(f, eventId) {
-      return `<div class="card"><label>Audit event ID</label><input id="rr_event" value="${html(eventId)}"><label>Requirement</label><select id="rr_req">${f.requirements.map(r => `<option value="${r.id}">${html(r.requirement_code)} - ${html(r.title)}</option>`).join('')}</select><label>Status</label><select id="rr_status"><option>conforming</option><option>minor_nc</option><option>major_nc</option><option>opportunity</option></select><label>Objective evidence</label><textarea id="rr_ev"></textarea><label>Finding</label><textarea id="rr_find"></textarea><label><input id="rr_confirm" type="checkbox" style="width:auto"> Auditor confirmed</label><button class="primary" onclick="saveResponse()">Save response</button></div>`;
     }
 
     async function saveResponse() {
@@ -433,38 +370,10 @@
 
     function ncrTab(f) {
       return `
-        ${workflowForm('NCR', 'saveNcr', [['audit_event_id','number','Audit event ID'],['audit_requirement_response_id','number','Response ID'],['ncr_number','text','NCR number'],['clause_reference','text','Clause'],['severity','text','Severity'],['responsible_person','text','Responsible person'],['due_date','date','Due date'],['verification_method','textarea','Verification method'],['statement','textarea','Statement'],['correction','textarea','Correction'],['root_cause','textarea','Root cause'],['corrective_action','textarea','Corrective action']], { clientId: f.client.id })}
-        ${workflowForm('CAPA', 'saveCapa', [['audit_event_id','number','Audit event ID'],['ncr_id','number','NCR ID'],['responsible_person','text','Responsible person'],['due_date','date','Due date'],['action_plan','textarea','Action plan'],['evidence_summary','textarea','Evidence'],['effectiveness_review','textarea','Effectiveness review']], { clientId: f.client.id })}
-        <h2>NCRs</h2>${table(f.ncrs, ['id','ncr_number','audit_event_id','severity','status','statement','responsible_person','due_date'])}
-        <h2>CAPAs</h2>${table(f.capas, ['id','ncr_id','audit_event_id','status','action_plan','responsible_person','due_date'])}`;
-    }
-
-    function clientClauseBuilderTab(f) {
-      return `
-        <div class="card">
-          <h2>Controlled Requirements In This Client File</h2>
-          <p class="muted">Clause Builder feeds this client's stage checklists, audit reports, and NCR Builder.</p>
-        </div>
-        ${table(f.requirements.map(r => Object.assign({}, r, { mapped_clauses: (f.requirementMappings || []).filter(m => String(m.audit_requirement_id) === String(r.id)).map(m => m.standard_code + ' ' + m.clause_reference).join(', ') })), ['id','requirement_code','title','category','stage_applicability','mapped_clauses','active'])}
-      `;
-    }
-
-    function clientNcrBuilderTab(f) {
-      const candidates = (f.responses || []).map(r => {
-        const ncr = (f.ncrs || []).find(n => String(n.audit_requirement_response_id) === String(r.id));
-        return Object.assign({}, r, { duplicate_ncr: ncr ? ncr.ncr_number : '' });
-      }).filter(r => ['minor_nc','major_nc','nonconforming'].indexOf(String(r.conformity_status).toLowerCase()) !== -1 || String(r.finding_text || '').trim());
-      return `
-        <div class="card"><h2>NCR Builder</h2><p class="muted">Create linked NCR/CAPA packages from this client's audit responses.</p><label>Audit response</label><select id="ncr_resp">${candidates.map(r => `<option value="${r.id}">${html(r.audit_event_id)} - ${html(r.requirement_code)} - ${html(r.conformity_status)} ${r.duplicate_ncr ? '(NCR ' + html(r.duplicate_ncr) + ')' : ''}</option>`).join('')}</select><label>Severity</label><select id="ncr_sev"><option>minor</option><option>major</option></select><label>Responsible person</label><input id="ncr_owner" value="${html(f.client.contact_name)}"><button class="primary" style="margin-top:10px" onclick="buildClientNcrPackage()">Build NCR/CAPA Package</button></div>
-        <h2>Candidate Responses</h2>${table(candidates, ['id','audit_event_id','requirement_code','conformity_status','finding_text','duplicate_ncr'])}
-      `;
-    }
-
-    async function buildClientNcrPackage() {
-      const f = state.clientFile;
-      state.clientFile = await server('buildNcrPackage', { clientId: f.client.id, audit_requirement_response_id: val('ncr_resp'), severity: val('ncr_sev'), responsible_person: val('ncr_owner') });
-      state.tab = 'ncr';
-      renderClientFile();
+        ${workflowForm('NCR', 'saveNcr', [['audit_event_id','number','Audit event ID'],['audit_requirement_response_id','number','Response ID'],['ncr_number','text','NCR number'],['clause_reference','text','Clause'],['severity','text','Severity'],['due_date','date','Due date'],['statement','textarea','Statement'],['correction','textarea','Correction'],['root_cause','textarea','Root cause'],['corrective_action','textarea','Corrective action']], { clientId: f.client.id })}
+        ${workflowForm('CAPA', 'saveCapa', [['audit_event_id','number','Audit event ID'],['ncr_id','number','NCR ID'],['due_date','date','Due date'],['action_plan','textarea','Action plan'],['evidence_summary','textarea','Evidence'],['effectiveness_review','textarea','Effectiveness review']], { clientId: f.client.id })}
+        <h2>NCRs</h2>${table(f.ncrs, ['id','ncr_number','severity','status','statement','due_date'])}
+        <h2>CAPAs</h2>${table(f.capas, ['id','ncr_id','status','action_plan','due_date'])}`;
     }
 
     function documentTab(f) {
@@ -478,80 +387,6 @@
       alert('Generated document:\\n' + res.documentUrl + '\\n' + res.pdfUrl);
       state.clientFile = await server('clientFile', { clientId: f.client.id });
       renderClientFile();
-    }
-
-    function renderClauseBuilder() {
-      const d = state.clause || { requirements: [], mappings: [], standards: [], runs: [] };
-      document.getElementById('app').innerHTML = `
-        <div class="row"><h1 style="flex:1">Clause Builder</h1><span class="pill">${html(d.requirements.length)} requirements</span></div>
-        <div class="grid cols-2">
-          <div class="card">
-            <h2>Requirement</h2>
-            <label>Requirement code</label><input id="cl_requirement_code" placeholder="QSI-COM-10.02">
-            <label>Title</label><input id="cl_title">
-            <label>Category</label><input id="cl_category" value="integrated_management">
-            <label>Stage applicability</label><input id="cl_stage_applicability" value="all">
-            <label>Audit question</label><textarea id="cl_audit_question"></textarea>
-            <label>Evidence expectation</label><textarea id="cl_evidence_expectation"></textarea>
-            <label>Source / basis note</label><input id="cl_source_note" value="QSI controlled clause builder">
-            <label>Mappings, one per line: standard | clause | title | source</label>
-            <textarea id="cl_mapping_lines" placeholder="ISO 22000:2018 | 8.9 | Control of product and process nonconformities | QSI controlled source"></textarea>
-            <button class="primary" style="margin-top:10px" onclick="saveClauseRequirement()">Save Requirement</button>
-          </div>
-          <div>
-            <h2>Recent Builder Runs</h2>${table(d.runs, ['created_at','action','requirement_id','summary'])}
-          </div>
-        </div>
-        <h2>Controlled Requirement Catalogue</h2>
-        ${table(d.requirements, ['id','requirement_code','title','category','stage_applicability','mapped_clauses','mapping_count','active'])}
-        <h2>Clause Mappings</h2>
-        ${table(d.mappings, ['audit_requirement_id','standard_code','clause_reference','clause_title','active'])}
-      `;
-    }
-
-    async function saveClauseRequirement() {
-      state.clause = await server('saveClauseRequirement', {
-        requirement_code: val('cl_requirement_code'),
-        title: val('cl_title'),
-        category: val('cl_category'),
-        stage_applicability: val('cl_stage_applicability'),
-        audit_question: val('cl_audit_question'),
-        evidence_expectation: val('cl_evidence_expectation'),
-        source_note: val('cl_source_note'),
-        mapping_lines: val('cl_mapping_lines')
-      });
-      renderClauseBuilder();
-    }
-
-    function renderNcrBuilder() {
-      const d = state.ncrBuilder || { clients: [], candidates: [], ncrs: [], capas: [], runs: [] };
-      document.getElementById('app').innerHTML = `
-        <div class="row"><h1 style="flex:1">NCR Builder</h1><span class="pill">${html(d.candidates.length)} candidates</span></div>
-        <div class="card">
-          <label>Candidate audit response</label>
-          <select id="nb_response">${d.candidates.map(r => `<option value="${r.id}">${html(r.company)} - ${html(r.event_type)} - ${html(r.requirement_code)} - ${html(r.conformity_status)} ${r.duplicate_ncr ? '(NCR ' + html(r.duplicate_ncr) + ')' : ''}</option>`).join('')}</select>
-          <div class="grid cols-2">
-            <div><label>Severity</label><select id="nb_severity"><option>minor</option><option>major</option></select></div>
-            <div><label>Responsible person</label><input id="nb_responsible_person"></div>
-          </div>
-          <label>Optional NCR statement override</label><textarea id="nb_statement"></textarea>
-          <button class="primary" style="margin-top:10px" onclick="buildNcrPackage()">Build NCR/CAPA Package</button>
-        </div>
-        <h2>Candidate Responses</h2>${table(d.candidates, ['id','company','event_type','requirement_code','conformity_status','clause_reference','finding_text','duplicate_ncr'])}
-        <h2>NCRs</h2>${table(d.ncrs, ['id','ncr_number','event_type','severity','status','statement','responsible_person','due_date'])}
-        <h2>CAPAs</h2>${table(d.capas, ['id','ncr_id','status','action_plan','responsible_person','due_date'])}
-        <h2>Recent Builder Runs</h2>${table(d.runs, ['created_at','action','ncr_id','capa_id','summary'])}
-      `;
-    }
-
-    async function buildNcrPackage() {
-      state.ncrBuilder = await server('buildNcrPackage', {
-        audit_requirement_response_id: val('nb_response'),
-        severity: val('nb_severity'),
-        responsible_person: val('nb_responsible_person'),
-        statement: val('nb_statement')
-      });
-      renderNcrBuilder();
     }
 
     function renderFinance() {

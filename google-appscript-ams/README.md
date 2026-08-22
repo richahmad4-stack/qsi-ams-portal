@@ -14,8 +14,6 @@ The target operating model is to mirror the current AMS:
 - Admin seed/bootstrap actions for roles, permissions, standards, and document templates.
 - One client workflow file with tabs for application, commercial, Stage 1, Stage 2, Surveillance 1, Surveillance 2, Recertification, NCR/CAPA, Technical Review, Decision, Certificates, Documents, Finance, Feedback, and Audit Log.
 - Super Admin-only Cycle Builder for controlled complete-cycle digitalization.
-- Clause Builder for controlled QSI audit requirements and standard/clause mappings.
-- NCR Builder for creating linked NCR/CAPA packages from audit responses and findings.
 
 ## Project Files
 
@@ -47,7 +45,3 @@ Set these in Apps Script Project Settings > Script properties:
 ## Operating Boundary
 
 This is intentionally Google-native. It does not reuse the PHP runtime, CodeIgniter sessions, or local MariaDB. The no-paid version uses Google Sheets as the active data store. For stronger production controls, use the preserved Cloud SQL version when paid infrastructure is approved.
-
-## Current Parity Status
-
-The no-paid Apps Script package now includes the first working Clause Builder and NCR Builder modules, the one-client workflow tab structure, and demo stage shells for Stage 1, Stage 2, Surveillance 1, Surveillance 2, and Recertification. It still requires further work before full parity: richer Cycle Builder UI/import, stronger role/conflict gates, complete document templates, client portal depth, and browser/PDF verification.
