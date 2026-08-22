@@ -71,9 +71,9 @@
   </div>
   <script>
     const BOOTSTRAP = <?!= bootstrap ?>;
-    const state = { page: 'dashboard', clientFile: null, clients: [], dashboard: null, finance: null, admin: null, cycle: null, cyclePreview: null, clause: null, ncrBuilder: null, tab: 'summary' };
+    const state = { page: 'dashboard', clientFile: null, clients: [], dashboard: null, finance: null, admin: null, clause: null, ncrBuilder: null, tab: 'summary' };
     const pages = [
-      ['dashboard', 'Dashboard'], ['cycle_builder', 'Cycle Builder'], ['clients', 'Clients'], ['workflow', 'Workflow'],
+      ['dashboard', 'Dashboard'], ['clients', 'Clients'], ['workflow', 'Workflow'],
       ['clause_builder', 'Clause Builder'], ['ncr_builder', 'NCR Builder'],
       ['finance', 'Finance'], ['admin', 'Admin'], ['audit', 'Audit Trail']
     ];
@@ -97,7 +97,6 @@
       el.innerHTML = '';
       pages.forEach(([id, label]) => {
         if (id === 'finance' && !can('finance', 'view')) return;
-        if (id === 'cycle_builder' && !can('cycle_builder', 'view')) return;
         if (id === 'clause_builder' && !can('clause_builder', 'view')) return;
         if (id === 'ncr_builder' && !can('ncr_builder', 'view')) return;
         if (id === 'admin' && !can('users', 'view')) return;
@@ -128,10 +127,6 @@
           state.clients = await server('listClients', {});
           renderWorkflow();
         }
-        if (page === 'cycle_builder') {
-          state.cycle = await server('cycleBuilder');
-          renderCycleBuilder();
-        }
         if (page === 'finance') {
           state.finance = await server('finance');
           renderFinance();
@@ -158,7 +153,7 @@
     }
 
     function renderLoading(page) {
-      const titles = { dashboard: 'Dashboard', cycle_builder: 'Cycle Builder', clients: 'Clients', workflow: 'Certification Workflow', clause_builder: 'Clause Builder', ncr_builder: 'NCR Builder', finance: 'Finance', admin: 'Admin', audit: 'Audit Trail' };
+      const titles = { dashboard: 'Dashboard', clients: 'Clients', workflow: 'Certification Workflow', clause_builder: 'Clause Builder', ncr_builder: 'NCR Builder', finance: 'Finance', admin: 'Admin', audit: 'Audit Trail' };
       document.getElementById('app').innerHTML = `<h1>${html(titles[page] || 'QSI AMS')}</h1><div class="card muted">Loading...</div>`;
       if (page === 'dashboard') renderDashboard();
     }
@@ -557,92 +552,6 @@
         statement: val('nb_statement')
       });
       renderNcrBuilder();
-    }
-
-    function renderCycleBuilder() {
-      const d = state.cycle || { standards: [], runs: [], rows: [] };
-      const p = state.cyclePreview;
-      document.getElementById('app').innerHTML = `
-        <div class="row"><h1 style="flex:1">Cycle Builder</h1><span class="pill">Super Admin</span></div>
-        <div class="grid cols-2">
-          <div class="card">
-            <h2>Controlled Cycle Input</h2>
-            <div class="grid cols-2">
-              <div><label>Company</label><input id="cy_company" value="Demo Cycle Builder Client"></div>
-              <div><label>Client code</label><input id="cy_client_code" value="CB-DEMO-001"></div>
-              <div><label>Legal name</label><input id="cy_legal_name" value="Demo Cycle Builder Client LLC"></div>
-              <div><label>City</label><input id="cy_city" value="Riyadh"></div>
-              <div><label>Contact name</label><input id="cy_contact_name" value="Client Representative"></div>
-              <div><label>Contact email</label><input id="cy_contact_email" value="cycle.client@example.com"></div>
-              <div><label>Employees</label><input id="cy_employee_count" type="number" value="85"></div>
-              <div><label>Sites</label><input id="cy_number_of_sites" type="number" value="1"></div>
-              <div><label>Start date</label><input id="cy_start_date" type="date"></div>
-              <div><label>Issue date</label><input id="cy_issue_date" type="date"></div>
-              <div><label>Stage 1 days</label><input id="cy_stage1_days" type="number" value="1"></div>
-              <div><label>Stage 2 days</label><input id="cy_stage2_days" type="number" value="2"></div>
-            </div>
-            <label>Scope</label><textarea id="cy_scope">Manufacturing and packing of chilled ready-to-eat food products.</textarea>
-            <label>Standards</label>
-            <div class="row">${d.standards.map(s => `<label style="font-weight:400"><input style="width:auto" type="checkbox" name="cy_standards" value="${html(s.code)}" ${['ISO 22000:2018','HACCP'].indexOf(String(s.code)) !== -1 ? 'checked' : ''}> ${html(s.code)}</label>`).join('')}</div>
-            <div class="row" style="margin-top:12px">
-              <label style="font-weight:400"><input style="width:auto" type="checkbox" id="cy_overwrite"> overwrite existing client code</label>
-            </div>
-            <button class="secondary" style="margin-top:10px" onclick="previewCycle()">Preview</button>
-            <button class="primary" style="margin-top:10px" onclick="generateCycle()">Generate Complete Cycle</button>
-          </div>
-          <div>
-            <h2>Preview</h2>${cyclePreviewHtml(p)}
-          </div>
-        </div>
-        <h2>Cycle Builder Runs</h2>${table(d.runs, ['created_at','status','client_code','client_id','summary'])}
-        <h2>Run Rows</h2>${table(d.rows, ['created_at','cycle_builder_run_id','client_code','status','message'])}
-      `;
-    }
-
-    function cyclePayload() {
-      return {
-        company: val('cy_company'),
-        legal_name: val('cy_legal_name'),
-        client_code: val('cy_client_code'),
-        city: val('cy_city'),
-        contact_name: val('cy_contact_name'),
-        contact_email: val('cy_contact_email'),
-        employee_count: val('cy_employee_count'),
-        number_of_sites: val('cy_number_of_sites'),
-        start_date: val('cy_start_date'),
-        issue_date: val('cy_issue_date'),
-        stage1_days: val('cy_stage1_days'),
-        stage2_days: val('cy_stage2_days'),
-        scope: val('cy_scope'),
-        overwrite_existing: document.getElementById('cy_overwrite').checked,
-        standard_codes: Array.from(document.querySelectorAll('input[name=cy_standards]:checked')).map(x => x.value)
-      };
-    }
-
-    function cyclePreviewHtml(p) {
-      if (!p) return '<div class="card muted">Preview shows validation, duplicate warnings, records and audit stage files before saving.</div>';
-      return `
-        ${p.errors && p.errors.length ? `<div class="notice"><b>Errors</b><br>${p.errors.map(html).join('<br>')}</div>` : ''}
-        ${p.warnings && p.warnings.length ? `<div class="notice"><b>Warnings</b><br>${p.warnings.map(html).join('<br>')}</div>` : ''}
-        ${table([p.client], ['company','client_code','standards','issue_date','expiry_date'])}
-        <h2>Records To Create</h2><div class="card">${(p.records || []).map(x => `<span class="pill" style="margin:3px">${html(x)}</span>`).join('')}</div>
-        <h2>Audit Stage Files</h2>${table(p.events, ['audit_number','label','start_date','end_date','days','status'])}
-      `;
-    }
-
-    async function previewCycle() {
-      state.cyclePreview = await server('previewCycle', cyclePayload());
-      renderCycleBuilder();
-    }
-
-    async function generateCycle() {
-      const payload = cyclePayload();
-      state.cyclePreview = await server('previewCycle', payload);
-      if (state.cyclePreview.errors && state.cyclePreview.errors.length) return renderCycleBuilder();
-      state.clientFile = await server('generateCycle', payload);
-      state.tab = 'summary';
-      state.page = 'workflow';
-      renderClientFile();
     }
 
     function renderFinance() {

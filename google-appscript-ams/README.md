@@ -50,4 +50,4 @@ This is intentionally Google-native. It does not reuse the PHP runtime, CodeIgni
 
 ## Current Parity Status
 
-The no-paid Apps Script package now includes the first working Cycle Builder preview/generate module, Clause Builder, NCR Builder, the one-client workflow tab structure, and demo stage shells for Stage 1, Stage 2, Surveillance 1, Surveillance 2, and Recertification. It still requires further work before full parity: batch Cycle Builder import/resume, stronger role/conflict gates, complete document templates, client portal depth, and browser/PDF verification.
+The no-paid Apps Script package now includes the first working Clause Builder and NCR Builder modules, the one-client workflow tab structure, and demo stage shells for Stage 1, Stage 2, Surveillance 1, Surveillance 2, and Recertification. It still requires further work before full parity: richer Cycle Builder UI/import, stronger role/conflict gates, complete document templates, client portal depth, and browser/PDF verification.
