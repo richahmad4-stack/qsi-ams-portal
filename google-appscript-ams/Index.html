@@ -193,9 +193,16 @@
 
     function renderClients() {
       document.getElementById('app').innerHTML = `
-        <div class="row"><h1 style="flex:1">Clients</h1><button class="primary" onclick="newClient()">New client</button></div>
+        <div class="row"><h1 style="flex:1">Clients</h1><button class="secondary" onclick="seedDemoClient()">Seed demo client</button><button class="primary" onclick="newClient()">New client</button></div>
         ${table(state.clients, ['id','company','client_code','standards','current_stage','status','contact_email'])}
       `;
+    }
+
+    async function seedDemoClient() {
+      document.getElementById('app').innerHTML = '<h1>Clients</h1><div class="card muted">Creating demo client...</div>';
+      state.clientFile = await server('seedDemoClient', {});
+      state.page = 'workflow';
+      renderClientFile();
     }
 
     function newClient() {
@@ -237,9 +244,19 @@
         employee_count: val('employee_count'), number_of_sites: val('number_of_sites'), scope: val('scope'),
         status: 'prospect', current_stage: 'application', standard_ids
       };
-      state.clientFile = await server('saveClient', payload);
+      document.getElementById('app').innerHTML = '<h1>New Client</h1><div class="card muted">Saving client...</div>';
+      const saved = await server('saveClient', payload);
+      state.clientFile = saved && saved.client ? saved : await clientFileByCode(payload.client_code, payload.company);
       state.page = 'workflow';
       renderClientFile();
+    }
+
+    async function clientFileByCode(code, company) {
+      const clients = await server('listClients', {});
+      state.clients = clients || [];
+      const match = state.clients.find(c => String(c.client_code) === String(code)) || state.clients.find(c => String(c.company) === String(company));
+      if (!match) throw new Error('Client was saved but could not be reopened yet. Open Clients and refresh.');
+      return server('clientFile', { clientId: Number(match.id) });
     }
 
     function val(id) { return document.getElementById(id).value; }
@@ -264,6 +281,7 @@
 
     function renderClientFile() {
       const f = state.clientFile;
+      if (!f || !f.client) return renderError('Client file could not be opened. Open Clients and select the saved client again.');
       const c = f.client;
       document.getElementById('app').innerHTML = `
         <div class="row"><h1 style="flex:1">${html(c.company)}</h1><span class="pill">${html(c.current_stage)}</span><span class="pill">${html(c.status)}</span></div>

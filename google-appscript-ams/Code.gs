@@ -1,5 +1,5 @@
 const AMS = {
-  VERSION: '1.1.1-sheets',
+  VERSION: '1.1.5-sheets',
   TIMEZONE: 'Asia/Riyadh',
   MODULES: ['dashboard', 'clients', 'standards', 'personnel', 'application_reviews', 'proposals', 'contracts', 'audit_programs', 'auditor_appointments', 'audit_plans', 'reports', 'ncrs', 'capas', 'technical_reviews', 'certification_decisions', 'certificates', 'document_templates', 'finance', 'users', 'audit_trail', 'settings'],
   ACTIONS: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'download', 'print'],
@@ -78,6 +78,7 @@ function dispatch(action, payload) {
   const actions = {
     bootstrap: () => getBootstrap_(user),
     dashboard: () => dashboard_(user),
+    seedDemoClient: () => seedDemoClient_(user),
     listClients: () => listClients_(user, payload || {}),
     saveClient: () => saveClient_(user, payload || {}),
     clientFile: () => clientFile_(user, Number(payload.clientId)),
@@ -163,9 +164,15 @@ function all_(table) {
   const headers = values[0];
   return values.slice(1).filter(row => row.some(cell => cell !== '')).map(row => {
     const obj = {};
-    headers.forEach((h, i) => obj[h] = row[i] === undefined ? '' : row[i]);
+    headers.forEach((h, i) => obj[h] = cellValue_(row[i]));
     return obj;
   });
+}
+
+function cellValue_(value) {
+  if (value === undefined || value === null) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]') return Utilities.formatDate(value, AMS.TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+  return value;
 }
 
 function insert_(table, data) {
@@ -467,7 +474,14 @@ function dashboard_(user) {
 function listClients_(user, payload) {
   requirePermission_(user, 'clients', 'view');
   const term = String(payload.search || '').toLowerCase();
-  return tenantRows_('clients', user).filter(c => !term || [c.company, c.client_code, c.contact_email].join(' ').toLowerCase().indexOf(term) !== -1).map(c => Object.assign({}, c, { standards: standardsForClient_(c.id).map(s => s.code).join(', ') })).reverse().slice(0, 200);
+  const seen = {};
+  const rows = tenantRows_('clients', user).filter(c => !term || [c.company, c.client_code, c.contact_email].join(' ').toLowerCase().indexOf(term) !== -1);
+  return rows.slice().reverse().filter(c => {
+    const key = c.client_code || 'id:' + c.id;
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
+  }).map(c => Object.assign({}, c, { standards: standardsForClient_(c.id).map(s => s.code).join(', ') })).slice(0, 200);
 }
 
 function standardsForClient_(clientId) {
@@ -481,6 +495,37 @@ function saveClient_(user, payload) {
   const id = payload.id ? update_('clients', payload.id, data) : insert_('clients', data);
   saveClientStandards_(id, payload.standard_ids || []);
   audit_(user, 'save', 'clients', id, null, data);
+  return clientFile_(user, id);
+}
+
+function seedDemoClient_(user) {
+  requirePermission_(user, 'clients', 'create');
+  const data = {
+    tenant_id: user.tenant_id,
+    company: 'Demo Food Factory Ltd',
+    legal_name: 'Demo Food Factory Ltd',
+    client_code: 'DEMO-001',
+    address: 'Demo Industrial Area, Riyadh, Saudi Arabia',
+    city: 'Riyadh',
+    country: 'Saudi Arabia',
+    contact_name: 'Demo Contact',
+    contact_email: 'demo.client@example.com',
+    contact_phone: '+966500000000',
+    scope: 'Manufacturing and packing of chilled ready-to-eat food products for demo certification workflow testing.',
+    employee_count: 75,
+    number_of_sites: 1,
+    risk_category: 'medium',
+    status: 'prospect',
+    current_stage: 'application'
+  };
+  const matches = all_('clients').filter(c => String(c.client_code) === data.client_code && String(c.tenant_id) === String(user.tenant_id));
+  const existing = matches.length ? matches[matches.length - 1] : null;
+  const id = existing ? update_('clients', existing.id, data) : insert_('clients', data);
+  const standardIds = all_('standards').filter(s => ['ISO 22000:2018', 'HACCP'].indexOf(String(s.code)) !== -1).map(s => s.id);
+  saveClientStandards_(id, standardIds);
+  upsertLatest_('certification_applications', ['tenant_id', 'client_id'], { tenant_id: user.tenant_id, client_id: id, application_number: 'APP-DEMO-001', received_date: today_(), application_payload: json_({ haccp_plans: 2, sites: 1, scope_reviewed: true }), status: 'submitted', submitted_by: user.id, submitted_at: now_() });
+  upsertLatest_('application_reviews', ['tenant_id', 'client_id'], { tenant_id: user.tenant_id, client_id: id, reviewer_user_id: user.id, review_date: today_(), review_payload: json_({ competence_available: true, audit_days: 3, decision_basis: 'Demo baseline' }), calculated_days: 3, decision: 'accepted', status: 'completed' });
+  audit_(user, existing ? 'update_demo_client' : 'seed_demo_client', 'clients', id, existing || null, data);
   return clientFile_(user, id);
 }
 
