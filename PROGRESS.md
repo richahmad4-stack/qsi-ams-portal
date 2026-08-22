@@ -25,6 +25,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MariaDB Certification Body Audit Management S
 - Google Apps Script deployment updated and verified online: the no-paid Google Sheets backend now batch-seeds baseline records, creates the first admin user, and renders the private QSI AMS dashboard through the active web app deployment.
 - Google Apps Script AMS blank-load issue fixed in the live Version 5 deployment: the UI now renders dashboard/navigation immediately and skips repeated schema checks for existing Google Sheets storage.
 - Google Apps Script AMS live deployment now includes an idempotent demo-client seeder and displays the seeded `DEMO-001` client file with ISO 22000:2018 and HACCP standards.
+- Google Apps Script AMS live Version 10 now seeds and displays a full demo certification cycle: application, application review, proposal, contract, audit programme/event/plan/timetable, appointment, requirement responses, NCR/CAPA, technical review, certification decision, certificate, invoice, payment, and richer per-tab workflow tables.
 
 ## Current Focus
 

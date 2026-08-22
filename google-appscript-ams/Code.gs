@@ -1,5 +1,5 @@
 const AMS = {
-  VERSION: '1.1.5-sheets',
+  VERSION: '1.2.0-sheets',
   TIMEZONE: 'Asia/Riyadh',
   MODULES: ['dashboard', 'clients', 'standards', 'personnel', 'application_reviews', 'proposals', 'contracts', 'audit_programs', 'auditor_appointments', 'audit_plans', 'reports', 'ncrs', 'capas', 'technical_reviews', 'certification_decisions', 'certificates', 'document_templates', 'finance', 'users', 'audit_trail', 'settings'],
   ACTIONS: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'download', 'print'],
@@ -515,8 +515,10 @@ function seedDemoClient_(user) {
     employee_count: 75,
     number_of_sites: 1,
     risk_category: 'medium',
-    status: 'prospect',
-    current_stage: 'application'
+    status: 'certified',
+    current_stage: 'surveillance_1',
+    certificate_number: 'QSI-DEMO-2026-001',
+    certificate_expiry_date: '2029-08-21'
   };
   const matches = all_('clients').filter(c => String(c.client_code) === data.client_code && String(c.tenant_id) === String(user.tenant_id));
   const existing = matches.length ? matches[matches.length - 1] : null;
@@ -525,8 +527,117 @@ function seedDemoClient_(user) {
   saveClientStandards_(id, standardIds);
   upsertLatest_('certification_applications', ['tenant_id', 'client_id'], { tenant_id: user.tenant_id, client_id: id, application_number: 'APP-DEMO-001', received_date: today_(), application_payload: json_({ haccp_plans: 2, sites: 1, scope_reviewed: true }), status: 'submitted', submitted_by: user.id, submitted_at: now_() });
   upsertLatest_('application_reviews', ['tenant_id', 'client_id'], { tenant_id: user.tenant_id, client_id: id, reviewer_user_id: user.id, review_date: today_(), review_payload: json_({ competence_available: true, audit_days: 3, decision_basis: 'Demo baseline' }), calculated_days: 3, decision: 'accepted', status: 'completed' });
+  seedDemoCycle_(user, id, data);
   audit_(user, existing ? 'update_demo_client' : 'seed_demo_client', 'clients', id, existing || null, data);
   return clientFile_(user, id);
+}
+
+function seedDemoCycle_(user, clientId, client) {
+  const proposalId = upsertLatest_('proposals', ['tenant_id', 'client_id'], {
+    tenant_id: user.tenant_id, client_id: clientId, proposal_number: 'PROP-DEMO-001',
+    proposal_date: today_(), valid_until: '2026-09-21', currency: 'SAR',
+    subtotal: 18000, vat: 2700, grand_total: 20700, status: 'accepted',
+    payload: json_({ audit_days: 3, standards: ['ISO 22000:2018', 'HACCP'] })
+  });
+  upsertLatest_('contracts', ['tenant_id', 'client_id'], {
+    tenant_id: user.tenant_id, client_id: clientId, proposal_id: proposalId,
+    contract_number: 'CON-DEMO-001', signed_date: today_(), status: 'signed',
+    payload: json_({ signed_by: 'Demo Contact', service: 'Initial certification' })
+  });
+  const programId = upsertLatest_('audit_programs', ['tenant_id', 'client_id'], {
+    tenant_id: user.tenant_id, client_id: clientId, program_number: 'PRG-DEMO-001',
+    cycle_type: 'initial', start_date: today_(), expiry_date: '2029-08-21',
+    status: 'active', payload: json_({ stage1: true, stage2: true, surveillance1: true, surveillance2: true })
+  });
+  const eventId = upsertLatest_('audit_events', ['tenant_id', 'client_id', 'event_type'], {
+    tenant_id: user.tenant_id, audit_program_id: programId, client_id: clientId,
+    audit_number: 'AUD-DEMO-001-S2', event_type: 'stage2',
+    planned_start_date: today_(), planned_end_date: today_(),
+    actual_start_date: today_(), actual_end_date: today_(), status: 'completed',
+    payload: json_({ team_leader: user.full_name || 'Lead Auditor', method: 'onsite' })
+  });
+  upsertLatest_('auditor_appointments', ['tenant_id', 'audit_event_id', 'role_in_audit'], {
+    tenant_id: user.tenant_id, audit_event_id: eventId, personnel_id: '',
+    user_id: user.id, role_in_audit: 'lead_auditor', appointment_status: 'appointed',
+    conflict_checked: 1, payload: json_({ impartiality: 'No conflict declared' })
+  });
+  const planId = upsertLatest_('audit_plans', ['tenant_id', 'audit_event_id'], {
+    tenant_id: user.tenant_id, audit_event_id: eventId,
+    objective: 'Confirm effective implementation of ISO 22000:2018 and HACCP requirements for the approved demo scope.',
+    criteria: 'ISO 22000:2018, HACCP/Codex CXC 1-1969, QSI certification rules, client documented system.',
+    scope: client.scope, status: 'approved', approved_by: user.id, approved_at: now_()
+  });
+  [
+    ['09:00', '10:30', 'Opening meeting and scope confirmation', 'ISO 22000 4.3', 'onsite'],
+    ['10:30', '12:30', 'Receiving, storage and prerequisite programmes', 'ISO 22000 8.2', 'onsite'],
+    ['13:30', '15:30', 'HACCP plan validation and CCP monitoring', 'HACCP Principle 3/6', 'onsite'],
+    ['15:30', '16:30', 'Closing meeting and finding agreement', 'ISO 22000 10.2', 'onsite']
+  ].forEach(item => upsertLatest_('audit_plan_items', ['audit_plan_id', 'process_area'], {
+    audit_plan_id: planId, audit_date: today_(), start_time: item[0], end_time: item[1],
+    process_area: item[2], clause_reference: item[3], auditor_name: user.full_name || 'Lead Auditor',
+    method: item[4]
+  }));
+  const reqs = all_('integrated_audit_requirements');
+  const reqByCode = code => reqs.find(r => r.requirement_code === code) || reqs[0] || {};
+  [
+    ['QSI-COM-04.03', 'conforming', 'Scope covers chilled ready-to-eat manufacturing, packing, site boundary and outsourced transport controls.', 'Scope was confirmed against application and process map.', true],
+    ['QSI-FSMS-08.53', 'conforming', 'Validation files are available for cooking, chilling and metal detection control measures.', 'Validation evidence was sampled and found adequate.', true],
+    ['QSI-FSMS-08.90', 'minor_nc', 'Recall test exists but mock recall effectiveness timing was not trended in management review.', 'Minor NC raised for trend review gap.', true],
+    ['QSI-HACCP-P06', 'conforming', 'HACCP plan review includes CCP monitoring checks and verification records.', 'Records were sampled for the last production month.', true]
+  ].forEach(row => {
+    const req = reqByCode(row[0]);
+    if (!req.id) return;
+    upsertLatest_('audit_requirement_responses', ['audit_event_id', 'audit_requirement_id'], {
+      tenant_id: user.tenant_id, audit_event_id: eventId, audit_requirement_id: req.id,
+      conformity_status: row[1], objective_evidence: row[2], finding_text: row[3],
+      auditor_confirmed: row[4] ? 1 : 0, confirmed_by_user_id: user.id, confirmed_at: now_()
+    });
+  });
+  const ncReq = reqByCode('QSI-FSMS-08.90');
+  const ncResponse = latest_('audit_requirement_responses', 'audit_requirement_id', ncReq.id) || {};
+  const ncrId = upsertLatest_('ncrs', ['tenant_id', 'ncr_number'], {
+    tenant_id: user.tenant_id, audit_event_id: eventId, audit_requirement_response_id: ncResponse.id || '',
+    ncr_number: 'NCR-DEMO-001', clause_reference: 'ISO 22000:2018 8.9',
+    severity: 'minor', statement: 'Mock recall effectiveness timing is not trended in management review inputs.',
+    correction: 'Update the recall test summary to include elapsed-time analysis.',
+    root_cause: 'Management review input checklist did not explicitly request mock recall timing trends.',
+    corrective_action: 'Revise management review input checklist and review the next mock recall timing trend.',
+    due_date: '2026-09-21', status: 'open'
+  });
+  upsertLatest_('capas', ['tenant_id', 'ncr_id'], {
+    tenant_id: user.tenant_id, ncr_id: ncrId, audit_event_id: eventId,
+    action_plan: 'QA manager to revise the management review input checklist and include mock recall trend analysis.',
+    evidence_summary: 'Draft checklist update and mock recall trend table prepared for next review cycle.',
+    effectiveness_review: 'Effectiveness to be checked at surveillance 1.', status: 'in_progress', due_date: '2026-09-21'
+  });
+  const trId = upsertLatest_('technical_reviews', ['tenant_id', 'client_id'], {
+    tenant_id: user.tenant_id, client_id: clientId, audit_event_id: eventId,
+    reviewer_user_id: user.id, review_date: today_(),
+    checklist_payload: json_({ impartiality: 'confirmed', report_complete: true, ncr_acceptable: true }),
+    review_notes: 'Demo technical review confirms file completeness with one minor NC under corrective action.',
+    recommendation: 'recommended', status: 'completed'
+  });
+  const decisionId = upsertLatest_('certification_decisions', ['tenant_id', 'client_id'], {
+    tenant_id: user.tenant_id, client_id: clientId, technical_review_id: trId,
+    decision_user_id: user.id, decision_date: today_(), decision: 'grant_certification',
+    decision_notes: 'Certification granted for the demo scope subject to routine CAPA follow-up.',
+    gm_approval: 'approved', status: 'approved'
+  });
+  upsertLatest_('certificates', ['tenant_id', 'client_id'], {
+    tenant_id: user.tenant_id, client_id: clientId, certification_decision_id: decisionId,
+    certificate_number: 'QSI-DEMO-2026-001', standard_code: 'ISO 22000:2018 + HACCP',
+    scope: client.scope, issue_date: today_(), expiry_date: '2029-08-21',
+    status: 'active', verification_token: 'demo' + String(clientId), verification_status: 'valid'
+  });
+  const invoiceId = upsertLatest_('invoices', ['tenant_id', 'invoice_number'], {
+    tenant_id: user.tenant_id, client_id: clientId, invoice_number: 'INV-DEMO-001',
+    invoice_date: today_(), due_date: '2026-09-21', subtotal: 18000, vat: 2700,
+    total: 20700, status: 'issued', payload: json_({ linked_proposal: 'PROP-DEMO-001' })
+  });
+  upsertLatest_('payments', ['tenant_id', 'reference'], {
+    tenant_id: user.tenant_id, invoice_id: invoiceId, payment_date: today_(),
+    amount: 10000, method: 'bank_transfer', reference: 'PAY-DEMO-001', status: 'partial'
+  });
 }
 
 function saveClientStandards_(clientId, standardIds) {
@@ -547,6 +658,8 @@ function clientFile_(user, clientId) {
   if (!client || String(client.tenant_id) !== String(user.tenant_id)) throw new Error('Client not found');
   const events = all_('audit_events').filter(e => String(e.client_id) === String(clientId));
   const eventIds = events.map(e => String(e.id));
+  const plans = all_('audit_plans').filter(p => eventIds.indexOf(String(p.audit_event_id)) !== -1);
+  const planIds = plans.map(p => String(p.id));
   const responses = all_('audit_requirement_responses').filter(r => eventIds.indexOf(String(r.audit_event_id)) !== -1).map(r => {
     const req = oneById_('integrated_audit_requirements', r.audit_requirement_id) || {};
     return Object.assign({}, r, { requirement_code: req.requirement_code || '', title: req.title || '' });
@@ -560,7 +673,9 @@ function clientFile_(user, clientId) {
     contract: latest_('contracts', 'client_id', clientId),
     programs: all_('audit_programs').filter(r => String(r.client_id) === String(clientId)).reverse(),
     events: events,
-    plans: all_('audit_plans').filter(p => eventIds.indexOf(String(p.audit_event_id)) !== -1),
+    appointments: all_('auditor_appointments').filter(a => eventIds.indexOf(String(a.audit_event_id)) !== -1),
+    plans: plans,
+    planItems: all_('audit_plan_items').filter(i => planIds.indexOf(String(i.audit_plan_id)) !== -1),
     requirements: all_('integrated_audit_requirements').filter(r => String(r.active) !== '0'),
     responses: responses,
     ncrs: all_('ncrs').filter(n => eventIds.indexOf(String(n.audit_event_id)) !== -1).reverse(),

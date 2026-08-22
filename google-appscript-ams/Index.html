@@ -301,29 +301,35 @@
           ${metric('Open NCRs', f.ncrs.filter(x => x.status !== 'closed').length)}
           ${metric('Certificates', f.certificates.length)}
         </div>
-        <h2>Audit Events</h2>${table(f.events, ['id','event_type','audit_number','planned_start_date','status'])}`;
+        <h2>File Snapshot</h2>
+        ${table([{ application: statusOf(f.application), review: statusOf(f.review), proposal: statusOf(f.proposal), contract: statusOf(f.contract), technical_review: statusOf(f.technicalReview), decision: statusOf(f.decision) }], ['application','review','proposal','contract','technical_review','decision'])}
+        <h2>Audit Events</h2>${table(f.events, ['id','event_type','audit_number','planned_start_date','actual_end_date','status'])}`;
       if (tab === 'application') return workflowForm('Application', 'saveApplication', [
         ['received_date','date','Received date'], ['status','text','Status'], ['scope_notes','textarea','Scope notes'], ['haccp_plans','number','HACCP plans']
       ], { clientId: f.client.id, application: {} }) + workflowForm('Application Review', 'saveApplicationReview', [
         ['review_date','date','Review date'], ['decision','text','Decision'], ['calculated_days','number','Calculated days'], ['review_notes','textarea','Review notes']
-      ], { clientId: f.client.id, review: {} });
+      ], { clientId: f.client.id, review: {} }) + '<h2>Current Application</h2>' + table(f.application ? [f.application] : [], ['application_number','received_date','status','submitted_at']) + '<h2>Current Review</h2>' + table(f.review ? [f.review] : [], ['review_date','calculated_days','decision','status']);
       if (tab === 'commercial') return workflowForm('Proposal', 'saveProposal', [
         ['proposal_number','text','Proposal number'], ['proposal_date','date','Proposal date'], ['valid_until','date','Valid until'], ['subtotal','number','Subtotal'], ['vat','number','VAT'], ['grand_total','number','Grand total'], ['status','text','Status']
       ], { clientId: f.client.id }) + workflowForm('Contract', 'saveContract', [
         ['contract_number','text','Contract number'], ['signed_date','date','Signed date'], ['status','text','Status']
-      ], { clientId: f.client.id });
+      ], { clientId: f.client.id }) + '<h2>Proposal</h2>' + table(f.proposal ? [f.proposal] : [], ['proposal_number','proposal_date','valid_until','currency','grand_total','status']) + '<h2>Contract</h2>' + table(f.contract ? [f.contract] : [], ['contract_number','signed_date','status']);
       if (tab === 'audit') return auditTab(f);
       if (tab === 'ncr') return ncrTab(f);
       if (tab === 'technical') return workflowForm('Technical Review', 'saveTechnicalReview', [
         ['audit_event_id','number','Audit event ID'], ['review_date','date','Review date'], ['recommendation','text','Recommendation'], ['status','text','Status'], ['review_notes','textarea','Review notes']
       ], { clientId: f.client.id, checklist: {} }) + workflowForm('Decision', 'saveDecision', [
         ['technical_review_id','number','Technical review ID'], ['decision_date','date','Decision date'], ['decision','text','Decision'], ['gm_approval','text','GM approval'], ['status','text','Status'], ['decision_notes','textarea','Decision notes']
-      ], { clientId: f.client.id });
+      ], { clientId: f.client.id }) + '<h2>Technical Review</h2>' + table(f.technicalReview ? [f.technicalReview] : [], ['id','review_date','recommendation','status','review_notes']) + '<h2>Certification Decision</h2>' + table(f.decision ? [f.decision] : [], ['id','decision_date','decision','gm_approval','status','decision_notes']);
       if (tab === 'certificate') return workflowForm('Issue Certificate', 'issueCertificate', [
         ['certification_decision_id','number','Decision ID'], ['certificate_number','text','Certificate number'], ['standard_code','text','Standard'], ['issue_date','date','Issue date'], ['expiry_date','date','Expiry date'], ['scope','textarea','Scope']
       ], { clientId: f.client.id }) + table(f.certificates, ['certificate_number','standard_code','issue_date','expiry_date','status','verification_token']);
       if (tab === 'documents') return documentTab(f);
       return '';
+    }
+
+    function statusOf(row) {
+      return row ? (row.status || row.decision || row.recommendation || 'recorded') : 'missing';
     }
 
     function workflowForm(title, action, fields, base) {
@@ -345,6 +351,11 @@
         ${workflowForm('Create Audit Program', 'createAuditProgram', [['program_number','text','Program number'],['cycle_type','text','Cycle type'],['start_date','date','Start date'],['expiry_date','date','Expiry date'],['status','text','Status']], { clientId: f.client.id })}
         ${workflowForm('Audit Event', 'saveAuditEvent', [['audit_program_id','number','Program ID'],['audit_number','text','Audit number'],['event_type','text','Event type'],['planned_start_date','date','Planned start'],['planned_end_date','date','Planned end'],['status','text','Status']], { clientId: f.client.id })}
         ${workflowForm('Audit Plan', 'saveAuditPlan', [['audit_event_id','number','Audit event ID'],['objective','textarea','Objective'],['criteria','textarea','Criteria'],['scope','textarea','Scope'],['status','text','Status']], { clientId: f.client.id })}
+        <h2>Audit Programmes</h2>${table(f.programs, ['id','program_number','cycle_type','start_date','expiry_date','status'])}
+        <h2>Audit Events</h2>${table(f.events, ['id','audit_number','event_type','planned_start_date','actual_end_date','status'])}
+        <h2>Appointments</h2>${table(f.appointments || [], ['audit_event_id','role_in_audit','appointment_status','conflict_checked'])}
+        <h2>Audit Plans</h2>${table(f.plans, ['id','audit_event_id','status','objective','criteria'])}
+        <h2>Plan Timetable</h2>${table(f.planItems || [], ['audit_date','start_time','end_time','process_area','clause_reference','auditor_name'])}
         <h2>Requirement Responses</h2>
         <div class="card"><label>Audit event ID</label><input id="rr_event"><label>Requirement</label><select id="rr_req">${f.requirements.map(r => `<option value="${r.id}">${html(r.requirement_code)} - ${html(r.title)}</option>`).join('')}</select><label>Status</label><select id="rr_status"><option>conforming</option><option>minor_nc</option><option>major_nc</option><option>opportunity</option></select><label>Objective evidence</label><textarea id="rr_ev"></textarea><label>Finding</label><textarea id="rr_find"></textarea><label><input id="rr_confirm" type="checkbox" style="width:auto"> Auditor confirmed</label><button class="primary" onclick="saveResponse()">Save response</button></div>
         ${table(f.responses, ['audit_event_id','requirement_code','conformity_status','auditor_confirmed','objective_evidence'])}
@@ -367,7 +378,7 @@
 
     function documentTab(f) {
       const templates = ['application_review','proposal','contract','audit_plan','audit_report','ncr_capa','technical_review','decision','certificate'];
-      return `<div class="card"><label>Template</label><select id="tpl">${templates.map(t => `<option>${t}</option>`).join('')}</select><label>Notes / report body</label><textarea id="doc_notes"></textarea><button class="primary" onclick="genDoc()">Generate document</button></div>${table(f.documents, ['template_key','title','generated_at','drive_file_id','pdf_file_id'])}`;
+      return `<div class="card"><label>Template</label><select id="tpl">${templates.map(t => `<option>${t}</option>`).join('')}</select><label>Notes / report body</label><textarea id="doc_notes"></textarea><button class="primary" onclick="genDoc()">Generate document</button></div><h2>Generated Documents</h2>${table(f.documents, ['template_key','title','generated_at','drive_file_id','pdf_file_id'])}<h2>Finance For This Client</h2>${table(f.invoices, ['invoice_number','invoice_date','due_date','total','status'])}`;
     }
 
     async function genDoc() {
