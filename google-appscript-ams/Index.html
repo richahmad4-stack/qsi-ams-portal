@@ -1,0 +1,404 @@
+<!doctype html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --ink: #17202a;
+      --muted: #5b6675;
+      --line: #d9dee7;
+      --panel: #ffffff;
+      --bg: #f5f7fa;
+      --brand: #0f766e;
+      --brand-2: #2563eb;
+      --warn: #b45309;
+      --bad: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.45 Arial, sans-serif; color: var(--ink); background: var(--bg); }
+    header { height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 3; }
+    header strong { font-size: 17px; }
+    header span { color: var(--muted); font-size: 12px; }
+    .shell { display: grid; grid-template-columns: 230px 1fr; min-height: calc(100vh - 58px); }
+    nav { background: #fff; border-right: 1px solid var(--line); padding: 14px; }
+    nav button { display: block; width: 100%; border: 0; background: transparent; text-align: left; padding: 10px 12px; border-radius: 6px; color: var(--ink); cursor: pointer; }
+    nav button.active, nav button:hover { background: #e8f3f1; color: #0f514c; }
+    main { padding: 22px; max-width: 1500px; width: 100%; }
+    h1 { margin: 0 0 18px; font-size: 24px; }
+    h2 { margin: 22px 0 10px; font-size: 17px; }
+    .grid { display: grid; gap: 14px; }
+    .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+    .metric { font-size: 28px; font-weight: 700; }
+    .muted { color: var(--muted); }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    label { display: block; font-weight: 600; margin: 10px 0 4px; }
+    input, select, textarea { width: 100%; border: 1px solid #c8d0db; border-radius: 6px; padding: 9px 10px; font: inherit; background: #fff; }
+    textarea { min-height: 86px; resize: vertical; }
+    button.primary, button.secondary, button.danger { border: 0; border-radius: 6px; padding: 9px 12px; cursor: pointer; font-weight: 600; }
+    button.primary { background: var(--brand); color: #fff; }
+    button.secondary { background: #e6edf7; color: #173153; }
+    button.danger { background: #fee2e2; color: var(--bad); }
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    th, td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: #eef2f7; font-size: 12px; color: #394657; }
+    tr:hover td { background: #fbfcfe; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef2ff; color: #3730a3; font-size: 12px; }
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0; }
+    .tabs button { border: 1px solid var(--line); background: #fff; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+    .tabs button.active { background: var(--brand-2); color: #fff; border-color: var(--brand-2); }
+    .notice { background: #fff7ed; border: 1px solid #fed7aa; padding: 12px; border-radius: 8px; color: #7c2d12; }
+    .split { display: grid; grid-template-columns: 360px 1fr; gap: 14px; }
+    .hidden { display: none !important; }
+    @media (max-width: 900px) {
+      .shell { grid-template-columns: 1fr; }
+      nav { display: flex; overflow: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+      nav button { width: auto; white-space: nowrap; }
+      .grid.cols-4, .grid.cols-2, .split { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div><strong>QSI AMS</strong> <span id="version"></span></div>
+    <div><span id="user"></span></div>
+  </header>
+  <div class="shell">
+    <nav id="nav"></nav>
+    <main id="app"></main>
+  </div>
+  <script>
+    const BOOTSTRAP = <?!= bootstrap ?>;
+    const state = { page: 'dashboard', clientFile: null, clients: [], dashboard: null, finance: null, admin: null, tab: 'summary' };
+    const pages = [
+      ['dashboard', 'Dashboard'], ['clients', 'Clients'], ['workflow', 'Workflow'],
+      ['finance', 'Finance'], ['admin', 'Admin'], ['audit', 'Audit Trail']
+    ];
+
+    document.getElementById('version').textContent = BOOTSTRAP.app.version;
+    document.getElementById('user').textContent = BOOTSTRAP.user.full_name || BOOTSTRAP.user.email || BOOTSTRAP.user.error || '';
+
+    function can(module, action) {
+      const p = BOOTSTRAP.user.permissions || {};
+      return Boolean(p[module] && p[module].indexOf(action) !== -1);
+    }
+
+    function server(action, payload) {
+      return new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).dispatch(action, payload || {});
+      });
+    }
+
+    function nav() {
+      const el = document.getElementById('nav');
+      el.innerHTML = '';
+      pages.forEach(([id, label]) => {
+        if (id === 'finance' && !can('finance', 'view')) return;
+        if (id === 'admin' && !can('users', 'view')) return;
+        if (id === 'audit' && !can('audit_trail', 'view')) return;
+        const b = document.createElement('button');
+        b.textContent = label;
+        b.className = state.page === id ? 'active' : '';
+        b.onclick = () => show(id);
+        el.appendChild(b);
+      });
+    }
+
+    async function show(page) {
+      state.page = page;
+      nav();
+      try {
+        if (BOOTSTRAP.user.error) return renderError(BOOTSTRAP.user.error);
+        if (page === 'dashboard') {
+          state.dashboard = await server('dashboard');
+          renderDashboard();
+        }
+        if (page === 'clients') {
+          state.clients = await server('listClients', {});
+          renderClients();
+        }
+        if (page === 'workflow') {
+          state.clients = await server('listClients', {});
+          renderWorkflow();
+        }
+        if (page === 'finance') {
+          state.finance = await server('finance');
+          renderFinance();
+        }
+        if (page === 'admin') {
+          state.admin = await server('adminData');
+          renderAdmin();
+        }
+        if (page === 'audit') {
+          state.audit = await server('auditTrail', { limit: 200 });
+          renderAudit();
+        }
+      } catch (err) {
+        renderError(err.message || err);
+      }
+    }
+
+    function html(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function renderError(message) {
+      document.getElementById('app').innerHTML = '<div class="notice">' + html(message) + '</div><div class="card" style="margin-top:14px"><button class="primary" onclick="bootstrapSeed()">Seed baseline / create first admin</button></div>';
+    }
+
+    async function bootstrapSeed() {
+      try {
+        const res = await server('seedBaseline', {});
+        alert(res.message + '. Reloading AMS.');
+        location.reload();
+      } catch (err) {
+        alert(err.message || err);
+      }
+    }
+
+    function renderDashboard() {
+      const d = state.dashboard;
+      document.getElementById('app').innerHTML = `
+        <h1>Dashboard</h1>
+        <div class="grid cols-4">
+          ${metric('Clients', d.counts.clients)}
+          ${metric('Active certificates', d.counts.activeCertificates)}
+          ${metric('Open NCRs', d.counts.openNcrs)}
+          ${metric('Pending technical reviews', d.counts.pendingReviews)}
+        </div>
+        <h2>Upcoming Audits</h2>
+        ${table(d.upcoming, ['company','event_type','audit_number','planned_start_date','status'])}
+        <h2>Recent Activity</h2>
+        ${table(d.recent, ['created_at','full_name','action','entity_table','entity_id'])}
+      `;
+    }
+
+    function metric(label, value) {
+      return `<div class="card"><div class="metric">${html(value)}</div><div class="muted">${html(label)}</div></div>`;
+    }
+
+    function table(rows, cols) {
+      if (!rows || !rows.length) return '<div class="card muted">No records.</div>';
+      return `<table><thead><tr>${cols.map(c => `<th>${html(c.replaceAll('_',' '))}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${cols.map(c => `<td>${html(r[c])}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    }
+
+    function renderClients() {
+      document.getElementById('app').innerHTML = `
+        <div class="row"><h1 style="flex:1">Clients</h1><button class="primary" onclick="newClient()">New client</button></div>
+        ${table(state.clients, ['id','company','client_code','standards','current_stage','status','contact_email'])}
+      `;
+    }
+
+    function newClient() {
+      document.getElementById('app').innerHTML = `
+        <h1>New Client</h1>
+        <div class="card">
+          ${clientForm({ country: 'Saudi Arabia', status: 'prospect', current_stage: 'application', number_of_sites: 1 })}
+          <button class="primary" onclick="submitClient()">Save client</button>
+        </div>`;
+    }
+
+    function clientForm(c) {
+      return `
+        <div class="grid cols-2">
+          <div><label>Company</label><input id="company" value="${html(c.company)}"></div>
+          <div><label>Client code</label><input id="client_code" value="${html(c.client_code)}"></div>
+          <div><label>Legal name</label><input id="legal_name" value="${html(c.legal_name)}"></div>
+          <div><label>Contact email</label><input id="contact_email" value="${html(c.contact_email)}"></div>
+          <div><label>Contact name</label><input id="contact_name" value="${html(c.contact_name)}"></div>
+          <div><label>Contact phone</label><input id="contact_phone" value="${html(c.contact_phone)}"></div>
+          <div><label>Country</label><input id="country" value="${html(c.country)}"></div>
+          <div><label>City</label><input id="city" value="${html(c.city)}"></div>
+          <div><label>Employees</label><input id="employee_count" type="number" value="${html(c.employee_count)}"></div>
+          <div><label>Sites</label><input id="number_of_sites" type="number" value="${html(c.number_of_sites)}"></div>
+        </div>
+        <label>Address</label><textarea id="address">${html(c.address)}</textarea>
+        <label>Scope</label><textarea id="scope">${html(c.scope)}</textarea>
+        <label>Standards</label>
+        <div class="row">${BOOTSTRAP.standards.map(s => `<label style="font-weight:400"><input style="width:auto" type="checkbox" name="standards" value="${s.id}"> ${html(s.code)}</label>`).join('')}</div>
+      `;
+    }
+
+    async function submitClient() {
+      const standard_ids = Array.from(document.querySelectorAll('input[name=standards]:checked')).map(x => x.value);
+      const payload = {
+        company: val('company'), legal_name: val('legal_name'), client_code: val('client_code'),
+        address: val('address'), city: val('city'), country: val('country'),
+        contact_name: val('contact_name'), contact_email: val('contact_email'), contact_phone: val('contact_phone'),
+        employee_count: val('employee_count'), number_of_sites: val('number_of_sites'), scope: val('scope'),
+        status: 'prospect', current_stage: 'application', standard_ids
+      };
+      state.clientFile = await server('saveClient', payload);
+      state.page = 'workflow';
+      renderClientFile();
+    }
+
+    function val(id) { return document.getElementById(id).value; }
+
+    function renderWorkflow() {
+      document.getElementById('app').innerHTML = `
+        <h1>Certification Workflow</h1>
+        <div class="split">
+          <div class="card">
+            <label>Select client</label>
+            <select id="clientPick">${state.clients.map(c => `<option value="${c.id}">${html(c.company)} - ${html(c.current_stage)}</option>`).join('')}</select>
+            <button class="primary" style="margin-top:10px" onclick="loadClient()">Open file</button>
+          </div>
+          <div class="card muted">Open a client file to work through application, review, proposal, contract, audit, NCR/CAPA, technical review, decision and certificate issue.</div>
+        </div>`;
+    }
+
+    async function loadClient() {
+      state.clientFile = await server('clientFile', { clientId: Number(val('clientPick')) });
+      renderClientFile();
+    }
+
+    function renderClientFile() {
+      const f = state.clientFile;
+      const c = f.client;
+      document.getElementById('app').innerHTML = `
+        <div class="row"><h1 style="flex:1">${html(c.company)}</h1><span class="pill">${html(c.current_stage)}</span><span class="pill">${html(c.status)}</span></div>
+        <div class="muted">${html((f.standards || []).map(s => s.code).join(', '))}</div>
+        <div class="tabs">
+          ${['summary','application','commercial','audit','ncr','technical','certificate','documents'].map(t => `<button class="${state.tab === t ? 'active' : ''}" onclick="state.tab='${t}';renderClientFile()">${t}</button>`).join('')}
+        </div>
+        <div id="fileTab">${tabHtml(f, state.tab)}</div>
+      `;
+    }
+
+    function tabHtml(f, tab) {
+      if (tab === 'summary') return `
+        <div class="grid cols-4">
+          ${metric('Stage', f.client.current_stage)}
+          ${metric('Events', f.events.length)}
+          ${metric('Open NCRs', f.ncrs.filter(x => x.status !== 'closed').length)}
+          ${metric('Certificates', f.certificates.length)}
+        </div>
+        <h2>Audit Events</h2>${table(f.events, ['id','event_type','audit_number','planned_start_date','status'])}`;
+      if (tab === 'application') return workflowForm('Application', 'saveApplication', [
+        ['received_date','date','Received date'], ['status','text','Status'], ['scope_notes','textarea','Scope notes'], ['haccp_plans','number','HACCP plans']
+      ], { clientId: f.client.id, application: {} }) + workflowForm('Application Review', 'saveApplicationReview', [
+        ['review_date','date','Review date'], ['decision','text','Decision'], ['calculated_days','number','Calculated days'], ['review_notes','textarea','Review notes']
+      ], { clientId: f.client.id, review: {} });
+      if (tab === 'commercial') return workflowForm('Proposal', 'saveProposal', [
+        ['proposal_number','text','Proposal number'], ['proposal_date','date','Proposal date'], ['valid_until','date','Valid until'], ['subtotal','number','Subtotal'], ['vat','number','VAT'], ['grand_total','number','Grand total'], ['status','text','Status']
+      ], { clientId: f.client.id }) + workflowForm('Contract', 'saveContract', [
+        ['contract_number','text','Contract number'], ['signed_date','date','Signed date'], ['status','text','Status']
+      ], { clientId: f.client.id });
+      if (tab === 'audit') return auditTab(f);
+      if (tab === 'ncr') return ncrTab(f);
+      if (tab === 'technical') return workflowForm('Technical Review', 'saveTechnicalReview', [
+        ['audit_event_id','number','Audit event ID'], ['review_date','date','Review date'], ['recommendation','text','Recommendation'], ['status','text','Status'], ['review_notes','textarea','Review notes']
+      ], { clientId: f.client.id, checklist: {} }) + workflowForm('Decision', 'saveDecision', [
+        ['technical_review_id','number','Technical review ID'], ['decision_date','date','Decision date'], ['decision','text','Decision'], ['gm_approval','text','GM approval'], ['status','text','Status'], ['decision_notes','textarea','Decision notes']
+      ], { clientId: f.client.id });
+      if (tab === 'certificate') return workflowForm('Issue Certificate', 'issueCertificate', [
+        ['certification_decision_id','number','Decision ID'], ['certificate_number','text','Certificate number'], ['standard_code','text','Standard'], ['issue_date','date','Issue date'], ['expiry_date','date','Expiry date'], ['scope','textarea','Scope']
+      ], { clientId: f.client.id }) + table(f.certificates, ['certificate_number','standard_code','issue_date','expiry_date','status','verification_token']);
+      if (tab === 'documents') return documentTab(f);
+      return '';
+    }
+
+    function workflowForm(title, action, fields, base) {
+      const id = 'f' + Math.random().toString(16).slice(2);
+      setTimeout(() => { window[id] = { action, base }; }, 0);
+      return `<div class="card" style="margin-bottom:14px"><h2>${html(title)}</h2>${fields.map(([name,type,label]) => type === 'textarea' ? `<label>${html(label)}</label><textarea data-form="${id}" data-name="${name}"></textarea>` : `<label>${html(label)}</label><input data-form="${id}" data-name="${name}" type="${type}">`).join('')}<button class="primary" style="margin-top:10px" onclick="submitWorkflow('${id}')">Save ${html(title)}</button></div>`;
+    }
+
+    async function submitWorkflow(id) {
+      const info = window[id];
+      const payload = Object.assign({}, info.base);
+      document.querySelectorAll(`[data-form="${id}"]`).forEach(el => payload[el.dataset.name] = el.value);
+      state.clientFile = await server(info.action, payload);
+      renderClientFile();
+    }
+
+    function auditTab(f) {
+      return `
+        ${workflowForm('Create Audit Program', 'createAuditProgram', [['program_number','text','Program number'],['cycle_type','text','Cycle type'],['start_date','date','Start date'],['expiry_date','date','Expiry date'],['status','text','Status']], { clientId: f.client.id })}
+        ${workflowForm('Audit Event', 'saveAuditEvent', [['audit_program_id','number','Program ID'],['audit_number','text','Audit number'],['event_type','text','Event type'],['planned_start_date','date','Planned start'],['planned_end_date','date','Planned end'],['status','text','Status']], { clientId: f.client.id })}
+        ${workflowForm('Audit Plan', 'saveAuditPlan', [['audit_event_id','number','Audit event ID'],['objective','textarea','Objective'],['criteria','textarea','Criteria'],['scope','textarea','Scope'],['status','text','Status']], { clientId: f.client.id })}
+        <h2>Requirement Responses</h2>
+        <div class="card"><label>Audit event ID</label><input id="rr_event"><label>Requirement</label><select id="rr_req">${f.requirements.map(r => `<option value="${r.id}">${html(r.requirement_code)} - ${html(r.title)}</option>`).join('')}</select><label>Status</label><select id="rr_status"><option>conforming</option><option>minor_nc</option><option>major_nc</option><option>opportunity</option></select><label>Objective evidence</label><textarea id="rr_ev"></textarea><label>Finding</label><textarea id="rr_find"></textarea><label><input id="rr_confirm" type="checkbox" style="width:auto"> Auditor confirmed</label><button class="primary" onclick="saveResponse()">Save response</button></div>
+        ${table(f.responses, ['audit_event_id','requirement_code','conformity_status','auditor_confirmed','objective_evidence'])}
+      `;
+    }
+
+    async function saveResponse() {
+      const f = state.clientFile;
+      state.clientFile = await server('saveRequirementResponse', { clientId: f.client.id, audit_event_id: val('rr_event'), audit_requirement_id: val('rr_req'), conformity_status: val('rr_status'), objective_evidence: val('rr_ev'), finding_text: val('rr_find'), auditor_confirmed: document.getElementById('rr_confirm').checked });
+      renderClientFile();
+    }
+
+    function ncrTab(f) {
+      return `
+        ${workflowForm('NCR', 'saveNcr', [['audit_event_id','number','Audit event ID'],['audit_requirement_response_id','number','Response ID'],['ncr_number','text','NCR number'],['clause_reference','text','Clause'],['severity','text','Severity'],['due_date','date','Due date'],['statement','textarea','Statement'],['correction','textarea','Correction'],['root_cause','textarea','Root cause'],['corrective_action','textarea','Corrective action']], { clientId: f.client.id })}
+        ${workflowForm('CAPA', 'saveCapa', [['audit_event_id','number','Audit event ID'],['ncr_id','number','NCR ID'],['due_date','date','Due date'],['action_plan','textarea','Action plan'],['evidence_summary','textarea','Evidence'],['effectiveness_review','textarea','Effectiveness review']], { clientId: f.client.id })}
+        <h2>NCRs</h2>${table(f.ncrs, ['id','ncr_number','severity','status','statement','due_date'])}
+        <h2>CAPAs</h2>${table(f.capas, ['id','ncr_id','status','action_plan','due_date'])}`;
+    }
+
+    function documentTab(f) {
+      const templates = ['application_review','proposal','contract','audit_plan','audit_report','ncr_capa','technical_review','decision','certificate'];
+      return `<div class="card"><label>Template</label><select id="tpl">${templates.map(t => `<option>${t}</option>`).join('')}</select><label>Notes / report body</label><textarea id="doc_notes"></textarea><button class="primary" onclick="genDoc()">Generate document</button></div>${table(f.documents, ['template_key','title','generated_at','drive_file_id','pdf_file_id'])}`;
+    }
+
+    async function genDoc() {
+      const f = state.clientFile;
+      const res = await server('generateDocument', { clientId: f.client.id, template_key: val('tpl'), context: { notes: val('doc_notes'), report_body: val('doc_notes'), scope: f.client.scope } });
+      alert('Generated document:\\n' + res.documentUrl + '\\n' + res.pdfUrl);
+      state.clientFile = await server('clientFile', { clientId: f.client.id });
+      renderClientFile();
+    }
+
+    function renderFinance() {
+      document.getElementById('app').innerHTML = `
+        <h1>Finance</h1>
+        <div class="card">${workflowFields('inv', [['clientId','number','Client ID'],['invoice_number','text','Invoice number'],['invoice_date','date','Invoice date'],['due_date','date','Due date'],['subtotal','number','Subtotal'],['vat','number','VAT'],['total','number','Total'],['status','text','Status']])}<button class="primary" onclick="saveInvoice()">Save invoice</button></div>
+        <h2>Invoices</h2>${table(state.finance.invoices, ['id','company','invoice_number','invoice_date','total','status'])}
+        <h2>Payments</h2>${table(state.finance.payments, ['id','company','invoice_number','payment_date','amount','method','status'])}
+      `;
+    }
+
+    function workflowFields(prefix, fields) {
+      return fields.map(([name,type,label]) => `<label>${html(label)}</label><input id="${prefix}_${name}" type="${type}">`).join('');
+    }
+
+    async function saveInvoice() {
+      const p = {};
+      ['clientId','invoice_number','invoice_date','due_date','subtotal','vat','total','status'].forEach(k => p[k] = val('inv_' + k));
+      state.finance = await server('saveInvoice', p);
+      renderFinance();
+    }
+
+    function renderAdmin() {
+      document.getElementById('app').innerHTML = `
+        <div class="row"><h1 style="flex:1">Admin</h1><button class="secondary" onclick="seed()">Seed baseline</button></div>
+        <div class="card">${workflowFields('user', [['full_name','text','Full name'],['email','text','Email'],['phone','text','Phone']])}<label>Role</label><select id="user_primary_role_code">${BOOTSTRAP.roleOptions.map(r => `<option value="${r.code}">${html(r.name)}</option>`).join('')}</select><label>Status</label><input id="user_status" value="active"><button class="primary" style="margin-top:10px" onclick="saveUser()">Save user</button></div>
+        <h2>Users</h2>${table(state.admin.users, ['id','full_name','email','primary_role_code','status','last_login_at'])}
+      `;
+    }
+
+    async function seed() {
+      const res = await server('seedBaseline', {});
+      alert(res.message);
+    }
+
+    async function saveUser() {
+      const p = {};
+      ['full_name','email','phone','primary_role_code','status'].forEach(k => p[k] = val('user_' + k));
+      state.admin = await server('saveUser', p);
+      renderAdmin();
+    }
+
+    function renderAudit() {
+      document.getElementById('app').innerHTML = `<h1>Audit Trail</h1>${table(state.audit, ['created_at','full_name','action','entity_table','entity_id','after_json'])}`;
+    }
+
+    nav();
+    show('dashboard');
+  </script>
+</body>
+</html>
