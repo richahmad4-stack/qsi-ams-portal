@@ -21,7 +21,7 @@ QSI AMS is a CodeIgniter 4 / PHP / MariaDB Certification Body Audit Management S
 - Local Windows startup is repaired and verified: the launcher resolves the current repository, starts the preserved `.mysql-data` MariaDB instance on port 3307, and serves the real CodeIgniter AMS on port 8080. The Super Admin seeder and browser login were verified end to end.
 - Cross-computer continuation is documented in `AMS_HANDOVER_CURRENT.md`; the older `SESSION_HANDOFF_AMS.md` is retained as superseded historical context.
 - Automated suite: **45 tests / 340 assertions passing**.
-- Google Apps Script AMS project package added under `google-appscript-ams/`, including Apps Script manifest/source/UI, Cloud SQL schema, Drive/Docs document generation workflow, deployment notes, RBAC, workflow, finance, certificate verification, and audit-trail scaffolding.
+- Google Apps Script AMS project package added under `google-appscript-ams/`, including Apps Script manifest/source/UI, no-paid Google Sheets backend, preserved optional Cloud SQL backend/schema, Drive/Docs document generation workflow, deployment notes, RBAC, workflow, finance, certificate verification, and audit-trail scaffolding.
 
 ## Current Focus
 

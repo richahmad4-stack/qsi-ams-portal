@@ -5,20 +5,20 @@
 The application is a Google Apps Script web app using:
 
 - `HtmlService` for the web interface.
-- `Jdbc.getCloudSqlConnection` for Cloud SQL MySQL.
+- `SpreadsheetApp` for the no-paid Google Sheets data store.
 - `Session.getActiveUser().getEmail()` for Google Workspace identity.
 - `DriveApp`, `DocumentApp`, and PDF export for controlled document outputs.
 - Script Properties for environment configuration.
 
-## Cloud SQL
+## No-Paid Storage
 
-Create a MySQL database and run:
+The active `Code.gs` creates its own storage when `setupNoPaidStorage` or `Seed baseline / create first admin` is run:
 
-```sql
-source sql/schema_cloudsql.sql;
-```
+- Google Sheet: `QSI AMS Data`
+- Google Drive folder: `QSI AMS Generated Documents`
+- Script properties: `AMS_DATA_SPREADSHEET_ID`, `AMS_ROOT_FOLDER_ID`
 
-Create a least-privilege application user with access to the AMS database. Do not use the root account in Script Properties.
+Cloud SQL is preserved only as an optional future backend in `Code_cloudsql.gs` and `sql/schema_cloudsql.sql`.
 
 ## Apps Script
 
@@ -31,11 +31,8 @@ Create a standalone Apps Script project and add:
 Set Script Properties:
 
 ```text
-CLOUD_SQL_CONNECTION_NAME=project:region:instance
-DB_NAME=qsi_ams
-DB_USER=ams_app
-DB_PASSWORD=...
-AMS_ROOT_FOLDER_ID=...
+AMS_DATA_SPREADSHEET_ID=created automatically
+AMS_ROOT_FOLDER_ID=created automatically
 AMS_PUBLIC_BASE_URL=https://script.google.com/macros/s/.../exec
 AMS_DEV_USER_EMAIL=admin@example.com
 ```
@@ -45,7 +42,7 @@ Deploy as a versioned Web app:
 - Execute as: `User accessing the web app`
 - Access: Workspace domain users
 
-After the schema is installed, open the deployed URL. If no AMS users exist yet, the error screen includes `Seed baseline / create first admin`; it seeds tenant, roles, permissions, standards, templates, audit requirements, and creates the active Google user as `super_admin`. If Apps Script cannot expose the active user email during testing, set `AMS_DEV_USER_EMAIL` before this bootstrap step.
+Open the deployed URL. If no AMS users exist yet, the error screen includes `Seed baseline / create first admin`; it creates the no-paid Sheet/Drive storage, seeds tenant, roles, permissions, standards, templates, audit requirements, and creates the active Google user as `super_admin`. If Apps Script cannot expose the active user email during testing, set `AMS_DEV_USER_EMAIL` before this bootstrap step.
 
 ## Controlled Document Output
 
