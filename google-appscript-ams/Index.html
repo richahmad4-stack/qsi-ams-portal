@@ -159,7 +159,7 @@
     }
 
     function renderDashboard() {
-      const d = state.dashboard;
+      const d = state.dashboard || { counts: { clients: 0, activeCertificates: 0, openNcrs: 0, pendingReviews: 0 }, upcoming: [], recent: [] };
       document.getElementById('app').innerHTML = `
         <h1>Dashboard</h1>
         <div class="grid cols-4">

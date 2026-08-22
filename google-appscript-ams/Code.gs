@@ -120,10 +120,15 @@ function props_() {
 }
 
 function store_() {
+  if (globalThis.__AMS_STORE) return globalThis.__AMS_STORE;
   let id = props_().getProperty('AMS_DATA_SPREADSHEET_ID');
   let ss = id ? SpreadsheetApp.openById(id) : SpreadsheetApp.create('QSI AMS Data');
   if (!id) props_().setProperty('AMS_DATA_SPREADSHEET_ID', ss.getId());
-  ensureSheets_(ss);
+  if (!globalThis.__AMS_SHEETS_READY) {
+    ensureSheets_(ss);
+    globalThis.__AMS_SHEETS_READY = true;
+  }
+  globalThis.__AMS_STORE = ss;
   return ss;
 }
 
@@ -168,6 +173,26 @@ function insert_(table, data) {
   return id;
 }
 
+function insertMany_(table, rows) {
+  if (!rows.length) return [];
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const sh = sheet_(table);
+    const headers = AMS.TABLES[table];
+    const key = 'NEXT_ID_' + table;
+    const start = nextIdStart_(table, sh, key);
+    const timestamp = now_();
+    const records = rows.map((data, index) => Object.assign({ id: start + index, created_at: timestamp, updated_at: timestamp }, data));
+    const values = records.map(row => headers.map(h => row[h] === undefined || row[h] === null ? '' : row[h]));
+    sh.getRange(sh.getLastRow() + 1, 1, values.length, headers.length).setValues(values);
+    props_().setProperty(key, String(start + rows.length));
+    return records.map(row => row.id);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function update_(table, id, patch) {
   const sh = sheet_(table);
   const headers = AMS.TABLES[table];
@@ -201,12 +226,22 @@ function nextId_(table) {
   lock.waitLock(30000);
   try {
     const key = 'NEXT_ID_' + table;
-    const current = Number(props_().getProperty(key) || '1');
+    const current = nextIdStart_(table, sheet_(table), key);
     props_().setProperty(key, String(current + 1));
     return current;
   } finally {
     lock.releaseLock();
   }
+}
+
+function nextIdStart_(table, sh, key) {
+  const stored = Number(props_().getProperty(key) || '0');
+  if (stored > 0) return stored;
+  const headers = AMS.TABLES[table];
+  const idCol = headers.indexOf('id') + 1;
+  if (sh.getLastRow() < 2 || idCol < 1) return 1;
+  const ids = sh.getRange(2, idCol, sh.getLastRow() - 1, 1).getValues().flat().map(Number).filter(Number.isFinite);
+  return ids.length ? Math.max.apply(null, ids) + 1 : 1;
 }
 
 function oneById_(table, id) {
@@ -314,22 +349,31 @@ function seedTenant_() {
 
 function seedRoles_() {
   const existing = all_('roles').map(r => r.code);
-  AMS.ROLES.forEach(role => {
-    if (existing.indexOf(role[0]) === -1) insert_('roles', { tenant_id: 1, code: role[0], name: role[1], description: role[2], system_role: 1 });
-  });
+  const rows = AMS.ROLES
+    .filter(role => existing.indexOf(role[0]) === -1)
+    .map(role => ({ tenant_id: 1, code: role[0], name: role[1], description: role[2], system_role: 1 }));
+  insertMany_('roles', rows);
 }
 
 function seedPermissions_() {
   const existing = all_('permissions').map(p => p.module + ':' + p.action);
+  const permissionRows = [];
   AMS.MODULES.forEach(module => AMS.ACTIONS.forEach(action => {
-    if (existing.indexOf(module + ':' + action) === -1) insert_('permissions', { module: module, action: action, description: action + ' ' + module });
+    const key = module + ':' + action;
+    if (existing.indexOf(key) === -1) {
+      permissionRows.push({ module: module, action: action, description: action + ' ' + module });
+      existing.push(key);
+    }
   }));
+  insertMany_('permissions', permissionRows);
+
   const rpExisting = all_('role_permissions').map(rp => rp.role_code + ':' + rp.module + ':' + rp.action);
+  const rolePermissionRows = [];
   const addPerms = (role, modules, actions) => {
     modules.forEach(module => actions.forEach(action => {
       const key = role + ':' + module + ':' + action;
       if (rpExisting.indexOf(key) === -1) {
-        insert_('role_permissions', { role_code: role, module: module, action: action });
+        rolePermissionRows.push({ role_code: role, module: module, action: action });
         rpExisting.push(key);
       }
     }));
@@ -345,27 +389,31 @@ function seedPermissions_() {
   addPerms('technical_reviewer', ['dashboard', 'clients', 'reports', 'ncrs', 'capas', 'technical_reviews'], AMS.ACTIONS);
   addPerms('certification_decision_maker', ['dashboard', 'clients', 'technical_reviews', 'certification_decisions', 'certificates'], AMS.ACTIONS);
   addPerms('finance', ['dashboard', 'clients', 'proposals', 'contracts', 'finance'], AMS.ACTIONS);
+  insertMany_('role_permissions', rolePermissionRows);
 }
 
 function seedStandards_() {
   const existing = all_('standards').map(s => s.code);
-  AMS.STANDARDS.forEach(std => {
-    if (existing.indexOf(std[0]) === -1) insert_('standards', { code: std[0], name: std[1], version: std[2], scheme_type: std[3], active: 1 });
-  });
+  const rows = AMS.STANDARDS
+    .filter(std => existing.indexOf(std[0]) === -1)
+    .map(std => ({ code: std[0], name: std[1], version: std[2], scheme_type: std[3], active: 1 }));
+  insertMany_('standards', rows);
 }
 
 function seedRequirements_() {
   const existing = all_('integrated_audit_requirements').map(r => r.requirement_code);
-  AMS.REQUIREMENTS.forEach(req => {
-    if (existing.indexOf(req[0]) === -1) insert_('integrated_audit_requirements', { requirement_code: req[0], title: req[1], audit_question: req[2], evidence_expectation: req[3], category: req[4], active: 1 });
-  });
+  const rows = AMS.REQUIREMENTS
+    .filter(req => existing.indexOf(req[0]) === -1)
+    .map(req => ({ requirement_code: req[0], title: req[1], audit_question: req[2], evidence_expectation: req[3], category: req[4], active: 1 }));
+  insertMany_('integrated_audit_requirements', rows);
 }
 
 function seedTemplates_() {
   const existing = all_('document_templates').map(t => t.template_key);
-  defaultTemplates_().forEach(t => {
-    if (existing.indexOf(t.key) === -1) insert_('document_templates', { tenant_id: 1, template_key: t.key, title: t.title, document_type: t.type, body_html: t.html, revision: '1', active: 1 });
-  });
+  const rows = defaultTemplates_()
+    .filter(t => existing.indexOf(t.key) === -1)
+    .map(t => ({ tenant_id: 1, template_key: t.key, title: t.title, document_type: t.type, body_html: t.html, revision: '1', active: 1 }));
+  insertMany_('document_templates', rows);
 }
 
 function ensureRootFolder_() {
