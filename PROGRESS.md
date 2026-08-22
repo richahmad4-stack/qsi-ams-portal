@@ -28,15 +28,16 @@ QSI AMS is a CodeIgniter 4 / PHP / MariaDB Certification Body Audit Management S
 - Google Apps Script AMS live Version 10 now seeds and displays a full demo certification cycle: application, application review, proposal, contract, audit programme/event/plan/timetable, appointment, requirement responses, NCR/CAPA, technical review, certification decision, certificate, invoice, payment, and richer per-tab workflow tables.
 - Google Apps Script full-parity plan documented in `docs/google-appscript-full-ams-parity-plan.md`: one client workflow with tabs, full Stage 1/Stage 2/Surveillance 1/Surveillance 2/Recertification audit files and reports, Super Admin Cycle Builder, professional UI design, document generation, gates, demo data, and verification requirements.
 - Google Apps Script local package expanded with Clause Builder and NCR Builder modules, additive Sheets schema updates, controlled requirement-clause mappings, linked NCR/CAPA package generation from audit responses, and the full one-client workflow tab layout with separate stage tabs.
+- Google Apps Script local package now includes first working Super Admin Cycle Builder preview/generate: validates controlled inputs, warns on duplicate client codes, creates/updates one normal client workflow, selected standards, application/review, proposal/contract, audit program, Stage 1, Stage 2, Surveillance 1, Surveillance 2, Recertification stage files, checklist response shells, reports, finance shell, run rows, and audit log.
 
 ## Current Focus
 
-The canonical report connection, Super Admin full-file access, and local login/startup repair are complete. The current Google Apps Script AMS package is still a starter/demo deployment, but the local source now has the first Clause Builder/NCR Builder implementation and the corrected one-client tab workflow. Continue by deploying/testing this source, then implementing full Cycle Builder preview/import and deeper gates/documents.
+The canonical report connection, Super Admin full-file access, and local login/startup repair are complete. The current Google Apps Script AMS package is still a starter/demo deployment, but the local source now has first working Cycle Builder preview/generate, Clause Builder/NCR Builder, and the corrected one-client tab workflow. Continue by deploying/testing this source, then implementing batch Cycle Builder import/resume and deeper gates/documents.
 
 ## Next
 
-1. Deploy and browser-test the updated Google Apps Script local source with Clause Builder, NCR Builder, one-client workflow tabs, and stage shells.
-2. Implement Google Apps Script full parity from `docs/google-appscript-full-ams-parity-plan.md`: full Cycle Builder preview/import, complete audit-stage file details/reports, gates, documents, client portal, demo data, and browser verification.
+1. Deploy and browser-test the updated Google Apps Script local source with Cycle Builder, Clause Builder, NCR Builder, one-client workflow tabs, and stage shells.
+2. Implement Google Apps Script full parity from `docs/google-appscript-full-ams-parity-plan.md`: batch Cycle Builder import/resume, complete audit-stage file details/reports, gates, documents, client portal, demo data, and browser verification.
 3. Add database-backed feature/E2E tests for all role conflicts and full certification/surveillance/recertification gates in the CodeIgniter AMS.
 4. Add immutable approval/document snapshots and hashes, complaints/appeals, suspension/withdrawal/reinstatement, and replacement-certificate history.
 5. Complete batch migration controls for the 700-client import: approval, downloadable errors, resume/retry, and reconciliation report.

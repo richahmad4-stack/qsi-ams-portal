@@ -34,6 +34,8 @@ const AMS = {
     payments: ['id', 'tenant_id', 'invoice_id', 'payment_date', 'amount', 'method', 'reference', 'status', 'created_at'],
     document_templates: ['id', 'tenant_id', 'template_key', 'title', 'document_type', 'body_html', 'revision', 'active', 'created_at', 'updated_at'],
     generated_documents: ['id', 'tenant_id', 'client_id', 'source_table', 'source_id', 'template_key', 'title', 'drive_file_id', 'pdf_file_id', 'version_no', 'hash_value', 'generated_by', 'generated_at'],
+    cycle_builder_runs: ['id', 'tenant_id', 'user_id', 'run_type', 'status', 'client_id', 'client_code', 'summary', 'warnings_json', 'errors_json', 'created_at'],
+    cycle_builder_rows: ['id', 'cycle_builder_run_id', 'row_number', 'client_id', 'client_code', 'status', 'message', 'payload_json', 'created_at'],
     clause_builder_runs: ['id', 'tenant_id', 'user_id', 'action', 'requirement_id', 'summary', 'created_at'],
     ncr_builder_runs: ['id', 'tenant_id', 'user_id', 'action', 'audit_requirement_response_id', 'ncr_id', 'capa_id', 'summary', 'created_at'],
     audit_logs: ['id', 'tenant_id', 'user_id', 'action', 'entity_table', 'entity_id', 'before_json', 'after_json', 'created_at']
@@ -100,6 +102,9 @@ function dispatch(action, payload) {
   const actions = {
     bootstrap: () => getBootstrap_(user),
     dashboard: () => dashboard_(user),
+    cycleBuilder: () => cycleBuilder_(user),
+    previewCycle: () => previewCycle_(user, payload || {}),
+    generateCycle: () => generateCycle_(user, payload || {}),
     clauseBuilder: () => clauseBuilder_(user),
     saveClauseRequirement: () => saveClauseRequirement_(user, payload || {}),
     deactivateClauseRequirement: () => deactivateClauseRequirement_(user, payload || {}),
@@ -537,6 +542,208 @@ function dashboard_(user) {
   };
 }
 
+function requireSuperAdmin_(user) {
+  if (String(user.primary_role_code) !== 'super_admin') throw new Error('Cycle Builder is Super Admin only.');
+}
+
+function cycleBuilder_(user) {
+  requirePermission_(user, 'cycle_builder', 'view');
+  requireSuperAdmin_(user);
+  return {
+    standards: all_('standards').filter(s => String(s.active) !== '0'),
+    runs: tenantRows_('cycle_builder_runs', user).slice(-60).reverse(),
+    rows: all_('cycle_builder_rows').slice(-120).reverse()
+  };
+}
+
+function previewCycle_(user, payload) {
+  requirePermission_(user, 'cycle_builder', 'view');
+  requireSuperAdmin_(user);
+  const normalized = normalizeCycleInput_(payload || {});
+  const errors = [];
+  const warnings = [];
+  if (!normalized.company) errors.push('Client company is required.');
+  if (!normalized.client_code) errors.push('Client code is required.');
+  if (!normalized.scope) errors.push('Certification scope is required.');
+  if (!normalized.standard_codes.length) errors.push('Select at least one standard.');
+  const duplicate = tenantRows_('clients', user).find(c => String(c.client_code).toLowerCase() === normalized.client_code.toLowerCase());
+  if (duplicate) warnings.push('Existing client code found: ' + duplicate.company + ' (#' + duplicate.id + ').');
+  const start = normalized.start_date || today_();
+  const issue = normalized.issue_date || start;
+  const events = [
+    cycleEventPreview_(normalized.client_code, 'stage1', 'Stage 1', addDays_(start, 0), Number(normalized.stage1_days || 1), 'planned'),
+    cycleEventPreview_(normalized.client_code, 'stage2', 'Stage 2', addDays_(start, 7), Number(normalized.stage2_days || 2), 'planned'),
+    cycleEventPreview_(normalized.client_code, 'surveillance1', 'Surveillance 1', addDays_(issue, 364), Number(normalized.surveillance_days || 1), 'locked_not_due'),
+    cycleEventPreview_(normalized.client_code, 'surveillance2', 'Surveillance 2', addDays_(issue, 729), Number(normalized.surveillance_days || 1), 'locked_not_due'),
+    cycleEventPreview_(normalized.client_code, 'recertification', 'Recertification', addDays_(issue, 1065), Number(normalized.recertification_days || 2), 'locked_not_due')
+  ];
+  return {
+    input: normalized,
+    duplicate_client_id: duplicate ? duplicate.id : '',
+    errors: errors,
+    warnings: warnings,
+    client: {
+      company: normalized.company,
+      client_code: normalized.client_code,
+      scope: normalized.scope,
+      standards: normalized.standard_codes.join(', '),
+      issue_date: issue,
+      expiry_date: addDays_(issue, 1094)
+    },
+    records: [
+      'Client master', 'Application', 'Application Review', 'Proposal', 'Contract',
+      'Audit Program', 'Stage 1 File', 'Stage 2 File', 'Surveillance 1 File',
+      'Surveillance 2 File', 'Recertification File', 'Stage reports', 'Finance shell'
+    ],
+    events: events
+  };
+}
+
+function generateCycle_(user, payload) {
+  requirePermission_(user, 'cycle_builder', 'create');
+  requireSuperAdmin_(user);
+  const preview = previewCycle_(user, payload);
+  if (preview.errors.length) throw new Error(preview.errors.join(' '));
+  if (preview.duplicate_client_id && !payload.allow_duplicate && !payload.overwrite_existing) {
+    const runId = insert_('cycle_builder_runs', { tenant_id: user.tenant_id, user_id: user.id, run_type: 'single', status: 'blocked_duplicate', client_id: preview.duplicate_client_id, client_code: preview.input.client_code, summary: 'Duplicate blocked for ' + preview.input.company, warnings_json: json_(preview.warnings), errors_json: json_(['Duplicate client code. Select overwrite to update the existing workflow.']) });
+    insert_('cycle_builder_rows', { cycle_builder_run_id: runId, row_number: 1, client_id: preview.duplicate_client_id, client_code: preview.input.client_code, status: 'blocked_duplicate', message: 'Duplicate client code.', payload_json: json_(preview.input) });
+    throw new Error('Duplicate client code. Select overwrite existing to update the existing workflow.');
+  }
+  const input = preview.input;
+  const existing = preview.duplicate_client_id ? oneById_('clients', preview.duplicate_client_id) : null;
+  const clientData = {
+    tenant_id: user.tenant_id,
+    company: input.company,
+    legal_name: input.legal_name || input.company,
+    client_code: input.client_code,
+    address: input.address || '',
+    city: input.city || 'Riyadh',
+    country: input.country || 'Saudi Arabia',
+    contact_name: input.contact_name || '',
+    contact_email: input.contact_email || '',
+    contact_phone: input.contact_phone || '',
+    scope: input.scope,
+    employee_count: input.employee_count || '',
+    number_of_sites: input.number_of_sites || 1,
+    risk_category: input.risk_category || 'medium',
+    status: input.client_status || 'active',
+    current_stage: 'audit_program',
+    certificate_number: input.certificate_number || '',
+    certificate_expiry_date: preview.client.expiry_date
+  };
+  const clientId = existing ? update_('clients', existing.id, clientData) : insert_('clients', clientData);
+  const standardIds = all_('standards').filter(s => input.standard_codes.indexOf(String(s.code)) !== -1).map(s => s.id);
+  saveClientStandards_(clientId, standardIds);
+  const appId = upsertLatest_('certification_applications', ['tenant_id', 'client_id'], {
+    tenant_id: user.tenant_id,
+    client_id: clientId,
+    application_number: input.application_number || 'APP-' + input.client_code,
+    received_date: input.application_date || input.start_date || today_(),
+    application_payload: json_({ source: 'Cycle Builder', scope: input.scope, haccp_plans: input.haccp_plans || '', sites: input.number_of_sites || 1 }),
+    status: 'submitted',
+    submitted_by: user.id,
+    submitted_at: now_()
+  });
+  const reviewId = upsertLatest_('application_reviews', ['tenant_id', 'client_id'], {
+    tenant_id: user.tenant_id,
+    client_id: clientId,
+    reviewer_user_id: user.id,
+    review_date: input.review_date || today_(),
+    review_payload: json_({ source: 'Cycle Builder', standards: input.standard_codes, employee_count: input.employee_count, sites: input.number_of_sites }),
+    calculated_days: Number(input.stage1_days || 1) + Number(input.stage2_days || 2),
+    decision: 'accepted',
+    status: 'completed'
+  });
+  const subtotal = Number(input.subtotal || 0);
+  const vat = Number(input.vat || (subtotal ? subtotal * 0.15 : 0));
+  const proposalId = upsertLatest_('proposals', ['tenant_id', 'client_id'], {
+    tenant_id: user.tenant_id,
+    client_id: clientId,
+    proposal_number: input.proposal_number || 'PROP-' + input.client_code,
+    proposal_date: input.proposal_date || today_(),
+    valid_until: input.valid_until || addDays_(today_(), 30),
+    currency: 'SAR',
+    subtotal: subtotal,
+    vat: vat,
+    grand_total: Number(input.grand_total || subtotal + vat),
+    status: 'accepted',
+    payload: json_({ source: 'Cycle Builder', review_id: reviewId })
+  });
+  const contractId = upsertLatest_('contracts', ['tenant_id', 'client_id'], {
+    tenant_id: user.tenant_id,
+    client_id: clientId,
+    proposal_id: proposalId,
+    contract_number: input.contract_number || 'CON-' + input.client_code,
+    signed_date: input.contract_date || today_(),
+    status: 'signed',
+    payload: json_({ source: 'Cycle Builder' })
+  });
+  const programId = upsertLatest_('audit_programs', ['tenant_id', 'client_id'], {
+    tenant_id: user.tenant_id,
+    client_id: clientId,
+    program_number: input.program_number || 'PRG-' + input.client_code,
+    cycle_type: input.cycle_type || 'initial',
+    start_date: input.start_date || today_(),
+    expiry_date: preview.client.expiry_date,
+    status: 'active',
+    payload: json_({ source: 'Cycle Builder', contract_id: contractId, application_id: appId, standards: input.standard_codes })
+  });
+  preview.events.forEach(ev => {
+    const eventId = seedAuditStageShell_(user, clientId, programId, clientData, ev.event_type, ev.audit_number || auditNumber_(input.client_code, ev.event_type), ev.status, ev.start_date, ev.end_date);
+    seedStageRequirementResponses_(user, eventId, ev.event_type, input.standard_codes);
+  });
+  const invoiceId = upsertLatest_('invoices', ['tenant_id', 'invoice_number'], {
+    tenant_id: user.tenant_id,
+    client_id: clientId,
+    invoice_number: input.invoice_number || 'INV-' + input.client_code,
+    invoice_date: input.proposal_date || today_(),
+    due_date: input.valid_until || addDays_(today_(), 30),
+    subtotal: subtotal,
+    vat: vat,
+    total: Number(input.grand_total || subtotal + vat),
+    status: subtotal ? 'issued' : 'draft',
+    payload: json_({ source: 'Cycle Builder', proposal_id: proposalId })
+  });
+  const runId = insert_('cycle_builder_runs', { tenant_id: user.tenant_id, user_id: user.id, run_type: 'single', status: 'generated', client_id: clientId, client_code: input.client_code, summary: 'Generated complete workflow for ' + input.company, warnings_json: json_(preview.warnings), errors_json: json_([]) });
+  insert_('cycle_builder_rows', { cycle_builder_run_id: runId, row_number: 1, client_id: clientId, client_code: input.client_code, status: 'generated', message: 'Workflow generated. Invoice #' + invoiceId + '.', payload_json: json_(input) });
+  audit_(user, 'cycle_builder_generate', 'clients', clientId, existing, { program_id: programId, proposal_id: proposalId, contract_id: contractId, run_id: runId });
+  return clientFile_(user, clientId);
+}
+
+function normalizeCycleInput_(payload) {
+  const standardCodes = Array.isArray(payload.standard_codes) ? payload.standard_codes : String(payload.standard_codes || '').split(',');
+  return Object.assign({}, payload, {
+    company: String(payload.company || '').trim(),
+    legal_name: String(payload.legal_name || payload.company || '').trim(),
+    client_code: String(payload.client_code || '').trim(),
+    scope: String(payload.scope || '').trim(),
+    standard_codes: standardCodes.map(s => String(s).trim()).filter(Boolean),
+    start_date: payload.start_date || today_(),
+    issue_date: payload.issue_date || payload.start_date || today_(),
+    stage1_days: payload.stage1_days || 1,
+    stage2_days: payload.stage2_days || 2,
+    surveillance_days: payload.surveillance_days || 1,
+    recertification_days: payload.recertification_days || 2
+  });
+}
+
+function cycleEventPreview_(clientCode, eventType, label, startDate, days, status) {
+  return {
+    event_type: eventType,
+    label: label,
+    audit_number: auditNumber_(clientCode, eventType),
+    start_date: startDate,
+    end_date: addDays_(startDate, Math.max(0, Math.ceil(days || 1) - 1)),
+    days: days,
+    status: status
+  };
+}
+
+function auditNumber_(clientCode, eventType) {
+  const suffixes = { stage1: 'S1', stage2: 'S2', surveillance1: 'SV1', surveillance2: 'SV2', recertification: 'RC' };
+  return ['AUD', clientCode || 'CLIENT', suffixes[eventType] || String(eventType).toUpperCase()].join('-');
+}
+
 function clauseBuilder_(user) {
   requirePermission_(user, 'clause_builder', 'view');
   const mappings = all_('integrated_requirement_clauses');
@@ -943,6 +1150,38 @@ function seedAuditStageShell_(user, clientId, programId, client, eventType, audi
     submitted_at: status === 'completed' ? now_() : ''
   });
   return eventId;
+}
+
+function seedStageRequirementResponses_(user, eventId, eventType, standardCodes) {
+  const selected = (standardCodes || []).map(String);
+  const mappings = all_('integrated_requirement_clauses').filter(m => String(m.active) !== '0');
+  const rows = all_('integrated_audit_requirements')
+    .filter(req => String(req.active) !== '0')
+    .filter(req => requirementAppliesToStage_(req, eventType))
+    .filter(req => requirementAppliesToStandards_(req, mappings, selected))
+    .map(req => ({
+      tenant_id: user.tenant_id,
+      audit_event_id: eventId,
+      audit_requirement_id: req.id,
+      conformity_status: 'not_started',
+      objective_evidence: '',
+      finding_text: '',
+      auditor_confirmed: 0,
+      confirmed_by_user_id: '',
+      confirmed_at: ''
+    }));
+  rows.forEach(row => upsertLatest_('audit_requirement_responses', ['audit_event_id', 'audit_requirement_id'], row));
+}
+
+function requirementAppliesToStage_(requirement, eventType) {
+  const stages = String(requirement.stage_applicability || 'all').toLowerCase().split(',').map(s => s.trim());
+  return stages.indexOf('all') !== -1 || stages.indexOf(String(eventType).toLowerCase()) !== -1;
+}
+
+function requirementAppliesToStandards_(requirement, mappings, selectedStandards) {
+  const reqMappings = mappings.filter(m => String(m.audit_requirement_id) === String(requirement.id));
+  if (!reqMappings.length) return true;
+  return reqMappings.some(m => selectedStandards.indexOf(String(m.standard_code)) !== -1);
 }
 
 function saveClientStandards_(clientId, standardIds) {
