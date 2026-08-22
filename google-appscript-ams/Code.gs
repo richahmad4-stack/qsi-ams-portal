@@ -1,7 +1,7 @@
 const AMS = {
-  VERSION: '1.2.0-sheets',
+  VERSION: '1.3.0-sheets',
   TIMEZONE: 'Asia/Riyadh',
-  MODULES: ['dashboard', 'clients', 'standards', 'personnel', 'application_reviews', 'proposals', 'contracts', 'audit_programs', 'auditor_appointments', 'audit_plans', 'reports', 'ncrs', 'capas', 'technical_reviews', 'certification_decisions', 'certificates', 'document_templates', 'finance', 'users', 'audit_trail', 'settings'],
+  MODULES: ['dashboard', 'cycle_builder', 'clause_builder', 'ncr_builder', 'clients', 'standards', 'personnel', 'application_reviews', 'proposals', 'contracts', 'audit_programs', 'auditor_appointments', 'audit_plans', 'reports', 'ncrs', 'capas', 'technical_reviews', 'certification_decisions', 'certificates', 'document_templates', 'finance', 'users', 'audit_trail', 'settings'],
   ACTIONS: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'download', 'print'],
   TABLES: {
     tenants: ['id', 'name', 'legal_name', 'code', 'timezone', 'currency', 'status', 'created_at', 'updated_at'],
@@ -21,10 +21,12 @@ const AMS = {
     auditor_appointments: ['id', 'tenant_id', 'audit_event_id', 'personnel_id', 'user_id', 'role_in_audit', 'appointment_status', 'conflict_checked', 'payload', 'created_at'],
     audit_plans: ['id', 'tenant_id', 'audit_event_id', 'objective', 'criteria', 'scope', 'status', 'approved_by', 'approved_at', 'created_at', 'updated_at'],
     audit_plan_items: ['id', 'audit_plan_id', 'audit_date', 'start_time', 'end_time', 'process_area', 'clause_reference', 'auditor_name', 'method', 'created_at'],
-    integrated_audit_requirements: ['id', 'requirement_code', 'title', 'audit_question', 'evidence_expectation', 'category', 'active'],
+    integrated_audit_requirements: ['id', 'requirement_code', 'title', 'audit_question', 'evidence_expectation', 'category', 'active', 'stage_applicability', 'source_note', 'created_at', 'updated_at'],
+    integrated_requirement_clauses: ['id', 'audit_requirement_id', 'standard_code', 'clause_reference', 'clause_title', 'source_note', 'active', 'created_at', 'updated_at'],
+    audit_reports: ['id', 'tenant_id', 'audit_event_id', 'report_number', 'stage_type', 'summary', 'conclusion', 'recommendation', 'lead_auditor_confirmed', 'status', 'submitted_at', 'created_at', 'updated_at'],
     audit_requirement_responses: ['id', 'tenant_id', 'audit_event_id', 'audit_requirement_id', 'conformity_status', 'objective_evidence', 'finding_text', 'auditor_confirmed', 'confirmed_by_user_id', 'confirmed_at', 'created_at', 'updated_at'],
-    ncrs: ['id', 'tenant_id', 'audit_event_id', 'audit_requirement_response_id', 'ncr_number', 'clause_reference', 'severity', 'statement', 'correction', 'root_cause', 'corrective_action', 'due_date', 'status', 'closed_by', 'closed_at', 'created_at', 'updated_at'],
-    capas: ['id', 'tenant_id', 'ncr_id', 'audit_event_id', 'action_plan', 'evidence_summary', 'effectiveness_review', 'status', 'due_date', 'closed_by', 'closed_at', 'created_at', 'updated_at'],
+    ncrs: ['id', 'tenant_id', 'audit_event_id', 'audit_requirement_response_id', 'ncr_number', 'clause_reference', 'severity', 'statement', 'correction', 'root_cause', 'corrective_action', 'due_date', 'status', 'closed_by', 'closed_at', 'created_at', 'updated_at', 'responsible_person', 'verification_method'],
+    capas: ['id', 'tenant_id', 'ncr_id', 'audit_event_id', 'action_plan', 'evidence_summary', 'effectiveness_review', 'status', 'due_date', 'closed_by', 'closed_at', 'created_at', 'updated_at', 'responsible_person'],
     technical_reviews: ['id', 'tenant_id', 'client_id', 'audit_event_id', 'reviewer_user_id', 'review_date', 'checklist_payload', 'review_notes', 'recommendation', 'status', 'created_at', 'updated_at'],
     certification_decisions: ['id', 'tenant_id', 'client_id', 'technical_review_id', 'decision_user_id', 'decision_date', 'decision', 'decision_notes', 'gm_approval', 'status', 'created_at', 'updated_at'],
     certificates: ['id', 'tenant_id', 'client_id', 'certification_decision_id', 'certificate_number', 'standard_code', 'scope', 'issue_date', 'expiry_date', 'status', 'verification_token', 'verification_status', 'created_at', 'updated_at'],
@@ -32,6 +34,8 @@ const AMS = {
     payments: ['id', 'tenant_id', 'invoice_id', 'payment_date', 'amount', 'method', 'reference', 'status', 'created_at'],
     document_templates: ['id', 'tenant_id', 'template_key', 'title', 'document_type', 'body_html', 'revision', 'active', 'created_at', 'updated_at'],
     generated_documents: ['id', 'tenant_id', 'client_id', 'source_table', 'source_id', 'template_key', 'title', 'drive_file_id', 'pdf_file_id', 'version_no', 'hash_value', 'generated_by', 'generated_at'],
+    clause_builder_runs: ['id', 'tenant_id', 'user_id', 'action', 'requirement_id', 'summary', 'created_at'],
+    ncr_builder_runs: ['id', 'tenant_id', 'user_id', 'action', 'audit_requirement_response_id', 'ncr_id', 'capa_id', 'summary', 'created_at'],
     audit_logs: ['id', 'tenant_id', 'user_id', 'action', 'entity_table', 'entity_id', 'before_json', 'after_json', 'created_at']
   },
   ROLES: [
@@ -49,18 +53,36 @@ const AMS = {
   ],
   STANDARDS: [['ISO 9001:2015', 'ISO 9001', '2015', 'management_system'], ['ISO 14001:2015', 'ISO 14001', '2015', 'management_system'], ['ISO 45001:2018', 'ISO 45001', '2018', 'management_system'], ['ISO 22000:2018', 'ISO 22000', '2018', 'food_safety'], ['HACCP', 'HACCP', '', 'food_safety']],
   REQUIREMENTS: [
-    ['QSI-COM-04.03', 'Management system scope', 'Does the documented scope accurately cover sites, activities, products, services, boundaries and justified applicability decisions?', 'Scope statement, certificate comparison, process map, applicability rationale.', 'integrated_management'],
-    ['QSI-COM-05.01', 'Leadership and accountability', 'Does top management demonstrate accountability for the management system and certification scope?', 'Policy, objectives, responsibilities, interview evidence, review records.', 'integrated_management'],
-    ['QSI-COM-06.01', 'Risk and opportunity planning', 'Are risks and opportunities identified, planned, implemented and reviewed?', 'Risk register, action plans, effectiveness review, changes.', 'integrated_management'],
-    ['QSI-COM-07.02', 'Competence', 'Are personnel competent for assigned process and system responsibilities?', 'Competence matrix, training, evaluation, interviews.', 'integrated_management'],
-    ['QSI-COM-08.01', 'Operational control', 'Are operational processes planned, controlled, monitored and updated?', 'Procedures, process controls, monitoring records, production/service records.', 'integrated_management'],
-    ['QSI-COM-09.02', 'Internal audit', 'Does the internal audit programme cover relevant processes, sites and requirements using competent and impartial auditors?', 'Programme, plans, checklists, reports, auditor competence, follow-up.', 'integrated_management'],
-    ['QSI-COM-09.03', 'Management review', 'Does management review consider required inputs and produce decisions/actions?', 'Review minutes, inputs, actions, outputs, improvement decisions.', 'integrated_management'],
-    ['QSI-COM-10.02', 'Nonconformity and corrective action', 'Are nonconformities corrected, analyzed, addressed and verified for effectiveness?', 'NCR/CAPA log, root cause, actions, evidence, effectiveness review.', 'integrated_management'],
-    ['QSI-FSMS-08.53', 'Validation of control measures', 'Are food-safety control measures validated before implementation and after relevant changes?', 'Validation basis, regulatory criteria, studies, trials, revalidation.', 'food_safety'],
-    ['QSI-FSMS-08.90', 'Control of food-safety nonconformity', 'Are affected products evaluated and controlled with corrections and withdrawal/recall readiness?', 'Product disposition, correction/CAPA, recall test, notifications.', 'food_safety'],
-    ['QSI-HACCP-P03', 'Validated critical limits', 'Are measurable critical limits established and supported by scientific, regulatory or technical basis?', 'Critical limits, validation studies, legal basis, approval records.', 'haccp'],
-    ['QSI-HACCP-P06', 'HACCP validation and verification', 'Is the HACCP plan validated, verified, reviewed and updated after relevant changes?', 'HACCP review, verification records, internal audit, test results.', 'haccp']
+    ['QSI-COM-04.03', 'Management system scope', 'Does the documented scope accurately cover sites, activities, products, services, boundaries and justified applicability decisions?', 'Scope statement, certificate comparison, process map, applicability rationale.', 'integrated_management', 'all', 'QSI controlled integrated audit catalogue'],
+    ['QSI-COM-05.01', 'Leadership and accountability', 'Does top management demonstrate accountability for the management system and certification scope?', 'Policy, objectives, responsibilities, interview evidence, review records.', 'integrated_management', 'all', 'QSI controlled integrated audit catalogue'],
+    ['QSI-COM-06.01', 'Risk and opportunity planning', 'Are risks and opportunities identified, planned, implemented and reviewed?', 'Risk register, action plans, effectiveness review, changes.', 'integrated_management', 'all', 'QSI controlled integrated audit catalogue'],
+    ['QSI-COM-07.02', 'Competence', 'Are personnel competent for assigned process and system responsibilities?', 'Competence matrix, training, evaluation, interviews.', 'integrated_management', 'all', 'QSI controlled integrated audit catalogue'],
+    ['QSI-COM-08.01', 'Operational control', 'Are operational processes planned, controlled, monitored and updated?', 'Procedures, process controls, monitoring records, production/service records.', 'integrated_management', 'stage2,surveillance1,surveillance2,recertification', 'QSI controlled integrated audit catalogue'],
+    ['QSI-COM-09.02', 'Internal audit', 'Does the internal audit programme cover relevant processes, sites and requirements using competent and impartial auditors?', 'Programme, plans, checklists, reports, auditor competence, follow-up.', 'integrated_management', 'all', 'QSI controlled integrated audit catalogue'],
+    ['QSI-COM-09.03', 'Management review', 'Does management review consider required inputs and produce decisions/actions?', 'Review minutes, inputs, actions, outputs, improvement decisions.', 'integrated_management', 'all', 'QSI controlled integrated audit catalogue'],
+    ['QSI-COM-10.02', 'Nonconformity and corrective action', 'Are nonconformities corrected, analyzed, addressed and verified for effectiveness?', 'NCR/CAPA log, root cause, actions, evidence, effectiveness review.', 'integrated_management', 'all', 'QSI controlled integrated audit catalogue'],
+    ['QSI-FSMS-08.53', 'Validation of control measures', 'Are food-safety control measures validated before implementation and after relevant changes?', 'Validation basis, regulatory criteria, studies, trials, revalidation.', 'food_safety', 'stage2,surveillance1,surveillance2,recertification', 'QSI controlled food-safety audit catalogue'],
+    ['QSI-FSMS-08.90', 'Control of food-safety nonconformity', 'Are affected products evaluated and controlled with corrections and withdrawal/recall readiness?', 'Product disposition, correction/CAPA, recall test, notifications.', 'food_safety', 'stage2,surveillance1,surveillance2,recertification', 'QSI controlled food-safety audit catalogue'],
+    ['QSI-HACCP-P03', 'Validated critical limits', 'Are measurable critical limits established and supported by scientific, regulatory or technical basis?', 'Critical limits, validation studies, legal basis, approval records.', 'haccp', 'stage2,surveillance1,surveillance2,recertification', 'QSI controlled HACCP audit catalogue'],
+    ['QSI-HACCP-P06', 'HACCP validation and verification', 'Is the HACCP plan validated, verified, reviewed and updated after relevant changes?', 'HACCP review, verification records, internal audit, test results.', 'haccp', 'all', 'QSI controlled HACCP audit catalogue']
+  ],
+  REQUIREMENT_MAPPINGS: [
+    ['QSI-COM-04.03', 'ISO 9001:2015', '4.3', 'Scope of the management system'],
+    ['QSI-COM-04.03', 'ISO 14001:2015', '4.3', 'Scope of the environmental management system'],
+    ['QSI-COM-04.03', 'ISO 45001:2018', '4.3', 'Scope of the OH&S management system'],
+    ['QSI-COM-04.03', 'ISO 22000:2018', '4.3', 'Scope of the food safety management system'],
+    ['QSI-COM-05.01', 'ISO 9001:2015', '5.1', 'Leadership and commitment'],
+    ['QSI-COM-05.01', 'ISO 22000:2018', '5.1', 'Leadership and commitment'],
+    ['QSI-COM-09.02', 'ISO 9001:2015', '9.2', 'Internal audit'],
+    ['QSI-COM-09.02', 'ISO 22000:2018', '9.2', 'Internal audit'],
+    ['QSI-COM-09.03', 'ISO 9001:2015', '9.3', 'Management review'],
+    ['QSI-COM-09.03', 'ISO 22000:2018', '9.3', 'Management review'],
+    ['QSI-COM-10.02', 'ISO 9001:2015', '10.2', 'Nonconformity and corrective action'],
+    ['QSI-COM-10.02', 'ISO 22000:2018', '10.1', 'Nonconformity and corrective action'],
+    ['QSI-FSMS-08.53', 'ISO 22000:2018', '8.5.3', 'Validation of control measures'],
+    ['QSI-FSMS-08.90', 'ISO 22000:2018', '8.9', 'Control of product and process nonconformities'],
+    ['QSI-HACCP-P03', 'HACCP', 'Principle 3', 'Establish validated critical limits'],
+    ['QSI-HACCP-P06', 'HACCP', 'Principle 6', 'Validate the plan and establish verification']
   ]
 };
 
@@ -78,6 +100,11 @@ function dispatch(action, payload) {
   const actions = {
     bootstrap: () => getBootstrap_(user),
     dashboard: () => dashboard_(user),
+    clauseBuilder: () => clauseBuilder_(user),
+    saveClauseRequirement: () => saveClauseRequirement_(user, payload || {}),
+    deactivateClauseRequirement: () => deactivateClauseRequirement_(user, payload || {}),
+    ncrBuilder: () => ncrBuilder_(user, payload || {}),
+    buildNcrPackage: () => buildNcrPackage_(user, payload || {}),
     seedDemoClient: () => seedDemoClient_(user),
     listClients: () => listClients_(user, payload || {}),
     saveClient: () => saveClient_(user, payload || {}),
@@ -143,16 +170,26 @@ function ensureSheets_(ss) {
     if (!sh) sh = ss.insertSheet(name);
     const headers = AMS.TABLES[name];
     const existing = sh.getLastRow() ? sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), headers.length)).getValues()[0] : [];
-    if (existing.slice(0, headers.length).join('|') !== headers.join('|')) {
-      sh.clear();
+    if (!existing.length || existing.every(h => h === '')) {
       sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sh.setFrozenRows(1);
+      return;
+    }
+    const missing = headers.filter(h => existing.indexOf(h) === -1);
+    if (missing.length) {
+      sh.getRange(1, existing.length + 1, 1, missing.length).setValues([missing]);
       sh.setFrozenRows(1);
     }
   });
 }
 
 function sheet_(table) {
-  const sh = store_().getSheetByName(table);
+  const ss = store_();
+  let sh = ss.getSheetByName(table);
+  if (!sh && AMS.TABLES[table]) {
+    ensureSheets_(ss);
+    sh = ss.getSheetByName(table);
+  }
   if (!sh) throw new Error('Missing table: ' + table);
   return sh;
 }
@@ -272,6 +309,12 @@ function today_() {
   return Utilities.formatDate(new Date(), AMS.TIMEZONE, 'yyyy-MM-dd');
 }
 
+function addDays_(dateText, days) {
+  const date = new Date(String(dateText || today_()) + 'T00:00:00');
+  date.setDate(date.getDate() + Number(days || 0));
+  return Utilities.formatDate(date, AMS.TIMEZONE, 'yyyy-MM-dd');
+}
+
 function token_() {
   return Utilities.getUuid().replace(/-/g, '');
 }
@@ -341,12 +384,13 @@ function getBootstrap_(knownUser) {
 }
 
 function seedBaseline_(user) {
-  store_();
+  ensureSheets_(store_());
   seedTenant_();
   seedRoles_();
   seedPermissions_();
   seedStandards_();
   seedRequirements_();
+  seedRequirementMappings_();
   seedTemplates_();
   ensureRootFolder_();
   ensureBootstrapUser_(user);
@@ -392,12 +436,12 @@ function seedPermissions_() {
   addPerms('super_admin', AMS.MODULES, AMS.ACTIONS);
   addPerms('administrator', AMS.MODULES, AMS.ACTIONS);
   addPerms('viewer', AMS.MODULES, ['view', 'download', 'print']);
-  addPerms('quality_manager', ['dashboard', 'clients', 'standards', 'application_reviews', 'audit_programs', 'reports', 'ncrs', 'capas', 'technical_reviews', 'certification_decisions', 'certificates', 'document_templates', 'audit_trail'], AMS.ACTIONS);
-  addPerms('technical_manager', ['dashboard', 'clients', 'standards', 'application_reviews', 'audit_programs', 'personnel', 'auditor_appointments', 'audit_plans', 'reports', 'technical_reviews', 'certification_decisions'], AMS.ACTIONS);
+  addPerms('quality_manager', ['dashboard', 'clause_builder', 'ncr_builder', 'clients', 'standards', 'application_reviews', 'audit_programs', 'reports', 'ncrs', 'capas', 'technical_reviews', 'certification_decisions', 'certificates', 'document_templates', 'audit_trail'], AMS.ACTIONS);
+  addPerms('technical_manager', ['dashboard', 'clause_builder', 'ncr_builder', 'clients', 'standards', 'application_reviews', 'audit_programs', 'personnel', 'auditor_appointments', 'audit_plans', 'reports', 'technical_reviews', 'certification_decisions'], AMS.ACTIONS);
   addPerms('proposal_officer', ['dashboard', 'clients', 'application_reviews', 'proposals', 'contracts', 'audit_programs', 'finance', 'document_templates'], AMS.ACTIONS);
-  addPerms('lead_auditor', ['dashboard', 'clients', 'audit_programs', 'auditor_appointments', 'audit_plans', 'reports', 'ncrs', 'capas'], AMS.ACTIONS);
-  addPerms('auditor', ['dashboard', 'clients', 'audit_plans', 'reports', 'ncrs', 'capas'], AMS.ACTIONS);
-  addPerms('technical_reviewer', ['dashboard', 'clients', 'reports', 'ncrs', 'capas', 'technical_reviews'], AMS.ACTIONS);
+  addPerms('lead_auditor', ['dashboard', 'ncr_builder', 'clients', 'audit_programs', 'auditor_appointments', 'audit_plans', 'reports', 'ncrs', 'capas'], AMS.ACTIONS);
+  addPerms('auditor', ['dashboard', 'ncr_builder', 'clients', 'audit_plans', 'reports', 'ncrs', 'capas'], AMS.ACTIONS);
+  addPerms('technical_reviewer', ['dashboard', 'clause_builder', 'ncr_builder', 'clients', 'reports', 'ncrs', 'capas', 'technical_reviews'], ['view', 'download', 'print']);
   addPerms('certification_decision_maker', ['dashboard', 'clients', 'technical_reviews', 'certification_decisions', 'certificates'], AMS.ACTIONS);
   addPerms('finance', ['dashboard', 'clients', 'proposals', 'contracts', 'finance'], AMS.ACTIONS);
   insertMany_('role_permissions', rolePermissionRows);
@@ -415,8 +459,30 @@ function seedRequirements_() {
   const existing = all_('integrated_audit_requirements').map(r => r.requirement_code);
   const rows = AMS.REQUIREMENTS
     .filter(req => existing.indexOf(req[0]) === -1)
-    .map(req => ({ requirement_code: req[0], title: req[1], audit_question: req[2], evidence_expectation: req[3], category: req[4], active: 1 }));
+    .map(req => ({ requirement_code: req[0], title: req[1], audit_question: req[2], evidence_expectation: req[3], category: req[4], stage_applicability: req[5] || 'all', source_note: req[6] || 'QSI controlled catalogue', active: 1 }));
   insertMany_('integrated_audit_requirements', rows);
+}
+
+function seedRequirementMappings_() {
+  const requirements = all_('integrated_audit_requirements');
+  const existing = all_('integrated_requirement_clauses').map(m => [m.audit_requirement_id, m.standard_code, m.clause_reference].join('|'));
+  const rows = [];
+  AMS.REQUIREMENT_MAPPINGS.forEach(mapping => {
+    const req = requirements.find(r => r.requirement_code === mapping[0]);
+    if (!req) return;
+    const key = [req.id, mapping[1], mapping[2]].join('|');
+    if (existing.indexOf(key) !== -1) return;
+    rows.push({
+      audit_requirement_id: req.id,
+      standard_code: mapping[1],
+      clause_reference: mapping[2],
+      clause_title: mapping[3],
+      source_note: 'Seeded QSI controlled mapping',
+      active: 1
+    });
+    existing.push(key);
+  });
+  insertMany_('integrated_requirement_clauses', rows);
 }
 
 function seedTemplates_() {
@@ -469,6 +535,169 @@ function dashboard_(user) {
     upcoming: events.filter(e => e.status !== 'completed').slice(0, 10),
     recent: tenantRows_('audit_logs', user).slice(-12).reverse().map(a => Object.assign({}, a, { full_name: (oneById_('users', a.user_id) || {}).full_name || '' }))
   };
+}
+
+function clauseBuilder_(user) {
+  requirePermission_(user, 'clause_builder', 'view');
+  const mappings = all_('integrated_requirement_clauses');
+  const requirements = all_('integrated_audit_requirements').map(req => {
+    const reqMappings = mappings.filter(m => String(m.audit_requirement_id) === String(req.id) && String(m.active) !== '0');
+    return Object.assign({}, req, {
+      mapping_count: reqMappings.length,
+      mapped_clauses: reqMappings.map(m => m.standard_code + ' ' + m.clause_reference).join(', ')
+    });
+  }).sort((a, b) => String(a.requirement_code).localeCompare(String(b.requirement_code)));
+  return {
+    requirements: requirements,
+    mappings: mappings,
+    standards: all_('standards').filter(s => String(s.active) !== '0'),
+    runs: tenantRows_('clause_builder_runs', user).slice(-50).reverse()
+  };
+}
+
+function saveClauseRequirement_(user, payload) {
+  requirePermission_(user, 'clause_builder', payload.id ? 'edit' : 'create');
+  const code = String(payload.requirement_code || '').trim();
+  if (!code) throw new Error('Requirement code is required.');
+  const duplicate = all_('integrated_audit_requirements').find(r => String(r.requirement_code).toLowerCase() === code.toLowerCase() && String(r.id) !== String(payload.id || ''));
+  if (duplicate) throw new Error('Duplicate requirement code: ' + code);
+  const data = {
+    requirement_code: code,
+    title: payload.title || '',
+    audit_question: payload.audit_question || '',
+    evidence_expectation: payload.evidence_expectation || '',
+    category: payload.category || 'integrated_management',
+    stage_applicability: payload.stage_applicability || 'all',
+    source_note: payload.source_note || 'QSI controlled clause builder',
+    active: payload.active === false || String(payload.active) === '0' ? 0 : 1
+  };
+  const before = payload.id ? oneById_('integrated_audit_requirements', payload.id) : null;
+  const id = payload.id ? update_('integrated_audit_requirements', payload.id, data) : insert_('integrated_audit_requirements', data);
+  replaceRequirementMappings_(id, payload.mapping_lines || payload.mappings || '');
+  insert_('clause_builder_runs', { tenant_id: user.tenant_id, user_id: user.id, action: payload.id ? 'update_requirement' : 'create_requirement', requirement_id: id, summary: code + ' - ' + data.title });
+  audit_(user, payload.id ? 'update_clause_requirement' : 'create_clause_requirement', 'integrated_audit_requirements', id, before, data);
+  return clauseBuilder_(user);
+}
+
+function deactivateClauseRequirement_(user, payload) {
+  requirePermission_(user, 'clause_builder', 'edit');
+  const row = oneById_('integrated_audit_requirements', payload.id);
+  if (!row) throw new Error('Requirement not found.');
+  update_('integrated_audit_requirements', payload.id, { active: 0 });
+  insert_('clause_builder_runs', { tenant_id: user.tenant_id, user_id: user.id, action: 'deactivate_requirement', requirement_id: payload.id, summary: row.requirement_code + ' deactivated' });
+  audit_(user, 'deactivate_clause_requirement', 'integrated_audit_requirements', payload.id, row, { active: 0 });
+  return clauseBuilder_(user);
+}
+
+function replaceRequirementMappings_(requirementId, mappingInput) {
+  all_('integrated_requirement_clauses')
+    .filter(m => String(m.audit_requirement_id) === String(requirementId) && String(m.active) !== '0')
+    .forEach(m => update_('integrated_requirement_clauses', m.id, { active: 0 }));
+  const lines = Array.isArray(mappingInput)
+    ? mappingInput.map(m => [m.standard_code, m.clause_reference, m.clause_title, m.source_note].join('|'))
+    : String(mappingInput || '').split(/\r?\n/);
+  const rows = [];
+  lines.map(line => line.trim()).filter(Boolean).forEach(line => {
+    const parts = line.split('|').map(part => part.trim());
+    if (!parts[0] || !parts[1]) return;
+    rows.push({
+      audit_requirement_id: requirementId,
+      standard_code: parts[0],
+      clause_reference: parts[1],
+      clause_title: parts[2] || '',
+      source_note: parts[3] || 'Clause Builder',
+      active: 1
+    });
+  });
+  insertMany_('integrated_requirement_clauses', rows);
+}
+
+function ncrBuilder_(user, payload) {
+  requirePermission_(user, 'ncr_builder', 'view');
+  const clientId = payload.clientId ? String(payload.clientId) : '';
+  const clients = tenantRows_('clients', user);
+  const events = tenantRows_('audit_events', user)
+    .filter(e => !clientId || String(e.client_id) === clientId)
+    .map(e => Object.assign({}, e, { company: (oneById_('clients', e.client_id) || {}).company || '' }));
+  const eventIds = events.map(e => String(e.id));
+  const ncrs = tenantRows_('ncrs', user);
+  const candidates = all_('audit_requirement_responses')
+    .filter(r => eventIds.indexOf(String(r.audit_event_id)) !== -1)
+    .map(r => ncrCandidateRow_(r, ncrs))
+    .filter(r => ['minor_nc', 'major_nc', 'nonconforming'].indexOf(String(r.conformity_status).toLowerCase()) !== -1 || String(r.finding_text || '').trim());
+  return {
+    clients: clients,
+    events: events,
+    candidates: candidates.reverse(),
+    ncrs: ncrs.map(n => Object.assign({}, n, { event_type: (oneById_('audit_events', n.audit_event_id) || {}).event_type || '' })).reverse(),
+    capas: tenantRows_('capas', user).reverse(),
+    runs: tenantRows_('ncr_builder_runs', user).slice(-50).reverse()
+  };
+}
+
+function ncrCandidateRow_(response, ncrs) {
+  const event = oneById_('audit_events', response.audit_event_id) || {};
+  const client = oneById_('clients', event.client_id) || {};
+  const req = oneById_('integrated_audit_requirements', response.audit_requirement_id) || {};
+  const mappings = all_('integrated_requirement_clauses').filter(m => String(m.audit_requirement_id) === String(req.id) && String(m.active) !== '0');
+  const duplicate = ncrs.find(n => String(n.audit_requirement_response_id) === String(response.id));
+  return Object.assign({}, response, {
+    client_id: client.id || '',
+    company: client.company || '',
+    audit_number: event.audit_number || '',
+    event_type: event.event_type || '',
+    requirement_code: req.requirement_code || '',
+    requirement_title: req.title || '',
+    clause_reference: mappings.map(m => m.standard_code + ' ' + m.clause_reference).join(', '),
+    duplicate_ncr: duplicate ? duplicate.ncr_number : ''
+  });
+}
+
+function buildNcrPackage_(user, payload) {
+  requirePermission_(user, 'ncr_builder', 'create');
+  const response = oneById_('audit_requirement_responses', payload.audit_requirement_response_id);
+  if (!response) throw new Error('Audit response is required.');
+  const event = oneById_('audit_events', response.audit_event_id);
+  if (!event || String(event.tenant_id) !== String(user.tenant_id)) throw new Error('Audit event not found.');
+  const duplicate = all_('ncrs').find(n => String(n.audit_requirement_response_id) === String(response.id));
+  if (duplicate && !payload.allow_duplicate) throw new Error('NCR already exists for this response: ' + duplicate.ncr_number);
+  const client = oneById_('clients', event.client_id) || {};
+  const req = oneById_('integrated_audit_requirements', response.audit_requirement_id) || {};
+  const mappings = all_('integrated_requirement_clauses').filter(m => String(m.audit_requirement_id) === String(req.id) && String(m.active) !== '0');
+  const clauseRef = payload.clause_reference || mappings.map(m => m.standard_code + ' ' + m.clause_reference).join(', ');
+  const severity = payload.severity || (String(response.conformity_status).toLowerCase() === 'major_nc' ? 'major' : 'minor');
+  const dueDate = payload.due_date || addDays_(today_(), severity === 'major' ? 15 : 30);
+  const ncrNumber = payload.ncr_number || ['NCR', client.client_code || event.client_id, String(event.event_type || 'audit').toUpperCase(), token_().slice(0, 5)].join('-');
+  const ncrId = insert_('ncrs', {
+    tenant_id: user.tenant_id,
+    audit_event_id: event.id,
+    audit_requirement_response_id: response.id,
+    ncr_number: ncrNumber,
+    clause_reference: clauseRef,
+    severity: severity,
+    statement: payload.statement || response.finding_text || ('Nonconformity identified against ' + (req.requirement_code || 'selected requirement') + '.'),
+    correction: payload.correction || 'Client to contain and correct the identified nonconformity.',
+    root_cause: payload.root_cause || 'Root cause analysis to be submitted by the client.',
+    corrective_action: payload.corrective_action || 'Corrective action plan to address the root cause and prevent recurrence.',
+    responsible_person: payload.responsible_person || client.contact_name || '',
+    due_date: dueDate,
+    verification_method: payload.verification_method || 'Auditor review of submitted evidence and effectiveness at next audit stage.',
+    status: payload.status || 'open'
+  });
+  const capaId = insert_('capas', {
+    tenant_id: user.tenant_id,
+    ncr_id: ncrId,
+    audit_event_id: event.id,
+    action_plan: payload.action_plan || payload.corrective_action || 'Submit correction, root cause analysis, corrective action evidence and effectiveness evidence.',
+    responsible_person: payload.responsible_person || client.contact_name || '',
+    evidence_summary: payload.evidence_summary || response.objective_evidence || '',
+    effectiveness_review: payload.effectiveness_review || 'Pending verification by assigned auditor.',
+    status: payload.capa_status || 'open',
+    due_date: dueDate
+  });
+  insert_('ncr_builder_runs', { tenant_id: user.tenant_id, user_id: user.id, action: 'build_ncr_package', audit_requirement_response_id: response.id, ncr_id: ncrId, capa_id: capaId, summary: ncrNumber + ' for ' + (client.company || 'client') });
+  audit_(user, 'build_ncr_package', 'ncrs', ncrId, null, { response: response.id, capa_id: capaId });
+  return payload.clientId ? clientFile_(user, payload.clientId) : ncrBuilder_(user, { clientId: event.client_id });
 }
 
 function listClients_(user, payload) {
@@ -549,6 +778,7 @@ function seedDemoCycle_(user, clientId, client) {
     cycle_type: 'initial', start_date: today_(), expiry_date: '2029-08-21',
     status: 'active', payload: json_({ stage1: true, stage2: true, surveillance1: true, surveillance2: true })
   });
+  seedAuditStageShell_(user, clientId, programId, client, 'stage1', 'AUD-DEMO-001-S1', 'completed', addDays_(today_(), -7), addDays_(today_(), -7));
   const eventId = upsertLatest_('audit_events', ['tenant_id', 'client_id', 'event_type'], {
     tenant_id: user.tenant_id, audit_program_id: programId, client_id: clientId,
     audit_number: 'AUD-DEMO-001-S2', event_type: 'stage2',
@@ -593,6 +823,16 @@ function seedDemoCycle_(user, clientId, client) {
       auditor_confirmed: row[4] ? 1 : 0, confirmed_by_user_id: user.id, confirmed_at: now_()
     });
   });
+  upsertLatest_('audit_reports', ['tenant_id', 'audit_event_id'], {
+    tenant_id: user.tenant_id, audit_event_id: eventId, report_number: 'RPT-DEMO-001-S2',
+    stage_type: 'stage2',
+    summary: 'Stage 2 audit verified implementation of the approved ISO 22000:2018 and HACCP scope.',
+    conclusion: 'The management system is implemented and generally effective, with one minor nonconformity requiring follow-up.',
+    recommendation: 'Certification recommended subject to planned CAPA follow-up.',
+    lead_auditor_confirmed: 1,
+    status: 'submitted',
+    submitted_at: now_()
+  });
   const ncReq = reqByCode('QSI-FSMS-08.90');
   const ncResponse = latest_('audit_requirement_responses', 'audit_requirement_id', ncReq.id) || {};
   const ncrId = upsertLatest_('ncrs', ['tenant_id', 'ncr_number'], {
@@ -602,11 +842,14 @@ function seedDemoCycle_(user, clientId, client) {
     correction: 'Update the recall test summary to include elapsed-time analysis.',
     root_cause: 'Management review input checklist did not explicitly request mock recall timing trends.',
     corrective_action: 'Revise management review input checklist and review the next mock recall timing trend.',
+    responsible_person: 'Demo QA Manager',
+    verification_method: 'Lead auditor to verify revised review input checklist and recall trend evidence.',
     due_date: '2026-09-21', status: 'open'
   });
   upsertLatest_('capas', ['tenant_id', 'ncr_id'], {
     tenant_id: user.tenant_id, ncr_id: ncrId, audit_event_id: eventId,
     action_plan: 'QA manager to revise the management review input checklist and include mock recall trend analysis.',
+    responsible_person: 'Demo QA Manager',
     evidence_summary: 'Draft checklist update and mock recall trend table prepared for next review cycle.',
     effectiveness_review: 'Effectiveness to be checked at surveillance 1.', status: 'in_progress', due_date: '2026-09-21'
   });
@@ -638,6 +881,68 @@ function seedDemoCycle_(user, clientId, client) {
     tenant_id: user.tenant_id, invoice_id: invoiceId, payment_date: today_(),
     amount: 10000, method: 'bank_transfer', reference: 'PAY-DEMO-001', status: 'partial'
   });
+  seedAuditStageShell_(user, clientId, programId, client, 'surveillance1', 'AUD-DEMO-001-SV1', 'planned', '2027-08-21', '2027-08-21');
+  seedAuditStageShell_(user, clientId, programId, client, 'surveillance2', 'AUD-DEMO-001-SV2', 'planned', '2028-08-21', '2028-08-21');
+  seedAuditStageShell_(user, clientId, programId, client, 'recertification', 'AUD-DEMO-001-RC', 'locked_not_due', '2029-07-21', '2029-07-22');
+}
+
+function seedAuditStageShell_(user, clientId, programId, client, eventType, auditNumber, status, startDate, endDate) {
+  const eventId = upsertLatest_('audit_events', ['tenant_id', 'client_id', 'event_type'], {
+    tenant_id: user.tenant_id,
+    audit_program_id: programId,
+    client_id: clientId,
+    audit_number: auditNumber,
+    event_type: eventType,
+    planned_start_date: startDate,
+    planned_end_date: endDate,
+    actual_start_date: status === 'completed' ? startDate : '',
+    actual_end_date: status === 'completed' ? endDate : '',
+    status: status,
+    payload: json_({ prepared_by: 'Cycle Builder demo seed', method: 'onsite' })
+  });
+  upsertLatest_('auditor_appointments', ['tenant_id', 'audit_event_id', 'role_in_audit'], {
+    tenant_id: user.tenant_id,
+    audit_event_id: eventId,
+    personnel_id: '',
+    user_id: user.id,
+    role_in_audit: 'lead_auditor',
+    appointment_status: status === 'locked_not_due' ? 'pending_due_date' : 'appointed',
+    conflict_checked: status === 'locked_not_due' ? 0 : 1,
+    payload: json_({ impartiality: status === 'locked_not_due' ? 'Pending due-date activation' : 'No conflict declared' })
+  });
+  const planId = upsertLatest_('audit_plans', ['tenant_id', 'audit_event_id'], {
+    tenant_id: user.tenant_id,
+    audit_event_id: eventId,
+    objective: 'Prepare and conduct ' + eventType + ' audit for the approved certification scope.',
+    criteria: 'Selected standards, QSI certification rules, client documented system and applicable regulatory requirements.',
+    scope: client.scope,
+    status: status === 'locked_not_due' ? 'locked' : 'approved',
+    approved_by: status === 'locked_not_due' ? '' : user.id,
+    approved_at: status === 'locked_not_due' ? '' : now_()
+  });
+  upsertLatest_('audit_plan_items', ['audit_plan_id', 'process_area'], {
+    audit_plan_id: planId,
+    audit_date: startDate,
+    start_time: '09:00',
+    end_time: '12:00',
+    process_area: eventType + ' audit file preparation and process sampling',
+    clause_reference: 'QSI integrated requirements',
+    auditor_name: user.full_name || 'Lead Auditor',
+    method: 'onsite'
+  });
+  upsertLatest_('audit_reports', ['tenant_id', 'audit_event_id'], {
+    tenant_id: user.tenant_id,
+    audit_event_id: eventId,
+    report_number: auditNumber.replace('AUD', 'RPT'),
+    stage_type: eventType,
+    summary: eventType + ' report shell prepared by Cycle Builder demo seed.',
+    conclusion: status === 'completed' ? 'Stage completed for demonstration file.' : 'Pending audit execution.',
+    recommendation: status === 'completed' ? 'Proceed according to certification cycle.' : 'Pending due-date activation and audit completion.',
+    lead_auditor_confirmed: status === 'completed' ? 1 : 0,
+    status: status === 'completed' ? 'submitted' : 'draft',
+    submitted_at: status === 'completed' ? now_() : ''
+  });
+  return eventId;
 }
 
 function saveClientStandards_(clientId, standardIds) {
@@ -676,7 +981,9 @@ function clientFile_(user, clientId) {
     appointments: all_('auditor_appointments').filter(a => eventIds.indexOf(String(a.audit_event_id)) !== -1),
     plans: plans,
     planItems: all_('audit_plan_items').filter(i => planIds.indexOf(String(i.audit_plan_id)) !== -1),
+    auditReports: all_('audit_reports').filter(r => eventIds.indexOf(String(r.audit_event_id)) !== -1).reverse(),
     requirements: all_('integrated_audit_requirements').filter(r => String(r.active) !== '0'),
+    requirementMappings: all_('integrated_requirement_clauses').filter(m => String(m.active) !== '0'),
     responses: responses,
     ncrs: all_('ncrs').filter(n => eventIds.indexOf(String(n.audit_event_id)) !== -1).reverse(),
     capas: all_('capas').filter(c => eventIds.indexOf(String(c.audit_event_id)) !== -1).reverse(),
@@ -773,14 +1080,14 @@ function saveRequirementResponse_(user, payload) {
 
 function saveNcr_(user, payload) {
   requirePermission_(user, 'ncrs', 'edit');
-  const id = insert_('ncrs', { tenant_id: user.tenant_id, audit_event_id: payload.audit_event_id, audit_requirement_response_id: payload.audit_requirement_response_id || '', ncr_number: payload.ncr_number || 'NCR-' + token_().slice(0, 8), clause_reference: payload.clause_reference || '', severity: payload.severity || 'minor', statement: payload.statement || '', correction: payload.correction || '', root_cause: payload.root_cause || '', corrective_action: payload.corrective_action || '', due_date: payload.due_date || '', status: payload.status || 'open' });
+  const id = insert_('ncrs', { tenant_id: user.tenant_id, audit_event_id: payload.audit_event_id, audit_requirement_response_id: payload.audit_requirement_response_id || '', ncr_number: payload.ncr_number || 'NCR-' + token_().slice(0, 8), clause_reference: payload.clause_reference || '', severity: payload.severity || 'minor', statement: payload.statement || '', correction: payload.correction || '', root_cause: payload.root_cause || '', corrective_action: payload.corrective_action || '', responsible_person: payload.responsible_person || '', due_date: payload.due_date || '', verification_method: payload.verification_method || '', status: payload.status || 'open' });
   audit_(user, 'save', 'ncrs', id, null, payload);
   return clientFile_(user, payload.clientId);
 }
 
 function saveCapa_(user, payload) {
   requirePermission_(user, 'capas', 'edit');
-  const id = insert_('capas', { tenant_id: user.tenant_id, ncr_id: payload.ncr_id || '', audit_event_id: payload.audit_event_id, action_plan: payload.action_plan || '', evidence_summary: payload.evidence_summary || '', effectiveness_review: payload.effectiveness_review || '', due_date: payload.due_date || '', status: payload.status || 'open' });
+  const id = insert_('capas', { tenant_id: user.tenant_id, ncr_id: payload.ncr_id || '', audit_event_id: payload.audit_event_id, action_plan: payload.action_plan || '', responsible_person: payload.responsible_person || '', evidence_summary: payload.evidence_summary || '', effectiveness_review: payload.effectiveness_review || '', due_date: payload.due_date || '', status: payload.status || 'open' });
   audit_(user, 'save', 'capas', id, null, payload);
   return clientFile_(user, payload.clientId);
 }

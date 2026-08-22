@@ -15,6 +15,8 @@ The target is not a separate simplified app. Each client must have one controlle
 - Stage 1, Stage 2, Surveillance 1, Surveillance 2, and Recertification are separate audit stage records inside the same client workflow.
 - Each audit stage has its own appointment, plan, timetable, checklist, evidence, findings, NCR/CAPA, audit report, technical review status, and decision status.
 - Cycle Builder is a required Super Admin-only controlled digitalization module.
+- Clause Builder is a required controlled-audit-catalogue module for creating and maintaining QSI audit requirements and mapped standard clauses.
+- NCR Builder is a required controlled nonconformity module for turning audit responses/findings into linked NCR/CAPA packages.
 - The UI must be designed as a professional certification-body workspace, not a basic form dump.
 - Generated documents must come from saved workflow records, not a PDF-only data path.
 
@@ -39,10 +41,12 @@ Every opened client file must show these tabs:
 15. Surveillance 2
 16. Recertification
 17. NCR/CAPA
-18. Documents
-19. Finance
-20. Feedback
-21. Audit Log
+18. Clause Builder
+19. NCR Builder
+20. Documents
+21. Finance
+22. Feedback
+23. Audit Log
 
 ## Audit Stage Tab Structure
 
@@ -62,6 +66,43 @@ Each audit-stage tab must include:
 - Technical review status for that stage.
 - Decision or maintain-certification status for that stage.
 - Document buttons for appointment, plan, report, NCR/CAPA, review, and decision.
+
+## Clause Builder
+
+Clause Builder must be a controlled module for Super Admin, Technical Manager, and Quality Manager roles. It is not just a static list.
+
+Clause Builder must provide:
+
+- Requirement code, title, audit question, evidence expectation, category, stage applicability, and active/inactive status.
+- Mapping to one or more standards and clauses.
+- Clause reference, clause title, standard code, and source/basis note.
+- Import/export-ready table view.
+- Duplicate requirement-code warning.
+- Active/inactive control without deleting historical references.
+- Audit log for every created or changed requirement.
+
+Clause Builder must feed:
+
+- Audit stage checklists.
+- Audit report requirement responses.
+- NCR Builder requirement selection.
+- Generated audit report content.
+- Cycle Builder stage-file preparation.
+
+## NCR Builder
+
+NCR Builder must be a controlled nonconformity workspace, available as a main module and as a tab inside each client workflow.
+
+NCR Builder must provide:
+
+- Selection from an audit event and audit requirement response.
+- Auto-fill of client, stage, standard/clause, finding, objective evidence, severity, and due date where possible.
+- NCR statement, correction, root cause, corrective action, responsibility, due date, verification method, effectiveness review, and closure fields.
+- CAPA package creation linked to the NCR.
+- Status lifecycle: open, correction submitted, corrective action accepted, verified closed, cancelled.
+- Duplicate warning when an NCR already exists for the same audit response.
+- Separate NCR/CAPA history for Stage 1, Stage 2, Surveillance 1, Surveillance 2, and Recertification.
+- Audit log for every created or changed NCR/CAPA.
 
 ## Cycle Builder
 
@@ -113,6 +154,7 @@ Expand the no-paid Sheets backend to include parity tables for:
 - client_feedback, invoices, payments
 - document_templates, generated_documents, notifications, audit_logs
 - cycle_builder_runs, cycle_builder_rows
+- clause_builder_runs, ncr_builder_runs where batch or generated actions need traceability
 
 ## UI Design Phase
 
@@ -133,6 +175,8 @@ Primary modules:
 
 - Dashboard
 - Cycle Builder
+- Clause Builder
+- NCR Builder
 - Clients
 - Client Workflow
 - Masters
@@ -209,13 +253,14 @@ Before reporting completion:
 
 1. Update Sheets schema and baseline seeding.
 2. Build one-client workflow shell with all tabs.
-3. Build Cycle Builder preview/generate/run records.
-4. Build stage tab data model and UI sections.
-5. Build Stage 1 and Stage 2 audit reports.
-6. Build Surveillance 1, Surveillance 2, and Recertification files.
-7. Add workflow gates and role/conflict controls.
-8. Add document generation and generated document register.
-9. Add client portal views.
-10. Seed complete demo clients.
-11. Deploy and verify in browser.
-
+3. Build Clause Builder and use it as the source for stage checklists.
+4. Build NCR Builder and link it to audit responses/CAPA.
+5. Build Cycle Builder preview/generate/run records.
+6. Build stage tab data model and UI sections.
+7. Build Stage 1 and Stage 2 audit reports.
+8. Build Surveillance 1, Surveillance 2, and Recertification files.
+9. Add workflow gates and role/conflict controls.
+10. Add document generation and generated document register.
+11. Add client portal views.
+12. Seed complete demo clients.
+13. Deploy and verify in browser.
